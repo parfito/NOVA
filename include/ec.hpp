@@ -226,7 +226,7 @@ class Ec : public Kobject, public Refcount, public Queue<Sc>
         NORETURN
         void activate();
 
-        template <void (*)()>
+        template <NORETURN void (*)()>
         NORETURN
         static void send_msg();
 

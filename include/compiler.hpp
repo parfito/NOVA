@@ -23,7 +23,69 @@
 #define STRING(x...) #x
 #define EXPAND(x) STRING(x)
 
-#if defined(__GNUC__)
+#define ACCESS_ONCE(x)              (*static_cast<volatile typeof(x) *>(&(x)))
+
+#if defined(__clang__)
+
+        #define COMPILER            "clang " __clang_version__
+        #define COMPILER_STRING     "clang " EXPAND (__clang_major__) "." EXPAND (__clang_minor__) "." EXPAND (__clang_patchlevel__)
+        #define COMPILER_VERSION    (__clang_major__ * 100 + __clang_minor__ * 10 + __clang_patchlevel__)
+
+    #if __has_attribute(always_inline)
+        #define ALWAYS_INLINE       __attribute__((always_inline))
+    #endif
+
+    #if __has_attribute(section)
+        // Work around LLVM bug 15788
+        asm (".section .cpulocal,\"w\",@nobits; .previous");
+        asm (".section .cpulocal.hot,\"w\",@nobits; .previous");
+        #define CPULOCAL            __attribute__((section (".cpulocal")))
+        #define CPULOCAL_HOT        __attribute__((section (".cpulocal.hot")))
+        #define INIT                __attribute__((section (".init")))
+        #define INITDATA            __attribute__((section (".initdata")))
+    #else
+        #error  SECTION unsupported
+    #endif
+
+    #if __has_attribute(init_priority)
+        #define INIT_PRIORITY(X)    __attribute__((init_priority((X))))
+    #else
+        #error  INIT_PRIORITY unsupported
+    #endif
+
+    #if __has_attribute(noreturn)
+        #define NORETURN            __attribute__((noreturn))
+    #endif
+
+    #if __has_attribute(packed)
+        #define PACKED              __attribute__((packed))
+    #endif
+
+    #if __has_builtin(__builtin_unreachable)
+        #define UNREACHED           __builtin_unreachable()
+    #elif __has_builtin(__builtin_trap)
+        #define UNREACHED           __builtin_trap()
+    #endif
+
+    #if __has_builtin(__builtin_expect)
+        #define EXPECT_FALSE(X)     __builtin_expect(!!(X), 0)
+        #define EXPECT_TRUE(X)      __builtin_expect(!!(X), 1)
+    #endif
+
+    #if ! __has_feature(cxx_nullptr)
+        #define nullptr             0
+    #endif
+
+        #define ALIGNED(X)          __attribute__((aligned(X)))
+        #define FORMAT(X,Y)         __attribute__((format (printf, (X),(Y))))
+        #define HOT                 __attribute__((hot))
+        #define NOINLINE            __attribute__((noinline))
+        #define NONNULL             __attribute__((nonnull))
+        #define REGPARM(X)          __attribute__((regparm(X)))
+        #define WARN_UNUSED_RESULT  __attribute__((warn_unused_result))
+        #define WEAK                __attribute__((weak))
+
+#elif defined(__GNUC__)
 
         #define COMPILER            "gcc " __VERSION__
 
@@ -71,9 +133,4 @@
         #define EXPECT_FALSE(X)     __builtin_expect(!!(X), 0)
         #define EXPECT_TRUE(X)      __builtin_expect(!!(X), 1)
 
-        #define ACCESS_ONCE(x)      (*static_cast<volatile typeof(x) *>(&(x)))
-
-#else
-        #define COMPILER            "unknown compiler"
-        #define COMPILER_VERSION    0
 #endif

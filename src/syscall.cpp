@@ -73,7 +73,7 @@ void Ec::delegate()
     C ? ret_user_sysexit() : reply();
 }
 
-template <void (*C)()>
+template <NORETURN void (*C)()>
 void Ec::send_msg()
 {
     Exc_regs *r = &current->regs;
