@@ -53,7 +53,8 @@ class Gdt : public Descriptor
         ALWAYS_INLINE
         static inline void load()
         {
-            asm volatile ("lgdt %0" : : "m" (Pseudo_descriptor (sizeof (gdt) - 1, reinterpret_cast<mword>(gdt))));
+            Pseudo_descriptor d (sizeof (gdt) - 1, reinterpret_cast<mword>(gdt));
+            asm volatile ("lgdt %0" : : "m" (d));
         }
 
         ALWAYS_INLINE

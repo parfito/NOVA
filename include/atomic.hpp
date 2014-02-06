@@ -48,16 +48,14 @@ class Atomic
         static inline bool test_set_bit (T &val, unsigned long bit)
         {
             bool ret;
-            asm volatile ("lock; bts%z1 %2, %1; setc %0" : "=q" (ret), "+m" (val) : "ir" (bit) : "cc");
-            return ret;
-        }
 
-        template <typename T>
-        ALWAYS_INLINE
-        static inline bool test_clr_bit (T &val, unsigned long bit)
-        {
-            bool ret;
-            asm volatile ("lock; btr%z1 %2, %1; setc %0" : "=q" (ret), "+m" (val) : "ir" (bit) : "cc");
+            switch (sizeof (T)) {
+                case 1: asm volatile ("lock; btsb %2, %1; setc %0" : "=q" (ret), "+m" (val) : "ir" (bit) : "cc"); break;
+                case 2: asm volatile ("lock; btsw %2, %1; setc %0" : "=q" (ret), "+m" (val) : "ir" (bit) : "cc"); break;
+                case 4: asm volatile ("lock; btsl %2, %1; setc %0" : "=q" (ret), "+m" (val) : "ir" (bit) : "cc"); break;
+                case 8: asm volatile ("lock; btsq %2, %1; setc %0" : "=q" (ret), "+m" (val) : "ir" (bit) : "cc"); break;
+            }
+
             return ret;
         }
 };

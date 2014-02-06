@@ -47,6 +47,7 @@ class Idt : public Descriptor
         ALWAYS_INLINE
         static inline void load()
         {
-            asm volatile ("lidt %0" : : "m" (Pseudo_descriptor (sizeof (idt) - 1, reinterpret_cast<mword>(idt))));
+            Pseudo_descriptor d (sizeof (idt) - 1, reinterpret_cast<mword>(idt));
+            asm volatile ("lidt %0" : : "m" (d));
         }
 };
