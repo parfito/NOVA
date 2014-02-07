@@ -41,7 +41,11 @@ message = @$(ECHO) $(1) $(2)
 endif
 
 # Feature check
-check = $(shell if $(CC) $(1) -c -xc++ /dev/null -o /dev/null >/dev/null 2>&1; then echo "$(1)"; fi)
+ifeq ($(shell $(CC) -v 2>&1 | grep -c "clang version"), 1)
+check = $(shell $(CC) $(1) -c -xc++ /dev/null -o /dev/null 2>&1 | egrep -q "error|warning: .* '$(1)'" || echo "$(1)")
+else
+check = $(shell $(CC) $(1) -c -xc++ /dev/null -o /dev/null >/dev/null 2>&1 && echo "$(1)")
+endif
 
 gitrv = $(shell (git rev-parse HEAD 2>/dev/null || echo 0) | cut -c1-7)
 
@@ -54,19 +58,22 @@ PFLAGS		:= $(addprefix -D, $(DEFINES)) $(addprefix -I, $(INC_DIR))
 DFLAGS		:= -MP -MMD -pipe
 OFLAGS		:= -Os
 ifeq ($(ARCH),x86_32)
-AFLAGS		:= -m32 -march=i686 -mpreferred-stack-boundary=2 -mregparm=3
+AFLAGS		:= -m32 -mno-mmx -mno-sse -march=i686  $(call check,-mpreferred-stack-boundary=2) -mregparm=3
 else ifeq ($(ARCH),x86_64)
-AFLAGS		:= -m64 -march=core2 -mpreferred-stack-boundary=4 -mcmodel=kernel -mno-red-zone
+AFLAGS		:= -m64 -mno-mmx -mno-sse -march=core2 $(or $(call check,-mpreferred-stack-boundary=3), $(call check,-mpreferred-stack-boundary=4)) -mcmodel=kernel -mno-red-zone
 else
 $(error $(ARCH) is not a valid architecture)
 endif
+AFLAGS		+= $(call check,-no-integrated-as)
 
 # Language options
-FFLAGS		:= -fdata-sections -ffunction-sections -fomit-frame-pointer -freg-struct-return -freorder-blocks -funit-at-a-time
+FFLAGS		:= -fdata-sections -ffunction-sections -fomit-frame-pointer -freorder-blocks -funit-at-a-time
 FFLAGS		+= -fno-asynchronous-unwind-tables -fno-exceptions -fno-rtti
-FFLAGS		+= $(call check,-fno-stack-protector)
-FFLAGS		+= $(call check,-fvisibility-inlines-hidden)
 FFLAGS		+= $(call check,-fdiagnostics-color=auto)
+FFLAGS		+= $(call check,-fno-builtin)
+FFLAGS		+= $(call check,-fno-stack-protector)
+FFLAGS		+= $(call check,-freg-struct-return)
+FFLAGS		+= $(call check,-fvisibility-inlines-hidden)
 FFLAGS		+= $(or $(call check,-std=gnu++11), $(call check,-std=gnu++0x), $(call check,-std=gnu++98))
 
 # Warning options
@@ -78,6 +85,9 @@ WFLAGS		+= $(call check,-Wstrict-null-sentinel)
 WFLAGS		+= $(call check,-Wstrict-overflow=5)
 WFLAGS		+= $(call check,-Wvolatile-register-var)
 WFLAGS		+= $(call check,-Wzero-as-null-pointer-constant)
+# Shut up some LLVM noise for the moment
+WFLAGS		+= $(call check,-Wno-sign-conversion)
+WFLAGS		+= $(call check,-Wno-unused-private-field)
 
 # Compiler flags
 SFLAGS		:= $(PFLAGS) $(DFLAGS) $(AFLAGS)
