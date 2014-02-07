@@ -70,9 +70,9 @@ SECTIONS
     .init_array : AT (ADDR (.init_array) - OFFSET)
     {
         PROVIDE (CTORS_L = .);
-        KEEP (SORT_BY_INIT_PRIORITY(*)(.init_array.65534 .ctors.00001))
+        KEEP (SORT_BY_INIT_PRIORITY(*)(.init_array.65534 .ctors.00001 .ctors.1))
         PROVIDE (CTORS_C = .);
-        KEEP (SORT_BY_INIT_PRIORITY(*)(.init_array.65533 .ctors.00002))
+        KEEP (SORT_BY_INIT_PRIORITY(*)(.init_array.65533 .ctors.00002 .ctors.2))
         PROVIDE (CTORS_G = .);
         KEEP (SORT_BY_INIT_PRIORITY(*)(.init_array.* .ctors.*))
         KEEP (*(.init_array .ctors))
