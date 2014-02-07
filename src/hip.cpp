@@ -34,10 +34,10 @@ void Hip::build (mword addr)
     Hip *h = hip();
 
     h->signature  = 0x41564f4e;
-    h->cpu_offs   = reinterpret_cast<mword>(h->cpu_desc) - reinterpret_cast<mword>(h);
-    h->cpu_size   = static_cast<uint16>(sizeof (Hip_cpu));
-    h->mem_offs   = reinterpret_cast<mword>(h->mem_desc) - reinterpret_cast<mword>(h);
-    h->mem_size   = static_cast<uint16>(sizeof (Hip_mem));
+    h->cpu_offs   = static_cast<typeof h->cpu_offs>(reinterpret_cast<mword>(h->cpu_desc) - reinterpret_cast<mword>(h));
+    h->cpu_size   = static_cast<typeof h->cpu_size>(sizeof (Hip_cpu));
+    h->mem_offs   = static_cast<typeof h->mem_offs>(reinterpret_cast<mword>(h->mem_desc) - reinterpret_cast<mword>(h));
+    h->mem_size   = static_cast<typeof h->mem_size>(sizeof (Hip_mem));
     h->api_flg    = FEAT_VMX | FEAT_SVM;
     h->api_ver    = CFG_VER;
     h->sel_num    = Space_obj::caps;
