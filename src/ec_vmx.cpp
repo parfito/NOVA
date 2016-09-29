@@ -205,15 +205,15 @@ void Ec::handle_vmx()
             current->regs.nst_error = Vmcs::read (Vmcs::EXI_QUALIFICATION);
             current->regs.nst_fault = Vmcs::read (Vmcs::INFO_PHYS_ADDR);
             break;
-//        case Vmcs::VMX_RDTSC: 
-//            check_memory(reason);
-//            current->regs.resolve_rdtsc<Vmcs>(rdtsc());
-//            ret_user_vmresume();
-//            break;
-//        case Vmcs::VMX_RDTSCP:
-//            Console::print("RDTSCP in VM");
-//            ret_user_vmrun();
-//            break;
+        case Vmcs::VMX_RDTSC: 
+            check_memory(reason);
+            current->regs.resolve_rdtsc<Vmcs>(rdtsc());
+            ret_user_vmresume();
+            break;
+        case Vmcs::VMX_RDTSCP:
+            Console::print("RDTSCP in VM");
+            ret_user_vmrun();
+            break;
     }
 
     check_memory(reason);

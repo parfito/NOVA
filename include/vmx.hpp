@@ -395,6 +395,8 @@ class Vmcs
             assert (ret);
         }
 
+        Vmcs* clone();
+
         ALWAYS_INLINE
         inline void make_current()
         {

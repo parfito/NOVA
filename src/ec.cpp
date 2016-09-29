@@ -70,11 +70,11 @@ Ec::Ec(Pd *own, mword sel, Pd *p, void (*f)(), unsigned c, unsigned e, mword u, 
 
     if (u) { // if a user thread
         //        Console::print("...user thread.");
-            regs.cs = SEL_USER_CODE;
-            regs.ds = SEL_USER_DATA;
-            regs.es = SEL_USER_DATA;
-            regs.ss = SEL_USER_DATA;
-            regs.REG(fl) = Cpu::EFL_IF;
+        regs.cs = SEL_USER_CODE;
+        regs.ds = SEL_USER_DATA;
+        regs.es = SEL_USER_DATA;
+        regs.ss = SEL_USER_DATA;
+        regs.REG(fl) = Cpu::EFL_IF;
         if (glb) { // if global
             regs.REG(sp) = s;
         } else // local thread
@@ -123,7 +123,10 @@ Ec::Ec(Pd *own, mword sel, Pd *p, void (*f)(), unsigned c, unsigned e, mword u, 
             /* allocate and register the virtual APIC page */
             mword virtual_apic_page_phys = Buddy::ptr_to_phys(new (pd->quota) Virtual_apic_page);
             Vmcs::write(Vmcs::APIC_VIRT_ADDR, virtual_apic_page_phys);
-
+            vmcs_backup = regs.vmcs->clone();
+            vmcs1 = regs.vmcs->clone();
+            vmcs2 = regs.vmcs->clone();
+            
             regs.vmcs->clear();
             cont = send_msg<ret_user_vmresume>;
             trace(TRACE_SYSCALL, "EC:%p created (PD:%p VMCS:%p VTLB:%p)", this, p, regs.vmcs, regs.vtlb);
@@ -309,19 +312,20 @@ void Ec::ret_user_vmresume() {
 
         current->regs.vmcs->make_current();
 
-        if (EXPECT_FALSE(Pd::current->gtlb.chk(Cpu::id))) {
-            Pd::current->gtlb.clr(Cpu::id);
-            if (current->regs.nst_on)
-                Pd::current->ept.flush();
-            else
-                current->regs.vtlb->flush(true);
-        }
-
-        if (EXPECT_FALSE(get_cr2() != current->regs.cr2))
-            set_cr2(current->regs.cr2);
-        current->save_state();
+        current->vmx_save_state();
         current->launch_state = Ec::vmresume;
     }
+    
+    if (EXPECT_FALSE(Pd::current->gtlb.chk(Cpu::id))) {
+        Pd::current->gtlb.clr(Cpu::id);
+        if (current->regs.nst_on)
+            Pd::current->ept.flush();
+        else
+            current->regs.vtlb->flush(true);
+    }
+
+    if (EXPECT_FALSE(get_cr2() != current->regs.cr2))
+        set_cr2(current->regs.cr2);
     current->regs.disable_rdtsc<Vmcs>();
     asm volatile ("lea %0," EXPAND(PREG(sp); LOAD_GPR)
                 "vmresume;"
@@ -441,8 +445,8 @@ void Ec::root_invoke() {
 
     /* setup PCID handling */
     Space_mem::boot_init();
-    assert (Pd::kern.did == 0);
-    assert (Pd::root.did == 1);
+    assert(Pd::kern.did == 0);
+    assert(Pd::root.did == 1);
 
     /* quirk */
     if (Dpt::ord != ~0UL && Dpt::ord > 0x8) {
@@ -527,9 +531,18 @@ void Ec::restore_state() {
             Hpt::cow_flush(v);
             cow = cow->next;
         }
-    } else {
+    } else if(Hip::feature() & Hip::FEAT_SVM){
         memcpy(vmcb1, regs.vmcb, PAGE_SIZE);
         memcpy(regs_0.vmcb, vmcb_backup, PAGE_SIZE);
+        Vtlb *tlb = regs.vtlb;
+        while (cow != nullptr) {
+            mword v = cow->gla;
+            tlb->update(v, cow->new_phys[1]->phys_addr, cow->attr | Vtlb::TLB_W);
+            cow = cow->next;
+        }
+    } else if(Hip::feature() & Hip::FEAT_VMX){
+        memcpy(vmcs1, regs.vmcs, PAGE_SIZE);
+        memcpy(regs_0.vmcs, vmcs_backup, PAGE_SIZE);
         Vtlb *tlb = regs.vtlb;
         while (cow != nullptr) {
             mword v = cow->gla;
@@ -556,8 +569,22 @@ void Ec::rollback() {
             Cow::free_cow_elt(cow);
             cow = cow->next;
         }
-    } else {
+    } else if(Hip::feature() & Hip::FEAT_SVM){
         memcpy(regs.vmcb, vmcb_backup, PAGE_SIZE);
+        Vtlb *tlb = regs.vtlb;
+        while (cow != nullptr) {
+            Paddr old_phys = cow->old_phys;
+            mword v = cow->gla;
+            tlb->update(v, old_phys, cow->attr & ~Vtlb::TLB_W);
+            v = cow->page_addr_or_gpa;
+            hpt.update(quota, v, 0, old_phys, cow->attr & ~Hpt::HPT_W, Hpt::TYPE_UP, true);
+            Hpt::cow_flush(v);
+            Cow::free_cow_elt(cow);
+            cow = cow->next;
+        }
+    }
+    else if(Hip::feature() & Hip::FEAT_VMX){
+        memcpy(regs.vmcs, vmcs_backup, PAGE_SIZE);
         Vtlb *tlb = regs.vtlb;
         while (cow != nullptr) {
             Paddr old_phys = cow->old_phys;

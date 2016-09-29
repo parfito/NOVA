@@ -176,7 +176,7 @@ void Ec::handle_exc(Exc_regs *r) {
 }
 
 void Ec::check_memory(mword from) {
-            Console::print(".....  Checking memory from %lx.", from);
+//            Console::print(".....  Checking memory from %lx.", from);
     //    if (!current->user_utcb) {
     //        current->debug = true;
     //    }

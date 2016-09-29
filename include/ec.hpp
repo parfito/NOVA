@@ -55,6 +55,7 @@ private:
     Ec * next;
     Fpu * fpu;
     Vmcb *vmcb_backup, *vmcb1, *vmcb2;
+    Vmcs *vmcs_backup, *vmcs1, *vmcs2;
 
     union {
 
@@ -485,6 +486,11 @@ public:
     void svm_save_state() {
         save_state();
         memcpy(vmcb_backup, regs.vmcb, PAGE_SIZE);
+    }
+
+    void vmx_save_state() {
+        save_state();
+        memcpy(vmcs_backup, regs.vmcs, PAGE_SIZE);
     }
 
     bool two_run_ok() {
