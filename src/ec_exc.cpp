@@ -213,7 +213,7 @@ void Ec::handle_exc(Exc_regs *r) {
 }
 
 void Ec::check_memory(int pmi) {
-    if ((Ec::current->is_idle()) || (Ec::current->cow_list == nullptr)) {
+    if ((Ec::current->is_idle()) || !Ec::current->cow_error_happened) {
         current->run_number = 0;
         read_instCounter(); // just to zero counter
         current->launch_state = Ec::UNLAUNCHED;
@@ -224,6 +224,7 @@ void Ec::check_memory(int pmi) {
 //        Console::print(".....  Checking memory from %d ", pmi);
 //        //        current->ec_debug= true;
 //    }
+    Console::print(".....  Checking memory from %d ", pmi);
     if (Ec::current->one_run_ok()) {
         current->exc_counter2 = Ec::exc_counter;
         current->counter2 = read_instCounter();
@@ -241,9 +242,10 @@ void Ec::check_memory(int pmi) {
             Ec::activate_pmi(current->counter1 - current->exc_counter1);
         }
         if (Ec::current->compare_and_commit()) {
-            current->cow_list = nullptr;
+            //current->cow_list = nullptr;
             current->run_number = 0;
             current->launch_state = Ec::UNLAUNCHED;
+            current->cow_error_happened = false;
             return;
         } else {
             Console::print("Checking failed");

@@ -124,43 +124,51 @@ bool Hpt::is_cow_fault(Quota &quota, mword v, mword err) {
     mword a;
     if (lookup(v, phys, a) && (a & Hpt::HPT_COW) && (a & Hpt::HPT_U)) {
         //        Ec::cow_count++;
+        Ec *ec = Ec::current;
         if (!(a & Hpt::HPT_P) && (a & Hpt::PTE_COW_IO)) { //Memory mapped IO
             //            if (Ec::current->ec_debug) {
-//                            Console::print("Cow error in IO: v: %p  phys: %p, attr: %p",
-//                                    v, phys, a);
+            //                            Console::print("Cow error in IO: v: %p  phys: %p, attr: %p",
+            //                                    v, phys, a);
             ////                Ec::current->ec_debug = false;
             //            }
-            Ec::current->check_memory(1257);
+            ec->check_memory(1257);
             update(quota, v, 0, phys, a | Hpt::HPT_P, Hpt::TYPE_UP, false); // the old frame may have been released; so we have to retain it
             cow_flush(v);
-//            Console::print("Read MMIO");
-            Ec::current->enable_step_debug(v, phys, a, Ec::MMIO);
+            //            Console::print("Read MMIO");
+            ec->enable_step_debug(v, phys, a, Ec::MMIO);
             return true;
         } else if ((err & Hpt::ERR_W) && !(a & Hpt::HPT_W)) {
-//            if (Ec::current->ec_debug) {
-//                Console::print("Cow error in Memory: v: %p  phys: %08p, attr: %08p",
-//                        v, phys, a);
-                //                Ec::current->ec_debug = false;
-//            }
+            //            if (Ec::current->ec_debug) {
+            //                Console::print("Cow error in Memory: v: %p  phys: %08p, attr: %08p",
+            //                        v, phys, a);
+            //                Ec::current->ec_debug = false;
+            //            }
             if (v >= USER_ADDR) {
                 //Normally, this must not happen since this is not a user space here but...                
                 update(quota, v, 0, phys, a | Hpt::HPT_W, Type::TYPE_UP, false);
                 //              Console::print("Cow Error above USER_ADDR");
             } else {
-                Cow::cow_elt *ce = nullptr;
-                if (!Cow::get_cow_list_elt(&ce)) //get new cow_elt
-                    Ec::current->die("Cow elt exhausted");
+                ec->cow_error_happened = true;
+                Cow::cow_elt *ce = ec->cowlist_contains(v, phys);
+                if (ce) {
+                    Console::print("cow elt exist %p", ce);
+                    ce->cowed = true;
+                }else{
+                    if (!Cow::get_cow_list_elt(&ce)) //get new cow_elt
+                        ec->die("Cow elt exhausted");
 
-                if (Ec::current->is_mapped_elsewhere(phys & ~PAGE_MASK, ce) || Cow::subtitute(phys & ~PAGE_MASK, ce, v & ~PAGE_MASK)) {
-                    ce->page_addr_or_gpa = v & ~PAGE_MASK;
-                    ce->attr = a;
-                    //                    ce->used = true;
-                } else // Cow::subtitute will fill cow's fields old_phys, new_phys and frame_index 
-                    Ec::current->die("Cow frame exhausted");
-                Ec::current->add_cow(ce);
+                    if (ec->is_mapped_elsewhere(phys & ~PAGE_MASK, ce) || Cow::subtitute(phys & ~PAGE_MASK, ce, v & ~PAGE_MASK)) {
+                        ce->page_addr_or_gpa = v & ~PAGE_MASK;
+                        ce->attr = a;
+                        //                    ce->used = true;
+                    } else // Cow::subtitute will fill cow's fields old_phys, new_phys and frame_index 
+                        ec->die("Cow frame exhausted");
+                    ec->add_cow(ce);
+                }
                 update(quota, v, 0, ce->new_phys[0]->phys_addr, a | Hpt::HPT_W, Type::TYPE_UP, false);
                 //                update(quota, v, 0, phys, a | Hpt::HPT_W, Type::TYPE_UP, false); // the old frame may have been released; so we have to retain it
                 cow_flush(v);
+                Console::print("Cow error Ec: %p  v: %p  phys: %p  ce: %p  phys1: %p  phys2: %p", ec, v, phys, ce, ce->new_phys[0]->phys_addr, ce->new_phys[1]->phys_addr);
             }
             return true;
         } else

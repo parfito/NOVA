@@ -35,7 +35,7 @@
 
 INIT_PRIORITY(PRIO_SLAB)
 Slab_cache Ec::cache(sizeof (Ec), 32);
-int Ec::exc_counter = 0, Ec::gsi_counter1 = 0, 
+int Ec::exc_counter = 0, Ec::gsi_counter1 = 0,
         Ec::lvt_counter1 = 0, Ec::msi_counter1 = 0, Ec::ipi_counter1 = 0, Ec::gsi_counter2 = 0,
         Ec::lvt_counter2 = 0, Ec::msi_counter2 = 0, Ec::ipi_counter2 = 0;
 bool Ec::ec_debug = false;
@@ -556,7 +556,7 @@ bool Ec::is_io_exc(mword v) {
 }
 
 void Ec::resolve_PIO_execption() {
-//    Console::print("Read PIO");
+    //    Console::print("Read PIO");
     Paddr phys;
     mword attr;
     Hpt hpt = Pd::current->Space_mem::loc[Cpu::id];
@@ -568,16 +568,9 @@ void Ec::resolve_PIO_execption() {
 }
 
 void Ec::resolve_temp_exception() {
-//    Console::print("Read TSC Ec: %p, is_idle(): %d  IP: %p", current, current->is_idle(), current->regs.REG(ip));
+    //    Console::print("Read TSC Ec: %p, is_idle(): %d  IP: %p", current, current->is_idle(), current->regs.REG(ip));
     set_cr4(get_cr4() & ~Cpu::CR4_TSD);
     Ec::current->enable_step_debug(0, 0, 0, Step_reason::RDTSC);
-}
-
-void Ec::add_cow(Cow::cow_elt *ce) {
-    Lock_guard <Spinlock> guard(cow_lock);
-    Cow::cow_elt *tampon = cow_list;
-    cow_list = ce;
-    ce->next = tampon;
 }
 
 void Ec::enable_step_debug(mword fault_addr, Paddr fault_phys, mword fault_attr, Step_reason reason) {
@@ -599,12 +592,12 @@ void Ec::disable_step_debug() {
     regs.REG(fl) &= ~Cpu::EFL_TF;
     switch (step_reason) {
         case MMIO:
-//            Console::print("MMIO read");
+            //            Console::print("MMIO read");
             Pd::current->loc[Cpu::id].update(Pd::current->quota, io_addr, 0, io_phys, io_attr & ~Hpt::HPT_P, Hpt::TYPE_UP, true);
             Hpt::cow_flush(io_addr);
             break;
         case PIO:
-//            Console::print("PIO read");
+            //            Console::print("PIO read");
             Paddr phys;
             mword attr;
             Pd::current->Space_mem::loc[Cpu::id].lookup(LOCAL_IOP_REMAP, phys, attr);
@@ -615,7 +608,7 @@ void Ec::disable_step_debug() {
             Hpt::cow_flush(SPC_LOCAL_IOP + PAGE_SIZE);
             break;
         case RDTSC:
-//            Console::print("TSC read Ec: %p, is_idle(): %d  IP: %p", current, current->is_idle(), current->regs.REG(ip));
+            //            Console::print("TSC read Ec: %p, is_idle(): %d  IP: %p", current, current->is_idle(), current->regs.REG(ip));
             set_cr4(get_cr4() | Cpu::CR4_TSD);
             break;
         default:
@@ -625,15 +618,46 @@ void Ec::disable_step_debug() {
     step_reason = NIL;
 }
 
+void Ec::add_cow(Cow::cow_elt *ce) {
+    ce->cowed = true;
+    Lock_guard <Spinlock> guard(cow_lock);
+    Cow::cow_elt *tampon = cow_list;
+    cow_list = ce;
+    ce->next = tampon;
+}
+
+Cow::cow_elt* Ec::cowlist_contains(mword addr, Paddr phys) {
+    phys = phys & ~PAGE_MASK;
+    addr = addr & ~PAGE_MASK;
+    Lock_guard <Spinlock> guard(cow_lock);
+    Cow::cow_elt *c = cow_list;
+    while (c != nullptr) {
+        if (c->page_addr_or_gpa == addr && c->old_phys == phys)
+            return c;
+        c = c->next;
+    }
+    return nullptr;
+}
+
 void Ec::restore_state() {
     Lock_guard <Spinlock> guard(cow_lock);
-    Cow::cow_elt *cow = current->cow_list;
+    Cow::cow_elt *cow = cow_list, *prev_cow = nullptr;
     if (user_utcb) {
         Quota quota = Pd::current->quota;
         while (cow != nullptr) {
-            mword v = cow->page_addr_or_gpa;
-            Pd::current->Space_mem::loc[Cpu::id].update(quota, v, 0, cow->new_phys[1]->phys_addr, cow->attr | Hpt::HPT_W, Hpt::TYPE_UP, false);
-            Hpt::cow_flush(v);
+            if(cow->cowed){
+                mword v = cow->page_addr_or_gpa;
+                Pd::current->Space_mem::loc[Cpu::id].update(quota, v, 0, cow->new_phys[1]->phys_addr, cow->attr | Hpt::HPT_W, Hpt::TYPE_UP, false);
+                Hpt::cow_flush(v);
+                prev_cow = cow;
+            } else {
+                if(cow == cow_list){
+                    cow_list = cow_list->next;
+                }else{
+                    prev_cow->next = cow->next;
+                }
+                Cow::free_cow_elt(cow);
+            }
             cow = cow->next;
         }
     } else if (Hip::feature() & Hip::FEAT_SVM) {
@@ -656,13 +680,12 @@ void Ec::restore_state() {
         }
     }
     regs = regs_0;
-
 }
 
 void Ec::rollback() {
     regs = regs_0;
     Lock_guard <Spinlock> guard(cow_lock);
-    Cow::cow_elt *cow = current->cow_list;
+    Cow::cow_elt *cow = cow_list;
     Hpt hpt = Pd::current->Space_mem::loc[Cpu::id];
     Quota quota = Pd::current->quota;
     if (user_utcb) {
@@ -705,7 +728,7 @@ void Ec::rollback() {
 
 bool Ec::compare_and_commit() {
     Lock_guard <Spinlock> guard(cow_lock);
-    Cow::cow_elt *cow = current->cow_list;
+    Cow::cow_elt *cow = cow_list, *prev_cow = cow_list;
     Quota quota = Pd::current->quota;
     Hpt hpt = Pd::current->Space_mem::loc[Cpu::id];
     if (user_utcb) {
@@ -714,8 +737,8 @@ bool Ec::compare_and_commit() {
                     *ptr2 = reinterpret_cast<const void*> (cow->page_addr_or_gpa);
             int missmatch_addr = memcmp(ptr1, ptr2, PAGE_SIZE);
             if (missmatch_addr) {
-                Console::print("Ec: %p  Pd: %p  ptr1: %p  "
-                        "ptr2: %p  missmatch_addr: %x", current, current->pd.operator->(), ptr1, ptr2, ptr2 +(PAGE_SIZE/4 - missmatch_addr - 1)*4);
+                Console::print("Ec: %p  Pd: %p  ptr1: %p  ptr2: %p  missmatch_addr: %x",
+                        this, this->pd.operator->(), ptr1, ptr2, ptr2 + (PAGE_SIZE / 4 - missmatch_addr - 1)*4);
                 return false;
             }
             Paddr old_phys = cow->old_phys;
@@ -724,7 +747,7 @@ bool Ec::compare_and_commit() {
             memcpy(ptr, reinterpret_cast<const void*> (v), PAGE_SIZE);
             hpt.update(quota, v, 0, old_phys, cow->attr & ~Hpt::HPT_W, Hpt::TYPE_UP, true); // the old frame may have been released; so we have to retain it
             Hpt::cow_flush(v);
-            Cow::free_cow_elt(cow);
+            cow->cowed = false;
             cow = cow->next;
         }
     } else {
@@ -760,7 +783,7 @@ bool Ec::compare_and_commit() {
 bool Ec::is_mapped_elsewhere(Paddr phys, Cow::cow_elt* cow) {
     Lock_guard <Spinlock> guard(cow_lock);
     bool is_mapped = false;
-    Cow::cow_elt *c = Ec::current->cow_list;
+    Cow::cow_elt *c = cow_list;
     while ((c != nullptr) && (c != cow)) {
         if (c->old_phys == phys) {//frame already mapped elsewhere
             cow->old_phys = phys;
@@ -786,7 +809,7 @@ bool Ec::is_mapped_elsewhere(Paddr phys, Cow::cow_elt* cow) {
 Cow::cow_elt* Ec::find_cow_elt(mword gpa) {
     int n = 0;
     Lock_guard <Spinlock> guard(cow_lock);
-    Cow::cow_elt *c = Ec::current->cow_list, *result = nullptr;
+    Cow::cow_elt *c = cow_list, *result = nullptr;
     while (c != nullptr) {
         if (c->old_phys == (gpa & ~PAGE_MASK)) {
             result = c;
@@ -800,17 +823,17 @@ Cow::cow_elt* Ec::find_cow_elt(mword gpa) {
     return result;
 }
 
-void Ec::clear_instCounter(){
+void Ec::clear_instCounter() {
     //Msr::write (Msr::IA32_PMC0, 0x0);
     //Msr::write (Msr::IA32_PMC1, 0x0);
-    Msr::write (Msr::MSR_PERF_GLOBAL_CTRL, 0x700000003);
-    Msr::write (Msr::MSR_PERF_FIXED_CTR0, 0x0);
+    Msr::write(Msr::MSR_PERF_GLOBAL_CTRL, 0x700000003);
+    Msr::write(Msr::MSR_PERF_FIXED_CTR0, 0x0);
     //Msr::write (Msr::IA32_PERFEVTSEL0, 0x004100c0);
     //Msr::write (Msr::IA32_PERFEVTSEL1, 0x004100c8);
-    Msr::write (Msr::MSR_PERF_FIXED_CTRL, 0xa);
+    Msr::write(Msr::MSR_PERF_FIXED_CTRL, 0xa);
 }
 
-void Ec::incr_count(unsigned cs){
-    if(cs & 3)
+void Ec::incr_count(unsigned cs) {
+    if (cs & 3)
         Ec::exc_counter++;
 }

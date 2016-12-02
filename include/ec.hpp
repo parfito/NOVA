@@ -212,6 +212,7 @@ public:
     Spinlock cow_lock;
     uint8 run_number = 0;
     int launch_state = UNLAUNCHED;
+    bool cow_error_happened = false;
     bool debug = false, hardening_started = false;
     int nb_fail = 0;
     int previous_reason = 0, nb_extint = 0;
@@ -533,6 +534,7 @@ public:
 
     bool is_mapped_elsewhere(Paddr phys, Cow::cow_elt* cow);
     void add_cow(Cow::cow_elt *ce);
+    Cow::cow_elt* cowlist_contains(mword, Paddr);
     
     void set_env(uint64 t) {
         // set EAX and EDX to the correct value

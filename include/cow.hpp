@@ -38,6 +38,7 @@ public:
         mword attr;
         struct cow_frame* new_phys[2];
         bool used = false;
+        bool cowed = false;
         struct cow_elt *next = nullptr;
     };
     static struct cow_elt cow_list[NB_COW_ELT];
