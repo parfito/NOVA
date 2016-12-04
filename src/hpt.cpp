@@ -125,6 +125,7 @@ bool Hpt::is_cow_fault(Quota &quota, mword v, mword err) {
     if (lookup(v, phys, a) && (a & Hpt::HPT_COW) && (a & Hpt::HPT_U)) {
         //        Ec::cow_count++;
         Ec *ec = Ec::current;
+        Pd *pd = ec->getPd();
         if (!(a & Hpt::HPT_P) && (a & Hpt::PTE_COW_IO)) { //Memory mapped IO
             //            if (Ec::current->ec_debug) {
             //                            Console::print("Cow error in IO: v: %p  phys: %p, attr: %p",
@@ -149,7 +150,7 @@ bool Hpt::is_cow_fault(Quota &quota, mword v, mword err) {
                 //              Console::print("Cow Error above USER_ADDR");
             } else {
                 ec->cow_error_happened = true;
-                Cow::cow_elt *ce = ec->cowlist_contains(v, phys);
+                Cow::cow_elt *ce = pd->cowlist_contains(v, phys);
                 if (ce) {
                     Console::print("cow elt exist %p", ce);
                     ce->cowed = true;
@@ -157,13 +158,13 @@ bool Hpt::is_cow_fault(Quota &quota, mword v, mword err) {
                     if (!Cow::get_cow_list_elt(&ce)) //get new cow_elt
                         ec->die("Cow elt exhausted");
 
-                    if (ec->is_mapped_elsewhere(phys & ~PAGE_MASK, ce) || Cow::subtitute(phys & ~PAGE_MASK, ce, v & ~PAGE_MASK)) {
+                    if (pd->is_mapped_elsewhere(phys & ~PAGE_MASK, ce) || Cow::subtitute(phys & ~PAGE_MASK, ce, v & ~PAGE_MASK)) {
                         ce->page_addr_or_gpa = v & ~PAGE_MASK;
                         ce->attr = a;
                         //                    ce->used = true;
                     } else // Cow::subtitute will fill cow's fields old_phys, new_phys and frame_index 
                         ec->die("Cow frame exhausted");
-                    ec->add_cow(ce);
+                    pd->add_cow(ce);
                 }
                 update(quota, v, 0, ce->new_phys[0]->phys_addr, a | Hpt::HPT_W, Type::TYPE_UP, false);
                 //                update(quota, v, 0, phys, a | Hpt::HPT_W, Type::TYPE_UP, false); // the old frame may have been released; so we have to retain it

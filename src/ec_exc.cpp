@@ -114,7 +114,7 @@ bool Ec::handle_exc_gp(Exc_regs *r) {
         current->resolve_PIO_execption();
         return true;
     }
-    Console::print("GP Here: err: %08lx  addr: %08lx  eip: %08lx  val: %08lx rdi: %10llx cs: %08lx ds: %08lx  "
+    Console::print("GP Here: err: %08lx  addr: %08lx  eip: %08lx  val: %08x rdi: %10lx cs: %08lx ds: %08lx  "
             "es: %08lx  fs: %08lx  gs: %08lx", r->err, r->cr2, eip, *(reinterpret_cast<uint32 *> (eip)), r->REG(di),
             r->cs, r->ds, r->es, r->fs, r->gs);
     return false;
@@ -213,10 +213,12 @@ void Ec::handle_exc(Exc_regs *r) {
 }
 
 void Ec::check_memory(int pmi) {
-    if ((Ec::current->is_idle()) || !Ec::current->cow_error_happened) {
-        current->run_number = 0;
+    Ec *ec = current;
+    Pd *pd = ec->getPd();
+    if (ec->is_idle() || !ec->cow_error_happened) {
+        ec->run_number = 0;
         read_instCounter(); // just to zero counter
-        current->launch_state = Ec::UNLAUNCHED;
+        ec->launch_state = Ec::UNLAUNCHED;
         return;
     }
 
@@ -224,35 +226,18 @@ void Ec::check_memory(int pmi) {
 //        Console::print(".....  Checking memory from %d ", pmi);
 //        //        current->ec_debug= true;
 //    }
-    Console::print(".....  Checking memory from %d ", pmi);
-    if (Ec::current->one_run_ok()) {
-        current->exc_counter2 = Ec::exc_counter;
-        current->counter2 = read_instCounter();
-        current->reset_counter();
-        if (Ec::ec_debug) {
-            Console::print("PMI: %d  Ec: %p  Pd: %p  X: %d | %d  A: %d | %d  gsi: %d | %d  lvt: %d | %d "
-                    " msi: %d | %d ipi: %d | %d", pmi, current, current->pd.operator->(), current->counter1,
-                    current->counter2, current->exc_counter1, current->exc_counter2,
-                    Ec::gsi_counter1, Ec::gsi_counter2, Ec::lvt_counter1, Ec::lvt_counter2,
-                    Ec::msi_counter1, Ec::msi_counter2, Ec::ipi_counter1, Ec::ipi_counter2);
-            Ec::ec_debug = false;
-        }
-        if (pmi == 1251) {
-            Console::print("PMI: %d  counter1: %ld  exc: %d Run = 1", pmi, current->counter1, current->exc_counter1);
-            Ec::activate_pmi(current->counter1 - current->exc_counter1);
-        }
-        if (Ec::current->compare_and_commit()) {
-            //current->cow_list = nullptr;
-            current->run_number = 0;
-            current->launch_state = Ec::UNLAUNCHED;
-            current->cow_error_happened = false;
+    Console::print(".....  Checking memory from %d  Ec: %p", pmi, ec);
+    if (ec->one_run_ok()) {
+       if (pd->compare_and_commit()) {
+            ec->run_number = 0;
+            ec->launch_state = Ec::UNLAUNCHED;
+            ec->cow_error_happened = false;
             return;
         } else {
-            Console::print("Checking failed");
-            Ec::current->rollback();
-            current->run_number = 0;
-            current->cow_list = nullptr;
-            switch (current->launch_state) {
+            Console::print("Checking failed Ec: %p", ec);
+            ec->rollback();
+            ec->run_number = 0;
+            switch (ec->launch_state) {
                 case Ec::SYSEXIT:
                     Ec::ret_user_sysexit();
                     break;
@@ -268,15 +253,9 @@ void Ec::check_memory(int pmi) {
             }
         }
     } else {
-        current->exc_counter1 = Ec::exc_counter;
-        current->counter1 = read_instCounter();
-        if (pmi == 1251) {
-            Console::print("PMI: %d  counter1: %ld  exc: %d Run = 1", pmi, current->counter1, current->exc_counter1);
-            Ec::activate_pmi(current->counter1 - current->exc_counter1);
-        }
-        Ec::current->restore_state();
-        current->run_number++;
-        switch (current->launch_state) {
+        ec->restore_state();
+        ec->run_number++;
+        switch (ec->launch_state) {
             case Ec::SYSEXIT:
                 Ec::ret_user_sysexit();
                 break;
@@ -306,10 +285,10 @@ uint64 Ec::read_instCounter() {
 }
 
 void Ec::reset_counter() {
-    Ec::exc_counter = counter1 = counter2 = exc_counter1 = exc_counter2 = 0;
+    Ec::exc_counter = exc_counter1 = exc_counter2 = 0;
     Msr::write(Msr::MSR_PERF_FIXED_CTR0, 0x0);
-    Ec::gsi_counter1 = Ec::lvt_counter1 = Ec::msi_counter1 = Ec::ipi_counter1 =
-            Ec::gsi_counter2 = Ec::lvt_counter2 = Ec::msi_counter2 = Ec::ipi_counter2 = 0;
+    counter1 = counter2 = Ec::gsi_counter1 = Ec::lvt_counter1 = Ec::msi_counter1 = 
+    Ec::ipi_counter1 = Ec::gsi_counter2 = Ec::lvt_counter2 = Ec::msi_counter2 = Ec::ipi_counter2 = 0;
 }
 
 void Ec::activate_pmi(int count) {
@@ -317,5 +296,5 @@ void Ec::activate_pmi(int count) {
     Ec::ec_debug = true;
     Msr::write(Msr::MSR_PERF_FIXED_CTR0, val);
     Msr::write(Msr::MSR_PERF_FIXED_CTRL, 0xa);
-    Console::print("Ec: %p  Pd: %p  count: %d val: %lx, %d", current, current->pd.operator->(), count, val, Msr::read<mword>(Msr::MSR_PERF_FIXED_CTR0));
+    Console::print("Ec: %p  Pd: %p  count: %d val: %x, %ld", current, current->getPd(), count, val, Msr::read<mword>(Msr::MSR_PERF_FIXED_CTR0));
 }

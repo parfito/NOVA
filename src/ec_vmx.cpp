@@ -54,7 +54,7 @@ void Ec::vmx_exception()
             ret_user_vmresume();
 
         case 0x307:         // #NM
-            check_memory(intr_info & 0x7ff);
+            check_memory(1962);
             handle_exc_nm();
             ret_user_vmresume();
 
@@ -76,9 +76,12 @@ void Ec::vmx_exception()
 
                 case Vtlb::SUCCESS:
                     ret_user_vmresume();
+                    
+                case Vtlb::SUCCESS_COW:
+                    break;
             }
     }
-    check_memory(intr_info & 0x7ff);
+    check_memory(1963);
             
     send_msg<ret_user_vmresume>();
 }
@@ -200,13 +203,13 @@ void Ec::handle_vmx()
         case Vmcs::VMX_EXC_NMI:     vmx_exception();
         case Vmcs::VMX_EXTINT:      vmx_extint();
         case Vmcs::VMX_INVLPG:      vmx_invlpg();
-        case Vmcs::VMX_CR:          {check_memory(reason); vmx_cr();}
+        case Vmcs::VMX_CR:          {check_memory(1964); vmx_cr();}
         case Vmcs::VMX_EPT_VIOLATION:
             current->regs.nst_error = Vmcs::read (Vmcs::EXI_QUALIFICATION);
             current->regs.nst_fault = Vmcs::read (Vmcs::INFO_PHYS_ADDR);
             break;
         case Vmcs::VMX_RDTSC: 
-            check_memory(reason);
+            check_memory(1965);
             current->regs.resolve_rdtsc<Vmcs>(rdtsc());
             ret_user_vmresume();
             break;
@@ -216,7 +219,7 @@ void Ec::handle_vmx()
             break;
     }
 
-    check_memory(reason);
+    check_memory(1966);
     current->regs.dst_portal = reason;
 
     send_msg<ret_user_vmresume>();

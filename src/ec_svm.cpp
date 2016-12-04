@@ -45,6 +45,7 @@ void Ec::svm_exception(mword reason) {
             current->regs.vmcb->inj_control = current->regs.vmcb->exitintinfo;
     }
 
+    int pmi = 1960;
     switch (reason) {
 
         default:
@@ -52,7 +53,7 @@ void Ec::svm_exception(mword reason) {
             break;
 
         case 0x47: // #NM
-            check_memory(reason);
+            check_memory(pmi);
             handle_exc_nm();
             ret_user_vmrun();
 
@@ -102,7 +103,7 @@ void Ec::svm_exception(mword reason) {
             }
     }
 
-    check_memory(reason);
+    check_memory(pmi);
     send_msg<ret_user_vmrun>();
 }
 
@@ -179,6 +180,7 @@ void Ec::handle_svm() {
 //                reason, current->regs.vmcb->rip, current->regs.vmcb->nrip, current->regs.REG(ip));
 //    }
 
+    int pmi = 1961;
     switch (reason) {
         case -1UL: // Invalid state
             reason = NUM_VMI - 3;
@@ -205,7 +207,7 @@ void Ec::handle_svm() {
 
         case 0x0 ... 0x1f: // CR Access
             //Console::print("Cr access  opc: %02x", opc);
-            check_memory(reason);
+            check_memory(pmi);
             svm_cr();
 
         case 0x40 ... 0x5f: // Exception
@@ -231,12 +233,12 @@ void Ec::handle_svm() {
 
         case 0x6e: //RDTSC
             //            Console::print("RDTSC in VM");
-            check_memory(reason);
+            check_memory(pmi);
             current->regs.resolve_rdtsc<Vmcb>(rdtsc());
             ret_user_vmrun();
 
         case 0x79: // INVLPG
-            check_memory(reason);
+            check_memory(pmi);
             svm_invlpg();
 
         case 0x87: //RDTSCP
@@ -244,7 +246,7 @@ void Ec::handle_svm() {
             ret_user_vmrun();
     }
 
-    check_memory(reason);
+    check_memory(pmi);
     current->regs.dst_portal = reason;
 
     send_msg<ret_user_vmrun>();

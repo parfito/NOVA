@@ -9,7 +9,6 @@
 #include "memory.hpp"
 #include "types.hpp"
 #include "buddy.hpp"
-#include "pd.hpp"
 #include "hip.hpp"
 
 #ifndef COW_HPP
@@ -65,33 +64,6 @@ public:
     //    Cow(const Cow& orig);
     virtual ~Cow();
 
-    static void initialize() {
-        // Allocate NB_COW_FRAME cow frames
-        for (uint64 i = 0; i < NB_COW_FRAME; i++)
-            cow_frames[i].phys_addr = Buddy::ptr_to_phys(Buddy::allocator.alloc(0, Pd::kern.quota, Buddy::FILL_0));
-
-        // calculate the physical address space for the RAM
-        Hip_mem *mem_desc = Hip::get_mem_desc();
-        uint32 num_mem_desc = (Hip::get_length() - Hip::get_mem_offset()) / Hip::get_mem_size();
-        for (uint32 i = 0; i < num_mem_desc; i++, mem_desc++) {
-            if (mem_desc->type == AVAILABLE_MEMORY) {
-                struct block *b = get_new_block_elt(), *tampon = ram_mem_list;
-                b->start = align_up(static_cast<Paddr> (mem_desc->addr), PAGE_SIZE); // Core rounds the start to the upper page boundary
-                b->end = align_dn(static_cast<Paddr> (mem_desc->addr + mem_desc->size), PAGE_SIZE); // Core truncate the size to the lower page boundary
-                ram_mem_list = b;
-                b->next = tampon;
-            }
-        }
-        struct block *b = ram_mem_list;
-        while (b != nullptr) {
-            if (b->start == 0x0UL) {
-                b->start = 0x1000UL; // Core : [0 - 1000[ is needed as I/O memory by the VESA driver, remove it from Ram space */
-            }
-            //                        Console::print("deb: %08lx  fin: %08lx", b->start, b->end);
-            b = b->next;
-        }
-    }
-
     static struct block* get_new_block_elt() {
         for (uint16 i = 0; i < NB_BLOCK_ELT; i++) {
             if (!block_elts[i].used) {
@@ -116,6 +88,7 @@ public:
 
     static bool get_cow_list_elt(cow_elt** cow_ptr);
     static bool subtitute(Paddr phys, cow_elt* cow, mword addr);
+    static void initialize();
 
 };
 

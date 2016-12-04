@@ -236,13 +236,13 @@ bool Vtlb::is_cow_fault(mword virt, mword gpa, Paddr hpa, mword err) {
         mword a = attr();
         if (!(val & TLB_P) && (val & PTE_COW_IO)) { //Memory mapped IO
             val |= TLB_P;
-            Console::print("IO space  hpa: %08lx  val: %08x  err: %08lx", hpa, val, err);
+//            Console::print("IO space  hpa: %08lx  val: %08x  err: %08lx", hpa, val, err);
             return true;
         } else if ((val & TLB_P) && (err & ERR_W) && !(val & TLB_W)) {
             Cow::cow_elt *ce = nullptr;
             if (Ec::current->run_number == 1) {
-                Console::print("virt: %08lx  gpa: %08lx  hpa: %08lx  err: %08lx ", virt, gpa, hpa, err);
-                ce = Ec::current->find_cow_elt(gpa);
+//                Console::print("virt: %08lx  gpa: %08lx  hpa: %08lx  err: %08lx ", virt, gpa, hpa, err);
+                ce = Pd::current->find_cow_elt(gpa);
                 val = ce->new_phys[1]->phys_addr | a | TLB_W;
                 val &= ~TLB_COW;
                 return true;
@@ -250,13 +250,13 @@ bool Vtlb::is_cow_fault(mword virt, mword gpa, Paddr hpa, mword err) {
             if (!Cow::get_cow_list_elt(&ce)) //get new cow_elt
                 Ec::current->die("Cow elt exhausted");
 
-            if (Ec::current->is_mapped_elsewhere(hpa & ~PAGE_MASK, ce) || Cow::subtitute(hpa & ~PAGE_MASK, ce, gpa & ~PAGE_MASK)) {
+            if (Pd::current->is_mapped_elsewhere(hpa & ~PAGE_MASK, ce) || Cow::subtitute(hpa & ~PAGE_MASK, ce, gpa & ~PAGE_MASK)) {
                 ce->gla = virt;
                 ce->page_addr_or_gpa = gpa & ~PAGE_MASK;
                 ce->attr = a;
             } else // Cow::subtitute will fill cow's fields old_phys, new_phys and frame_index 
                 Ec::current->die("Cow frame exhausted");
-            Ec::current->add_cow(ce);
+            Pd::current->add_cow(ce);
             val = ce->new_phys[0]->phys_addr | a | TLB_W;
             val &= ~TLB_COW;
             //            val |= TLB_W;

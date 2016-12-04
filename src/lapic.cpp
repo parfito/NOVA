@@ -108,8 +108,8 @@ void Lapic::send_ipi (unsigned cpu, unsigned vector, Delivery_mode dlv, Shorthan
 void Lapic::therm_handler() {}
 
 void Lapic::perfm_handler() {
-    Console::print("PERF INTERRUPT X: %d | %d  A: %d | %d", Ec::current->counter1, 
-            Ec::current->exc_counter1, Ec::read_instCounter(), Ec::exc_counter);
+//    Console::print("PERF INTERRUPT X: %d | %d  A: %d | %d", Ec::current->counter1, 
+//            Ec::current->exc_counter1, Ec::read_instCounter(), Ec::exc_counter);
     Ec::check_memory(1255);
 }
 

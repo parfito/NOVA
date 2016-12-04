@@ -8,6 +8,7 @@
 #include "cow.hpp"
 #include "memory.hpp"
 #include "string.hpp"
+#include "pd.hpp"
 
 uint16 Cow::frame_index_max = 0;
 uint16 Cow::elt_index_max = 0;
@@ -59,8 +60,8 @@ void Cow::free_cow_frame(struct cow_frame * frame_ptr) {
 }
 
 void Cow::free_cow_elt(cow_elt * cow) {
-    cow->old_phys =  (Paddr) (-1);//0xffffffff; old_phys when set would always be differrent from 0xffffffff because pages are allocated at page boundary
-    cow->page_addr_or_gpa = (mword) (-1); // 0xffffffff;
+    cow->old_phys = (~0ul); //0xffffffff; old_phys when set would always be differrent from 0xffffffff because pages are allocated at page boundary
+    cow->page_addr_or_gpa = (~0ul); // 0xffffffff;
     cow->used = false;
     free_cow_frame(cow->new_phys[0]);
     free_cow_frame(cow->new_phys[1]);
@@ -100,10 +101,10 @@ bool Cow::subtitute(Paddr phys, cow_elt* cow, mword addr) {
         return false;
     if (!get_new_cow_frame(&frame2))
         return false;
-//    if (!max_displayed) {
-//        Console::print("cpu: %2d  frame_index_max: %d  elt_index_max: %d", Cpu::id, frame_index_max, elt_index_max);
-//        max_displayed = true;
-//    }
+    //    if (!max_displayed) {
+    //        Console::print("cpu: %2d  frame_index_max: %d  elt_index_max: %d", Cpu::id, frame_index_max, elt_index_max);
+    //        max_displayed = true;
+    //    }
     void *ptr = Hpt::remap_cow(Pd::kern.quota, frame1->phys_addr); //we only have 2^NB_COW_FRAME availlable, may be exhausted
     memcpy(ptr, reinterpret_cast<const void*> (addr), PAGE_SIZE);
     cow->new_phys[0] = frame1;
@@ -114,3 +115,31 @@ bool Cow::subtitute(Paddr phys, cow_elt* cow, mword addr) {
 
     return true;
 }
+
+void Cow::initialize() {
+    // Allocate NB_COW_FRAME cow frames
+    for (uint64 i = 0; i < NB_COW_FRAME; i++)
+        cow_frames[i].phys_addr = Buddy::ptr_to_phys(Buddy::allocator.alloc(0, Pd::kern.quota, Buddy::FILL_0));
+
+    // calculate the physical address space for the RAM
+    Hip_mem *mem_desc = Hip::get_mem_desc();
+    uint32 num_mem_desc = (Hip::get_length() - Hip::get_mem_offset()) / Hip::get_mem_size();
+    for (uint32 i = 0; i < num_mem_desc; i++, mem_desc++) {
+        if (mem_desc->type == AVAILABLE_MEMORY) {
+            struct block *b = get_new_block_elt(), *tampon = ram_mem_list;
+            b->start = align_up(static_cast<Paddr> (mem_desc->addr), PAGE_SIZE); // Core rounds the start to the upper page boundary
+            b->end = align_dn(static_cast<Paddr> (mem_desc->addr + mem_desc->size), PAGE_SIZE); // Core truncate the size to the lower page boundary
+            ram_mem_list = b;
+            b->next = tampon;
+        }
+    }
+    struct block *b = ram_mem_list;
+    while (b != nullptr) {
+        if (b->start == 0x0UL) {
+            b->start = 0x1000UL; // Core : [0 - 1000[ is needed as I/O memory by the VESA driver, remove it from Ram space */
+        }
+        //                        Console::print("deb: %08lx  fin: %08lx", b->start, b->end);
+        b = b->next;
+    }
+}
+

@@ -50,7 +50,7 @@ void bootstrap()
         Ec *root_ec = new (Pd::root.quota) Ec (&Pd::root, NUM_EXC + 1, &Pd::root, Ec::root_invoke, Cpu::id, 0, USER_ADDR - 2 * PAGE_SIZE, 0, nullptr);
         Sc *root_sc = new (Pd::root.quota) Sc (&Pd::root, NUM_EXC + 2, root_ec, Cpu::id, Sc::default_prio, Sc::default_quantum);
         root_sc->remote_enqueue();
-        Console::print("Lapic::freq_tsc: %lu  freq_bus: %lu", Lapic::freq_tsc, Lapic::freq_bus);
+        Console::print("Lapic::freq_tsc: %u  freq_bus: %u", Lapic::freq_tsc, Lapic::freq_bus);
     }
     Ec::clear_instCounter();
     Sc::schedule();
