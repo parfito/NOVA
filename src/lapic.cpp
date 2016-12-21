@@ -152,3 +152,17 @@ void Lapic::ipi_vector (unsigned vector)
 
     Counter::print<1,16> (++Counter::ipi[ipi], Console_vga::COLOR_LIGHT_GREEN, ipi + SPN_IPI);
 }
+
+uint64 Lapic::read_counter()
+{
+    return Msr::read<uint64>(Msr::MSR_PERF_FIXED_CTR0);
+}
+
+void Lapic::readReset_instCounter(unsigned cs, unsigned vec, mword rip) {
+    if (cs & 3 || vec == 1001){
+        Console::print("compteur: %lld, IA32_PMC0: %lld  vector: %u  rip: %lx", 
+                Msr::read<uint64>(Msr::MSR_PERF_FIXED_CTR0), Msr::read<uint64>(Msr::IA32_PMC0), vec, rip);; //no need to stop the counter because he is not supposed to count (according to config) when we are in kernl mode
+        Msr::write(Msr::MSR_PERF_FIXED_CTR0, 0x0);
+        Msr::write (Msr::IA32_PMC0, 0x0);
+    }
+}

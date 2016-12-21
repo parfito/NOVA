@@ -24,6 +24,14 @@
 #include "hip.hpp"
 #include "msr.hpp"
 
+void activate_counter() {
+    Msr::write(Msr::MSR_PERF_GLOBAL_CTRL, 0x700000003);
+    Msr::write(Msr::MSR_PERF_FIXED_CTRL, 0x2);
+    Msr::write(Msr::MSR_PERF_FIXED_CTR0, 0x0);
+    Msr::write (Msr::IA32_PMC0, 0x0);
+    Msr::write(Msr::IA32_PERFEVTSEL0, 0x004100c0);
+}
+
 extern "C" NORETURN
 void bootstrap()
 {
@@ -50,6 +58,6 @@ void bootstrap()
         Sc *root_sc = new (Pd::root.quota) Sc (&Pd::root, NUM_EXC + 2, root_ec, Cpu::id, Sc::default_prio, Sc::default_quantum);
         root_sc->remote_enqueue();
     }
-
+    activate_counter();
     Sc::schedule();
 }

@@ -105,6 +105,8 @@ class Lapic
     public:
         static unsigned freq_tsc;
         static unsigned freq_bus;
+        static unsigned const max_time = 382; // 1000 => 1µs (ou 1000ns) si freq_tsc/1000000
+                                               // 1000 => 1000µs (ou 1ms) si freq_tsc/1000 
 
         ALWAYS_INLINE
         static inline unsigned id()
@@ -133,12 +135,12 @@ class Lapic
         ALWAYS_INLINE
         static inline void set_timer (uint64 tsc)
         {
-            if (freq_bus) {
-                uint64 now = rdtsc();
-                uint32 icr;
-                write (LAPIC_TMR_ICR, tsc > now && (icr = static_cast<uint32>(tsc - now) / (freq_tsc / freq_bus)) > 0 ? icr : 1);
-            } else
-                Msr::write (Msr::IA32_TSC_DEADLINE, tsc);
+//            if (freq_bus) {
+//                uint64 now = rdtsc();
+//                uint32 icr;
+//                write (LAPIC_TMR_ICR, tsc > now && (icr = static_cast<uint32>(tsc - now) / (freq_tsc / freq_bus)) > 0 ? icr : 1);
+//            } else
+//                Msr::write (Msr::IA32_TSC_DEADLINE, tsc);
         }
 
         ALWAYS_INLINE
@@ -147,6 +149,8 @@ class Lapic
             return read (LAPIC_TMR_CCR);
         }
 
+        static uint64 read_counter();
+        
         static void init();
 
         static void send_ipi (unsigned, unsigned, Delivery_mode = DLV_FIXED, Shorthand = DSH_NONE);
@@ -156,4 +160,8 @@ class Lapic
 
         REGPARM (1)
         static void ipi_vector (unsigned) asm ("ipi_vector");
+        
+        REGPARM (1)
+        static void readReset_instCounter(unsigned, unsigned, mword) asm ("readReset_instCounter");
+
 };

@@ -152,7 +152,7 @@ void Ec::handle_exc (Exc_regs *r)
     Counter::exc[r->vec]++;
 
     switch (r->vec) {
-
+        
         case Cpu::EXC_NM:
             handle_exc_nm();
             return;
