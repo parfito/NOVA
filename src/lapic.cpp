@@ -130,8 +130,10 @@ void Lapic::timer_handler()
         Timeout::check();        
 
     Rcu::update();
-    eoi();
-//    Ec::check_memory(1251);
+//    if (expired){
+//        eoi();
+//        Ec::check_memory(1251);
+//    }
 }
 
 void Lapic::lvt_vector (unsigned vector)
@@ -151,7 +153,7 @@ void Lapic::lvt_vector (unsigned vector)
     }
 
     eoi();
-
+    Ec::check_memory(1251);
     Counter::print<1,16> (++Counter::lvt[lvt], Console_vga::COLOR_LIGHT_BLUE, lvt + SPN_LVT);
 }
 
@@ -174,7 +176,7 @@ void Lapic::ipi_vector (unsigned vector)
     Counter::print<1,16> (++Counter::ipi[ipi], Console_vga::COLOR_LIGHT_GREEN, ipi + SPN_IPI);
 }
 
-void Lapic::reset_pmi(unsigned count)
+void Lapic::set_pmi(unsigned count)
 {
     if(count==0)
         return;

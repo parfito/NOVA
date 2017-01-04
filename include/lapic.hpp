@@ -167,7 +167,7 @@ class Lapic
         REGPARM (1)
         static void ipi_vector (unsigned) asm ("ipi_vector");
         
-        static void reset_pmi(unsigned);
+        static void set_pmi(unsigned);
         
         static void activate_pmi();
         

@@ -38,7 +38,7 @@ Slab_cache Ec::cache(sizeof (Ec), 32);
 unsigned Ec::exc_counter = 0, Ec::gsi_counter1 = 0, Ec::exc_counter1 = 0, Ec::exc_counter2 = 0, 
         Ec::lvt_counter1 = 0, Ec::msi_counter1 = 0, Ec::ipi_counter1 = 0, Ec::gsi_counter2 = 0,
         Ec::lvt_counter2 = 0, Ec::msi_counter2 = 0, Ec::ipi_counter2 = 0;
-unsigned Ec::step_nb = 20, Ec::compteur = 0;
+unsigned Ec::step_nb = 100, Ec::compteur = 0;
 bool Ec::ec_debug = false;
 Ec *Ec::current, *Ec::fpowner;
 // Constructors
@@ -279,22 +279,8 @@ void Ec::ret_user_sysexit() {
         current->save_state();
         current->launch_state = Ec::SYSEXIT;
     }
-//    if (reinterpret_cast<mword>(current) == 0xffffffff84c50100) {
-//        Cpu_regs  r = current->regs;
-//        Console::print("Ec: %p  err: %08lx  rdi: %10lx cs: %08lx ds: %08lx ss: %08lx  "
-//                "es: %08lx  fs: %08lx  gs: %08lx", current, r.err, r.REG(di),
-//                r.cs, r.ds, r.ss, r.es, r.fs, r.gs);
-//        Utcb *u = current->utcb;
-//        Console::print("rdi %16lx  cs %04x:%08lx:%08lx ds %04x:%08lx:%08lx ss  %04x:%08lx:%08lx es %04x:%08lx:%08lx fs %04x:%08lx:%08lx gs %04x:%08lx:%08lx",
-//                u->read_rdi(), u->read_cs_sel(), u->read_cs_base(), u->read_cs_lim(),
-//                u->read_ds_sel(), u->read_ds_base(), u->read_ds_lim(),
-//                u->read_ss_sel(), u->read_ss_base(), u->read_ss_lim(),
-//                u->read_es_sel(), u->read_es_base(), u->read_es_lim(),
-//                u->read_fs_sel(), u->read_fs_base(), u->read_fs_lim(),
-//                u->read_gs_sel(), u->read_gs_base(), u->read_gs_lim()
-//                );
-//    }
-//    current->activate_pmi(20);
+    if(ec_debug)
+        Console::print("TF: %08lx SYSEXIT", current->regs.r11);
     asm volatile ("lea %0," EXPAND(PREG(sp); LOAD_GPR RET_USER_HYP) : : "m" (current->regs) : "memory");
 
     UNREACHED;
@@ -310,6 +296,8 @@ void Ec::ret_user_iret() {
         current->save_state();
         current->launch_state = Ec::IRET;
     }
+    if(ec_debug)
+        Console::print("TF: %08lx IRET", current->regs.REG(fl));
     asm volatile ("lea %0," EXPAND(PREG(sp); LOAD_GPR LOAD_SEG RET_USER_EXC) : : "m" (current->regs) : "memory");
 
     UNREACHED;
@@ -659,4 +647,9 @@ void Ec::restore_state() {
 void Ec::rollback() {
     regs = regs_0;
     pd->rollback();
+}
+
+void Ec::getVec(unsigned cs, unsigned vec, mword rip) {
+    if(ec_debug && (cs & 3 || vec == 1001))
+        Console::print("vector: %u  cs: %u  rip: %lx", vec, cs, rip);
 }

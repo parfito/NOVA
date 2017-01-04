@@ -86,6 +86,7 @@
 #define OFS_CR2         0x58
 #define OFS_VEC         0xa8
 #define OFS_CS          0xb8
+#define OFS_RIP         0xb0
 
 #define LOAD_KSP        mov     PREG(sp), PREG(11);     \
                         mov     tss_run + 4, PREG(sp)

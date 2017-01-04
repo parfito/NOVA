@@ -87,6 +87,10 @@ INTRGATE                \DPL
  */
 entry_exc:              push    $0
 entry_exc_error:        SAVE_STATE
+                        mov     OFS_RIP (%REG(bx)), %ARG_3
+                        mov     OFS_VEC (%REG(bx)), %ARG_2
+                        mov     OFS_CS (%REG(bx)), %ARG_1
+                        call getVec
                         mov     OFS_CS (%REG(bx)), %ARG_1
                         call    incr_count
                         mov     %cr2, %REG(ax)
@@ -132,6 +136,10 @@ INTRGATE                0
 
 entry_gsi:              push    $0
                         SAVE_STATE
+                        mov     OFS_RIP (%REG(bx)), %ARG_3
+                        mov     OFS_VEC (%REG(bx)), %ARG_2
+                        mov     OFS_CS (%REG(bx)), %ARG_1
+                        call getVec
                         mov     OFS_CS (%REG(bx)), %ARG_1
                         call    incr_count
                         mov     OFS_VEC (%REG(bx)), %ARG_1
@@ -150,6 +158,10 @@ INTRGATE                0
 
 entry_lvt:              push    $0
                         SAVE_STATE
+                        mov     OFS_RIP (%REG(bx)), %ARG_3
+                        mov     OFS_VEC (%REG(bx)), %ARG_2
+                        mov     OFS_CS (%REG(bx)), %ARG_1
+                        call getVec
                         mov     OFS_CS (%REG(bx)), %ARG_1
                         call    incr_count
                         mov     OFS_VEC (%REG(bx)), %ARG_1
@@ -168,6 +180,10 @@ INTRGATE                0
 
 entry_msi:              push    $0
                         SAVE_STATE
+                        mov     OFS_RIP (%REG(bx)), %ARG_3
+                        mov     OFS_VEC (%REG(bx)), %ARG_2
+                        mov     OFS_CS (%REG(bx)), %ARG_1
+                        call getVec
                         mov     OFS_CS (%REG(bx)), %ARG_1
                         call    incr_count
                         mov     OFS_VEC (%REG(bx)), %ARG_1
@@ -186,6 +202,10 @@ INTRGATE                0
 
 entry_ipi:              push    $0
                         SAVE_STATE
+                        mov     OFS_RIP (%REG(bx)), %ARG_3
+                        mov     OFS_VEC (%REG(bx)), %ARG_2
+                        mov     OFS_CS (%REG(bx)), %ARG_1
+                        call getVec
                         mov     OFS_CS (%REG(bx)), %ARG_1
                         call    incr_count
                         mov     OFS_VEC (%REG(bx)), %ARG_1

@@ -122,7 +122,11 @@ bool Ec::handle_exc_gp(Exc_regs *r) {
 
 bool Ec::handle_exc_pf(Exc_regs *r) {
     mword addr = r->cr2;
-
+    
+    if(ec_debug){
+        if(r->err & Hpt::ERR_U)
+            Console::print("OK");
+    }
     if ((r->err & Hpt::ERR_U) && Pd::current->Space_mem::loc[Cpu::id].is_cow_fault(Pd::current->quota, addr, r->err))
         return true;
 
@@ -167,22 +171,24 @@ void Ec::handle_exc(Exc_regs *r) {
     switch (r->vec) {
         case Cpu::EXC_NMI:
             if (Msr::read<uint64>(Msr::IA32_PERF_GLOBAL_STATUS) & 1ull << 32) {
-                Console::print("PERF INTERRUPT OVERFLOW STATUS %llx  OVF_CTRL %llx", Msr::read<uint64>(Msr::IA32_PERF_GLOBAL_STATUS), Msr::read<uint64>(Msr::IA32_PERF_GLOBAL_OVF_CTRL));
                 current->in_step_mode = true;
                 current->regs.REG(fl) |= Cpu::EFL_TF;
-                Console::print("STATUS %llx  OVF_CTRL %llx", Msr::read<uint64>(Msr::IA32_PERF_GLOBAL_STATUS), Msr::read<uint64>(Msr::IA32_PERF_GLOBAL_OVF_CTRL));
+                compteur = current->nbInstr_to_execute ? current->nbInstr_to_execute : ~0ull - Msr::read<uint64>(Msr::MSR_PERF_FIXED_CTR0);
+                Console::print("PERF INTERRUPT OVERFLOW MSR_PERF_FIXED_CTR0 %llx  compteur %x", Msr::read<uint64>(Msr::MSR_PERF_FIXED_CTR0), compteur);
                 return;
             }
             break;
         case Cpu::EXC_DB:
+            Console::print(" In Debug Mode");
             if (current->in_step_mode) {
-                compteur = current->nbInstr_to_execute;
                 for (; compteur > 0;) {
                     Console::print("Step finished %u",compteur);
+                    current->regs.REG(fl) |= Cpu::EFL_TF;
                     compteur--;
                     return;
                 }
                 compteur = 0;
+                current->regs.REG(fl) &= ~Cpu::EFL_TF;
                 current->in_step_mode = false;
                 check_memory(3001);
             }
@@ -244,15 +250,16 @@ void Ec::check_memory(int pmi) {
     //        //        current->ec_debug= true;
     //    }
     if (ec->one_run_ok()) {
+        if(pmi == 1251){
+            return;
+        }
         ec->exc_counter2 = Ec::exc_counter;
         ec->counter2 = readReset_instCounter();
-        if (Ec::ec_debug) {
-            Console::print("PMI: %d  Ec: %p  Pd: %p  X: %lld | %lld  A: %u | %u  gsi: %u | %u  lvt: %u | %u "
-                    " msi: %u | %u  ipi: %u | %u", pmi, ec, pd, ec->counter1,
-                    ec->counter2, ec->exc_counter1, ec->exc_counter2,
-                    Ec::gsi_counter1, Ec::gsi_counter2, Ec::lvt_counter1, Ec::lvt_counter2,
-                    Ec::msi_counter1, Ec::msi_counter2, Ec::ipi_counter1, Ec::ipi_counter2);
-            Ec::ec_debug = false;
+        if (ec_debug) {
+            Console::print("PMI: %d  counters: %lld | %lld  exc: %d | %d Run = 2  PMC0: %lld  EIP: %lx", 
+                    pmi, ec->counter1, ec->counter2, ec->exc_counter1, ec->exc_counter2,
+                    Msr::read<uint64>(Msr::IA32_PMC0), ec->regs.REG(ip));
+//            ec_debug = false;
         }
         if (pmi == 3001) {
             Console::print("PMI: %d  counter2: %lld  exc: %d Run = 2  PMC0: %lld  EIP: %lx",
@@ -287,23 +294,32 @@ void Ec::check_memory(int pmi) {
             }
         }
     } else {
+        ec->restore_state();
+        ec->run_number++;
         ec->exc_counter1 = Ec::exc_counter;
         ec->counter1 = readReset_instCounter();
         if (pmi == 1251) {
+            ec_debug = true; 
             Console::print("PMI: %d  counter1: %lld  exc: %u Run = 1  PMC0: %lld  EIP: %lx",
                     pmi, ec->counter1, ec->exc_counter1, Msr::read<uint64>(Msr::IA32_PMC0), ec->regs.REG(ip));
             uint64 instruction_num = ec->counter1 - ec->exc_counter1; 
             if (instruction_num > step_nb){
-                Lapic::reset_pmi(instruction_num - step_nb);
-                ec->nbInstr_to_execute = step_nb;
+                Lapic::set_pmi(instruction_num + step_nb);
+                ec->nbInstr_to_execute = 0;
             }else{
-                ec->in_step_mode = true;
-                ec->regs.REG(fl) |= Cpu::EFL_TF;
-                ec->nbInstr_to_execute = instruction_num;
+                if(instruction_num > 0){
+                    ec->in_step_mode = true;
+                    if(ec->launch_state == SYSEXIT){
+                        Console::print("R11 %lx", ec->regs.r11);
+                        ec->regs.r11 |= Cpu::EFL_TF;
+                    }else{
+                        ec->regs.REG(fl) |= Cpu::EFL_TF;
+                    }
+                    ec->nbInstr_to_execute = instruction_num;
+                    compteur = instruction_num;  
+                }
             }
         }
-        ec->restore_state();
-        ec->run_number++;
         switch (ec->launch_state) {
             case Ec::SYSEXIT:
                 Ec::ret_user_sysexit();

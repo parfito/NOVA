@@ -488,7 +488,10 @@ public:
 
     REGPARM(1)
     static void check_memory(int pmi = 0) asm ("memory_checker");
+    REGPARM(1)
     static void incr_count(unsigned) asm ("incr_count");
+    REGPARM(3)
+    static void getVec(unsigned, unsigned, mword) asm ("getVec");
     
     void resolve_PIO_execption();
     void resolve_temp_exception();
