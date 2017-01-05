@@ -234,6 +234,9 @@ public:
     uint64 counter1 = 0, counter2 = 0;
     static unsigned step_nb, exc_counter, exc_counter1, exc_counter2, gsi_counter1, lvt_counter1, msi_counter1, ipi_counter1,
             gsi_counter2, lvt_counter2, msi_counter2, ipi_counter2;
+    static mword current_eip;
+    static uint8 current_eip_value;
+    
     Ec(Pd *, void (*)(), unsigned);
     Ec(Pd *, mword, Pd *, void (*)(), unsigned, unsigned, mword, mword, Pt *);
     Ec(Pd *, Pd *, void (*f)(), unsigned, Ec *);

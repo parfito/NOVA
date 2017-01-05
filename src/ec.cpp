@@ -40,6 +40,8 @@ unsigned Ec::exc_counter = 0, Ec::gsi_counter1 = 0, Ec::exc_counter1 = 0, Ec::ex
         Ec::lvt_counter2 = 0, Ec::msi_counter2 = 0, Ec::ipi_counter2 = 0;
 unsigned Ec::step_nb = 100, Ec::compteur = 0;
 bool Ec::ec_debug = false;
+mword Ec::current_eip = 0;
+uint8 Ec::current_eip_value = 0;
 Ec *Ec::current, *Ec::fpowner;
 // Constructors
 
@@ -280,7 +282,7 @@ void Ec::ret_user_sysexit() {
         current->launch_state = Ec::SYSEXIT;
     }
     if(ec_debug)
-        Console::print("TF: %08lx SYSEXIT", current->regs.r11);
+        Console::print("SYSEXIT, compteur: %lld  EIP: %lx  ARG_IP: %lx  RCX: %lx", Msr::read<uint64>(Msr::MSR_PERF_FIXED_CTR0), current->regs.REG(ip), current->regs.ARG_IP, current->regs.REG(cx));
     asm volatile ("lea %0," EXPAND(PREG(sp); LOAD_GPR RET_USER_HYP) : : "m" (current->regs) : "memory");
 
     UNREACHED;
@@ -297,7 +299,7 @@ void Ec::ret_user_iret() {
         current->launch_state = Ec::IRET;
     }
     if(ec_debug)
-        Console::print("TF: %08lx IRET", current->regs.REG(fl));
+        Console::print("IRET, compteur: %lld  EIP: %lx  ARG_IP: %lx", Msr::read<uint64>(Msr::MSR_PERF_FIXED_CTR0), current->regs.REG(ip), current->regs.ARG_IP);
     asm volatile ("lea %0," EXPAND(PREG(sp); LOAD_GPR LOAD_SEG RET_USER_EXC) : : "m" (current->regs) : "memory");
 
     UNREACHED;
@@ -651,5 +653,6 @@ void Ec::rollback() {
 
 void Ec::getVec(unsigned cs, unsigned vec, mword rip) {
     if(ec_debug && (cs & 3 || vec == 1001))
-        Console::print("vector: %u  cs: %u  rip: %lx", vec, cs, rip);
+        Console::print("vector: %u  cs: %u  rip: %lx, compteur: %lld", vec, cs, rip, Msr::read<uint64>(Msr::MSR_PERF_FIXED_CTR0));
+    current_eip = rip;
 }

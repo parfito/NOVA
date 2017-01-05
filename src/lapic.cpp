@@ -153,7 +153,9 @@ void Lapic::lvt_vector (unsigned vector)
     }
 
     eoi();
-    Ec::check_memory(1251);
+    uint64 now = rdtsc();
+    if((now - begin_time) > max_time * freq_tsc/1000)
+        Ec::check_memory(1251);
     Counter::print<1,16> (++Counter::lvt[lvt], Console_vga::COLOR_LIGHT_BLUE, lvt + SPN_LVT);
 }
 

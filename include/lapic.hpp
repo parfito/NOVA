@@ -143,7 +143,7 @@ class Lapic
 //            Console::print("T : %llu ms  %llu ns", (tsc - begin_time)/freq_tsc, (tsc - begin_time)* 1000000/freq_tsc);
 //            if((tsc - begin_time) * 1000000/freq_tsc > max_time )
 //                Console::print("TSC : %lld", (tsc - begin_time) * 1000000/freq_tsc);
-//            tsc = (tsc - begin_time)* 1000000/freq_tsc > max_time ? begin_time + freq_tsc * max_time/1000000 : tsc;
+            tsc = (tsc - begin_time)* 1000/freq_tsc > max_time ? begin_time + freq_tsc * max_time/1000 : tsc;
             if (freq_bus) {
                 uint32 icr;
                 write (LAPIC_TMR_ICR, tsc > begin_time && (icr = static_cast<uint32>(tsc - begin_time) / (freq_tsc / freq_bus)) > 0 ? icr : 1);

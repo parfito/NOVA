@@ -123,10 +123,6 @@ bool Ec::handle_exc_gp(Exc_regs *r) {
 bool Ec::handle_exc_pf(Exc_regs *r) {
     mword addr = r->cr2;
     
-    if(ec_debug){
-        if(r->err & Hpt::ERR_U)
-            Console::print("OK");
-    }
     if ((r->err & Hpt::ERR_U) && Pd::current->Space_mem::loc[Cpu::id].is_cow_fault(Pd::current->quota, addr, r->err))
         return true;
 
@@ -176,32 +172,62 @@ void Ec::handle_exc(Exc_regs *r) {
                 compteur = current->nbInstr_to_execute ? current->nbInstr_to_execute : ~0ull - Msr::read<uint64>(Msr::MSR_PERF_FIXED_CTR0);
                 Console::print("PERF INTERRUPT OVERFLOW MSR_PERF_FIXED_CTR0 %llx  compteur %x", Msr::read<uint64>(Msr::MSR_PERF_FIXED_CTR0), compteur);
                 return;
+            }else {
+                Console::print("UNEXPECTED NMI");
+                break;
             }
             break;
+            
         case Cpu::EXC_DB:
-            Console::print(" In Debug Mode");
-            if (current->in_step_mode) {
-                for (; compteur > 0;) {
-                    Console::print("Step finished %u",compteur);
-                    current->regs.REG(fl) |= Cpu::EFL_TF;
-                    compteur--;
+            if (r->user()) {
+                if(current->in_step_mode){
+                    uint8 *ptr = reinterpret_cast<uint8 *> (r->REG(ip));
+                    ptr--;
+                    current_eip_value = *ptr;
+                    *ptr = 0xcc;
+                    r->REG(fl) &= ~Cpu::EFL_TF;
+                    return;
+                }else{
+                    Ec::current->disable_step_debug();
+                    current->launch_state = Ec::UNLAUNCHED;
+                    current->reset_counter();
                     return;
                 }
-                compteur = 0;
-                current->regs.REG(fl) &= ~Cpu::EFL_TF;
-                current->in_step_mode = false;
-                check_memory(3001);
-            }
-            if (r->user()) {
-                Ec::current->disable_step_debug();
-                current->launch_state = Ec::UNLAUNCHED;
-                current->reset_counter();
-                return;
             } else {
                 Console::print("Debug in kernel");
                 break;
             }
-
+            break;
+            
+        case Cpu::EXC_BP:
+            compteur = Msr::read<uint64>(Msr::MSR_PERF_FIXED_CTR0) - 1;
+            Console::print("Breakpoint compteur: %lu", compteur);
+            unsigned nb_instr;
+            nb_instr = current->counter1 - current->exc_counter1;
+            if(compteur < nb_instr){
+                r->REG(ip) --;
+                uint8 *ptr = reinterpret_cast<uint8 *> (r->REG(ip));
+                *ptr = current_eip_value;
+                r->REG(fl) |= Cpu::EFL_TF;
+                return;
+            }else if(compteur == nb_instr){
+                r->REG(ip) --;
+                uint8 *ptr = reinterpret_cast<uint8 *> (r->REG(ip));
+                *ptr = current_eip_value;
+                current->in_step_mode = false;
+                Paddr phys;
+                mword a;
+                Pd::current->Space_mem::loc[Cpu::id].lookup(current_eip, phys, a);
+                Pd::current->Space_mem::loc[Cpu::id].update(Pd::current->quota, current_eip, 0, phys, a & ~Hpt::HPT_W, Hpt::TYPE_UP, false);
+                check_memory(3001);
+                ec_debug = false;
+                return;
+            }else{
+                Console::print("Problem in RE-RUN");
+                break;
+            }
+            break;
+            
         case Cpu::EXC_NM:
             if (r->user())
                 check_memory(1253);
@@ -256,14 +282,32 @@ void Ec::check_memory(int pmi) {
         ec->exc_counter2 = Ec::exc_counter;
         ec->counter2 = readReset_instCounter();
         if (ec_debug) {
-            Console::print("PMI: %d  counters: %lld | %lld  exc: %d | %d Run = 2  PMC0: %lld  EIP: %lx", 
+            Console::print("PMI: %d  counters: %lld | %lld  exc: %d | %d Run = 2  PMC0: %lld  EIP: %lx  RCX: %lx  current_eip: %lx", 
                     pmi, ec->counter1, ec->counter2, ec->exc_counter1, ec->exc_counter2,
-                    Msr::read<uint64>(Msr::IA32_PMC0), ec->regs.REG(ip));
+                    Msr::read<uint64>(Msr::IA32_PMC0), ec->regs.REG(ip), ec->regs.REG(cx), current_eip);
 //            ec_debug = false;
         }
+        if(ec->counter2 == 0){ // No instruction is executed because an interrupt/exception was pending
+            ec->regs = ec->regs_0;
+            Console::print("1254 pending  launch_state: %d  EIP: %lx", ec->launch_state, ec->regs.REG(ip));
+            switch (ec->launch_state) {
+                case Ec::SYSEXIT:
+                    Ec::ret_user_sysexit();
+                    break;
+                case Ec::IRET:
+                    Ec::ret_user_iret();
+                case Ec::VMRESUME:
+                    Ec::ret_user_vmresume();
+                case Ec::VMRUN:
+                    Ec::ret_user_vmrun();
+                case Ec::UNLAUNCHED:
+                    Console::print("Bad Run");
+                    Ec::die("Bad Run");
+            }
+        }
         if (pmi == 3001) {
-            Console::print("PMI: %d  counter2: %lld  exc: %d Run = 2  PMC0: %lld  EIP: %lx",
-                    pmi, ec->counter2, ec->exc_counter2, Msr::read<uint64>(Msr::IA32_PMC0), ec->regs.REG(ip));
+            Console::print("PMI: %d  counter2: %lld  exc: %d Run = 2  PMC0: %lld  EIP: %lx  current_eip: %lx",
+                    pmi, ec->counter2, ec->exc_counter2, Msr::read<uint64>(Msr::IA32_PMC0), ec->regs.REG(ip), current_eip);
             //            Lapic::reset_pmi(ec->counter2 - ec->exc_counter2);
         }
         ec->reset_counter();
@@ -294,32 +338,24 @@ void Ec::check_memory(int pmi) {
             }
         }
     } else {
-        ec->restore_state();
-        ec->run_number++;
         ec->exc_counter1 = Ec::exc_counter;
         ec->counter1 = readReset_instCounter();
         if (pmi == 1251) {
             ec_debug = true; 
-            Console::print("PMI: %d  counter1: %lld  exc: %u Run = 1  PMC0: %lld  EIP: %lx",
-                    pmi, ec->counter1, ec->exc_counter1, Msr::read<uint64>(Msr::IA32_PMC0), ec->regs.REG(ip));
-            uint64 instruction_num = ec->counter1 - ec->exc_counter1; 
-            if (instruction_num > step_nb){
-                Lapic::set_pmi(instruction_num + step_nb);
-                ec->nbInstr_to_execute = 0;
-            }else{
-                if(instruction_num > 0){
-                    ec->in_step_mode = true;
-                    if(ec->launch_state == SYSEXIT){
-                        Console::print("R11 %lx", ec->regs.r11);
-                        ec->regs.r11 |= Cpu::EFL_TF;
-                    }else{
-                        ec->regs.REG(fl) |= Cpu::EFL_TF;
-                    }
-                    ec->nbInstr_to_execute = instruction_num;
-                    compteur = instruction_num;  
-                }
-            }
+            Console::print("PMI: %d  counter1: %lld  exc: %u Run = 1  PMC0: %lld  launch_state: %d  EIP: %lx  RCX: %lx  ARG_IP: %lx  current_eip: %lx",
+                    pmi, ec->counter1, ec->exc_counter1, Msr::read<uint64>(Msr::IA32_PMC0), 
+                    ec->launch_state, ec->regs.REG(ip), ec->regs.REG(cx), ec->regs.ARG_IP, current_eip);
+            uint8 *ptr = reinterpret_cast<uint8 *> (current_eip);
+            current_eip_value = *ptr;
+            Paddr phys;
+            mword a;
+            Pd::current->Space_mem::loc[Cpu::id].lookup(current_eip, phys, a);
+            Pd::current->Space_mem::loc[Cpu::id].update(Pd::current->quota, current_eip, 0, phys, a | Hpt::HPT_W, Hpt::TYPE_UP, false);
+            *ptr = 0xcc;
+            ec->in_step_mode = true;
         }
+        ec->restore_state();
+        ec->run_number++;
         switch (ec->launch_state) {
             case Ec::SYSEXIT:
                 Ec::ret_user_sysexit();

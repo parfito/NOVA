@@ -42,16 +42,6 @@ bool Hpt::sync_from(Quota &quota, Hpt src, mword v, mword o) {
     // if d->val == (s->val|Hpt::HPT_COW), so the previous comparison must have been tested true.
     if (d->val == (s->val | Hpt::HPT_COW))
         return false;
-    //        if (Ec::debug) {
-    //            Console::print("v: %08lx  d: %p  d.val: %08lx  s: %p  s.val: %08lx", v, d, d->val, s, s->val);
-    //    if (v < USER_ADDR)
-    //        Pd::current->big_page_check();
-    //            Paddr phys1;
-    //            mword attr1;
-    //            lookup(reinterpret_cast<mword> (&(d->val)), phys1, attr1);
-    //            Console::print("&(e->val): %08lx", phys1);
-    //        }
-
     d->val = s->val;
 
     return true;
