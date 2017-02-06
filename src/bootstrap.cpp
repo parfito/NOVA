@@ -23,6 +23,7 @@
 #include "ec.hpp"
 #include "hip.hpp"
 #include "msr.hpp"
+#include "lapic.hpp"
 
 void activate_counter() {
     Msr::write(Msr::MSR_PERF_GLOBAL_CTRL, 0x700000003);
@@ -58,6 +59,7 @@ void bootstrap()
         Sc *root_sc = new (Pd::root.quota) Sc (&Pd::root, NUM_EXC + 2, root_ec, Cpu::id, Sc::default_prio, Sc::default_quantum);
         root_sc->remote_enqueue();
     }
-    activate_counter();
+    Lapic::activate_pmi();
+    Lapic::set_pmi(3);
     Sc::schedule();
 }

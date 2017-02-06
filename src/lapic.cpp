@@ -103,7 +103,9 @@ void Lapic::send_ipi (unsigned cpu, unsigned vector, Delivery_mode dlv, Shorthan
     write (LAPIC_ICR_LO, dsh | 1U << 14 | dlv | vector);
 }
 
-void Lapic::therm_handler() {}
+void Lapic::therm_handler() {
+    Console::print("PERF PMI");
+}
 
 void Lapic::perfm_handler() {}
 
@@ -165,4 +167,20 @@ void Lapic::readReset_instCounter(unsigned cs, unsigned vec, mword rip) {
         Msr::write(Msr::MSR_PERF_FIXED_CTR0, 0x0);
         Msr::write (Msr::IA32_PMC0, 0x0);
     }
+}
+
+void Lapic::set_pmi(unsigned count){
+    if(count==0)
+        return;
+    set_lvt(LAPIC_LVT_PERFM, DLV_FIXED, VEC_LVT_PERFM);
+    Msr::write(Msr::IA32_PERF_GLOBAL_OVF_CTRL, 1ull << 32);
+    Msr::write(Msr::MSR_PERF_FIXED_CTR0, -count | 0xFFFF00000000);
+//    Console::print("MSR_PERF_FIXED_CTR0 %llx", Msr::read<uint64>(Msr::MSR_PERF_FIXED_CTR0));
+}
+
+void Lapic::activate_pmi() {
+    Msr::write(Msr::MSR_PERF_GLOBAL_CTRL, 0x700000003);
+    Msr::write(Msr::MSR_PERF_FIXED_CTRL, 0xa);
+    Msr::write (Msr::IA32_PMC0, 0x0);
+    Msr::write(Msr::IA32_PERFEVTSEL0, 0x004100c5);
 }

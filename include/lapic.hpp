@@ -135,12 +135,12 @@ class Lapic
         ALWAYS_INLINE
         static inline void set_timer (uint64 tsc)
         {
-//            if (freq_bus) {
-//                uint64 now = rdtsc();
-//                uint32 icr;
-//                write (LAPIC_TMR_ICR, tsc > now && (icr = static_cast<uint32>(tsc - now) / (freq_tsc / freq_bus)) > 0 ? icr : 1);
-//            } else
-//                Msr::write (Msr::IA32_TSC_DEADLINE, tsc);
+            if (freq_bus) {
+                uint64 now = rdtsc();
+                uint32 icr;
+                write (LAPIC_TMR_ICR, tsc > now && (icr = static_cast<uint32>(tsc - now) / (freq_tsc / freq_bus)) > 0 ? icr : 1);
+            } else
+                Msr::write (Msr::IA32_TSC_DEADLINE, tsc);
         }
 
         ALWAYS_INLINE
@@ -163,5 +163,9 @@ class Lapic
         
         REGPARM (1)
         static void readReset_instCounter(unsigned, unsigned, mword) asm ("readReset_instCounter");
-
+        
+                
+        static void set_pmi(unsigned);
+        
+        static void activate_pmi();
 };
