@@ -60,6 +60,6 @@ void bootstrap()
         root_sc->remote_enqueue();
     }
     Lapic::activate_pmi();
-    Lapic::set_pmi(3);
+    Lapic::set_pmi(1000);
     Sc::schedule();
 }

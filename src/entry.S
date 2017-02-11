@@ -227,10 +227,6 @@ entry_sysenter_db:      mov     12(%esp), %esp
 entry_sysenter:         LOAD_KSP
                         lea     -11*SIZE(%REG(sp)), %REG(sp)
                         SAVE_GPR
-                        mov     OFS_RIP (%REG(bx)), %ARG_3
-                        mov     $1001, %ARG_2
-                        mov     OFS_CS (%REG(bx)), %ARG_1
-                        call readReset_instCounter
                         mov     $(CPU_LOCAL_STCK + PAGE_SIZE), %REG(sp)
                         and     $0xf, %ARG_1
                         jmp     *syscall(,%ARG_1,SIZE)
