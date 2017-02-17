@@ -69,7 +69,7 @@ void Lapic::init()
 
     if ((Cpu::bsp = apic_base & 0x100)) {
 
-        send_ipi (0, 0, DLV_INIT, DSH_EXC_SELF);
+//        send_ipi (0, 0, DLV_INIT, DSH_EXC_SELF);
 
         write (LAPIC_TMR_ICR, ~0U);
 
@@ -84,9 +84,9 @@ void Lapic::init()
 
         trace (TRACE_APIC, "TSC:%u kHz BUS:%u kHz", freq_tsc, freq_bus);
 
-        send_ipi (0, 1, DLV_SIPI, DSH_EXC_SELF);
-        Acpi::delay (1);
-        send_ipi (0, 1, DLV_SIPI, DSH_EXC_SELF);
+//        send_ipi (0, 1, DLV_SIPI, DSH_EXC_SELF);
+//        Acpi::delay (1);
+//        send_ipi (0, 1, DLV_SIPI, DSH_EXC_SELF);
     }
 
     write (LAPIC_TMR_ICR, 0);
