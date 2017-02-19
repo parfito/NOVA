@@ -31,6 +31,8 @@
 
 unsigned    Lapic::freq_tsc;
 unsigned    Lapic::freq_bus;
+uint64      Lapic::end_time = 0;
+uint64      Lapic::timer_time = 0;
 
 void Lapic::init()
 {
@@ -124,15 +126,31 @@ void Lapic::timer_handler()
 
 void Lapic::lvt_vector (unsigned vector)
 {
+    timer_time = rdtsc();
     unsigned lvt = vector - VEC_LVT;
-
+    
+    uint64 old_timer_time = timer_time, old_end_time = end_time;
+    
     switch (vector) {
         case VEC_LVT_TIMER: timer_handler(); break;
         case VEC_LVT_ERROR: error_handler(); break;
         case VEC_LVT_PERFM: perfm_handler(); break;
         case VEC_LVT_THERM: therm_handler(); break;
     }
-
+    
+    if(vector == VEC_LVT_TIMER){
+        uint64 diff;
+        char sign = ' ';
+        if(old_timer_time > old_end_time){
+            diff = old_timer_time - old_end_time;
+        }else{
+            diff = old_end_time - old_timer_time;
+            sign = '-';
+        }
+        Console::print("timer_time %llu  end_timer %llu  diff %c%llu", old_timer_time, old_end_time, sign, diff);
+        timer_time = end_time = 0;
+    }
+    
     eoi();
 
     Counter::print<1,16> (++Counter::lvt[lvt], Console_vga::COLOR_LIGHT_BLUE, lvt + SPN_LVT);
