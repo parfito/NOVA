@@ -27,7 +27,7 @@
 extern "C" NORETURN
 void bootstrap()
 {
-    static mword barrier;
+//    static mword barrier;
 
     Cpu::init();
 
