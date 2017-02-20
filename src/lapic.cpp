@@ -31,8 +31,7 @@
 
 unsigned    Lapic::freq_tsc;
 unsigned    Lapic::freq_bus;
-uint64      Lapic::end_time = 0;
-uint64      Lapic::timer_time = 0;
+uint64      Lapic::end_time = 0, Lapic::begin_time = 0, Lapic::max_tsc = 0;
 
 void Lapic::init()
 {
@@ -124,12 +123,10 @@ void Lapic::timer_handler()
     Rcu::update();
 }
 
-void Lapic::lvt_vector (unsigned vector)
+void Lapic::lvt_vector (unsigned vector, unsigned cs)
 {
-    timer_time = rdtsc();
+    Ec::end_time = rdtsc();
     unsigned lvt = vector - VEC_LVT;
-    
-    uint64 old_timer_time = timer_time, old_end_time = end_time;
     
     switch (vector) {
         case VEC_LVT_TIMER: timer_handler(); break;
@@ -137,22 +134,16 @@ void Lapic::lvt_vector (unsigned vector)
         case VEC_LVT_PERFM: perfm_handler(); break;
         case VEC_LVT_THERM: therm_handler(); break;
     }
-    
-    if(vector == VEC_LVT_TIMER){
-        uint64 diff;
-        char sign = ' ';
-        if(old_timer_time > old_end_time){
-            diff = old_timer_time - old_end_time;
-        }else{
-            diff = old_end_time - old_timer_time;
-            sign = '-';
-        }
-        Console::print("timer_time %llu  end_timer %llu  diff %c%llu", old_timer_time, old_end_time, sign, diff);
-        timer_time = end_time = 0;
-    }
-    
+       
     eoi();
 
+    if(vector == VEC_LVT_TIMER && (cs & 3)){
+        uint64 diff = Ec::end_time - Ec::begin_time;
+        if(diff > max_tsc)
+            Console::print("begin_time %llu  end_time %llu  diff %llu", Ec::begin_time, Ec::end_time, diff);
+        Ec::begin_time = Ec::end_time = 0;
+    }
+    
     Counter::print<1,16> (++Counter::lvt[lvt], Console_vga::COLOR_LIGHT_BLUE, lvt + SPN_LVT);
 }
 
@@ -169,4 +160,8 @@ void Lapic::ipi_vector (unsigned vector)
     eoi();
 
     Counter::print<1,16> (++Counter::ipi[ipi], Console_vga::COLOR_LIGHT_GREEN, ipi + SPN_IPI);
+}
+
+void Lapic::lvt_vector (unsigned vector){
+    lvt_vector(vector, 0);
 }

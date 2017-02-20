@@ -51,6 +51,7 @@ void bootstrap()
         Sc *root_sc = new (Pd::root.quota) Sc (&Pd::root, NUM_EXC + 2, root_ec, Cpu::id, Sc::default_prio, Sc::default_quantum);
         root_sc->remote_enqueue();
         Console::print("Lapic::freq_tsc: %u  freq_bus: %u", Lapic::freq_tsc, Lapic::freq_bus);
+        Lapic::activate_timer();
     }
 
     Sc::schedule();

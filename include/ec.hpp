@@ -200,7 +200,8 @@ class Ec : public Kobject, public Refcount, public Queue<Sc>
     public:
         static Ec *current CPULOCAL_HOT;
         static Ec *fpowner CPULOCAL;
-
+        static uint64 begin_time, end_time;
+        
         Ec (Pd *, void (*)(), unsigned);
         Ec (Pd *, mword, Pd *, void (*)(), unsigned, unsigned, mword, mword, Pt *);
         Ec (Pd *, Pd *, void (*f)(), unsigned, Ec *);

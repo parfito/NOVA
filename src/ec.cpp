@@ -36,7 +36,7 @@ INIT_PRIORITY (PRIO_SLAB)
 Slab_cache Ec::cache (sizeof (Ec), 32);
 
 Ec *Ec::current, *Ec::fpowner;
-
+uint64 Ec::begin_time = 0, Ec::end_time =0; 
 // Constructors
 Ec::Ec (Pd *own, void (*f)(), unsigned c) : Kobject (EC, static_cast<Space_obj *>(own)), cont (f), utcb (nullptr), pd (own), partner (nullptr), prev (nullptr), next (nullptr), fpu (nullptr), cpu (static_cast<uint16>(c)), glb (true), evt (0), timeout (this), user_utcb (0), xcpu_sm (nullptr), pt_oom(nullptr)
 {
@@ -257,6 +257,7 @@ void Ec::ret_user_sysexit()
     if (EXPECT_FALSE (hzd))
         handle_hazard (hzd, ret_user_sysexit);
 
+    begin_time = rdtsc();
     asm volatile ("lea %0," EXPAND (PREG(sp); LOAD_GPR RET_USER_HYP) : : "m" (current->regs) : "memory");
 
     UNREACHED;
@@ -269,6 +270,7 @@ void Ec::ret_user_iret()
     if (EXPECT_FALSE (hzd))
         handle_hazard (hzd, ret_user_iret);
 
+    begin_time = rdtsc();
     asm volatile ("lea %0," EXPAND (PREG(sp); LOAD_GPR LOAD_SEG RET_USER_EXC) : : "m" (current->regs) : "memory");
 
     UNREACHED;
