@@ -1052,5 +1052,5 @@ if {[file exists $homedir/.vim]} { exec cp -r $homedir/.vim [run_dir]/home/ }
 copy_and_strip_genode_binaries_to_run_dir $binaries
 build_boot_image $boot_modules
 
-#append qemu_args " -m 512 "
-#run_genode_until forever
+append qemu_args " -m 512 "
+run_genode_until forever
