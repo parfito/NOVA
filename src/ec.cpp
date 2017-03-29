@@ -46,8 +46,9 @@ Ec *Ec::current, *Ec::fpowner;
 
 Cpu_regs Ec::regs_0, Ec::regs_1;
 
-Ec::Ec(Pd *own, void (*f)(), unsigned c) : Kobject(EC, static_cast<Space_obj *> (own)), cont(f), utcb(nullptr), pd(own), partner(nullptr), prev(nullptr), next(nullptr), fpu(nullptr), cpu(static_cast<uint16> (c)), glb(true), evt(0), timeout(this), user_utcb(0), xcpu_sm(nullptr), pt_oom(nullptr) {
+Ec::Ec(Pd *own, void (*f)(), unsigned c, char* const nm) : Kobject(EC, static_cast<Space_obj *> (own)), cont(f), utcb(nullptr), pd(own), partner(nullptr), prev(nullptr), next(nullptr), fpu(nullptr), cpu(static_cast<uint16> (c)), glb(true), evt(0), timeout(this), user_utcb(0), xcpu_sm(nullptr), pt_oom(nullptr) {
     trace(TRACE_SYSCALL, "EC:%p created (PD:%p Kernel)", this, own);
+    copy_string(name, nm);
 
     regs.vtlb = nullptr;
     regs.vmcs = nullptr;
@@ -65,9 +66,10 @@ Ec::Ec(Pd *own, void (*f)(), unsigned c) : Kobject(EC, static_cast<Space_obj *> 
  * @param u : user thread control block
  * @param s : stack pointer
  */
-Ec::Ec(Pd *own, mword sel, Pd *p, void (*f)(), unsigned c, unsigned e, mword u, mword s, Pt *oom) : Kobject(EC, static_cast<Space_obj *> (own), sel, 0xd, free, pre_free), cont(f), pd(p), partner(nullptr), prev(nullptr), next(nullptr), fpu(nullptr), cpu(static_cast<uint16> (c)), glb(!!f), evt(e), timeout(this), user_utcb(u), xcpu_sm(nullptr), pt_oom(oom) {
+Ec::Ec(Pd *own, mword sel, Pd *p, void (*f)(), unsigned c, unsigned e, mword u, mword s, Pt *oom, char* const nm) : Kobject(EC, static_cast<Space_obj *> (own), sel, 0xd, free, pre_free), cont(f), pd(p), partner(nullptr), prev(nullptr), next(nullptr), fpu(nullptr), cpu(static_cast<uint16> (c)), glb(!!f), evt(e), timeout(this), user_utcb(u), xcpu_sm(nullptr), pt_oom(oom) {
     // Make sure we have a PTAB for this CPU in the PD
     pd->Space_mem::init(pd->quota, c);
+    copy_string(name, nm);
 
     regs.vtlb = nullptr;
     regs.vmcs = nullptr;
@@ -153,9 +155,10 @@ Ec::Ec(Pd *own, mword sel, Pd *p, void (*f)(), unsigned c, unsigned e, mword u, 
     }
 }
 
-Ec::Ec(Pd *own, Pd *p, void (*f)(), unsigned c, Ec *clone) : Kobject(EC, static_cast<Space_obj *> (own), 0, 0xd, free, pre_free), cont(f), regs(clone->regs), rcap(clone), utcb(clone->utcb), pd(p), partner(nullptr), prev(nullptr), next(nullptr), fpu(clone->fpu), cpu(static_cast<uint16> (c)), glb(!!f), evt(clone->evt), timeout(this), user_utcb(0), xcpu_sm(clone->xcpu_sm), pt_oom(clone->pt_oom) {
+Ec::Ec(Pd *own, Pd *p, void (*f)(), unsigned c, Ec *clone, char* const nm) : Kobject(EC, static_cast<Space_obj *> (own), 0, 0xd, free, pre_free), cont(f), regs(clone->regs), rcap(clone), utcb(clone->utcb), pd(p), partner(nullptr), prev(nullptr), next(nullptr), fpu(clone->fpu), cpu(static_cast<uint16> (c)), glb(!!f), evt(clone->evt), timeout(this), user_utcb(0), xcpu_sm(clone->xcpu_sm), pt_oom(clone->pt_oom) {
     // Make sure we have a PTAB for this CPU in the PD
     pd->Space_mem::init(pd->quota, c);
+    copy_string(name, nm);
 
     regs.vtlb = nullptr;
     regs.vmcs = nullptr;
@@ -216,7 +219,7 @@ void Ec::handle_hazard(mword hzd, void (*func)()) {
     if (hzd & HZD_RCU)
         Rcu::quiet();
 
-    if (hzd & HZD_SCHED) {
+    if (hzd & HZD_SCHED && is_idle()) {
         current->cont = func;
         Sc::schedule();
     }
@@ -274,7 +277,7 @@ void Ec::handle_hazard(mword hzd, void (*func)()) {
 }
 
 void Ec::ret_user_sysexit() {
-    if (current->is_idle()) {
+    if (is_idle()) {
         mword hzd = (Cpu::hazard | current->regs.hazard()) & (HZD_RECALL | HZD_STEP | HZD_RCU | HZD_FPU | HZD_DS_ES | HZD_SCHED);
         if (EXPECT_FALSE(hzd))
             handle_hazard(hzd, ret_user_sysexit);
@@ -292,7 +295,7 @@ void Ec::ret_user_sysexit() {
 }
 
 void Ec::ret_user_iret() {
-    if (current->is_idle()) {
+    if (is_idle()) {
         // No need to check HZD_DS_ES because IRET will reload both anyway
         mword hzd = (Cpu::hazard | current->regs.hazard()) & (HZD_RECALL | HZD_STEP | HZD_RCU | HZD_FPU | HZD_SCHED);
         if (EXPECT_FALSE(hzd))
@@ -311,14 +314,14 @@ void Ec::chk_kern_preempt() {
     if (!Cpu::preemption)
         return;
 
-    if (Ec::current->is_idle() && Cpu::hazard & HZD_SCHED) { // this may leak from the kernel without terminating a double_running.
+    if (is_idle() && Cpu::hazard & HZD_SCHED) { // this may leak from the kernel without terminating a double_running.
         Cpu::preempt_disable();
         Sc::schedule();
     }
 }
 
 void Ec::ret_user_vmresume() {
-    if (current->is_idle()) {
+    if (is_idle()) {
         mword hzd = (Cpu::hazard | current->regs.hazard()) & (HZD_RECALL | HZD_TSC | HZD_RCU | HZD_SCHED);
         if (EXPECT_FALSE(hzd))
             handle_hazard(hzd, ret_user_vmresume);
@@ -353,7 +356,7 @@ void Ec::ret_user_vmresume() {
 }
 
 void Ec::ret_user_vmrun() {
-    if (!Ec::current->hardening_started || current->is_idle()) {
+    if (!Ec::current->hardening_started || is_idle()) {
         mword hzd = (Cpu::hazard | current->regs.hazard()) & (HZD_RECALL | HZD_TSC | HZD_RCU | HZD_SCHED);
         if (EXPECT_FALSE(hzd))
             handle_hazard(hzd, ret_user_vmrun);
@@ -395,7 +398,7 @@ void Ec::idle() {
     for (;;) {
 
         mword hzd = Cpu::hazard & (HZD_RCU | HZD_SCHED);
-        if (EXPECT_FALSE(hzd))
+        if (is_idle() && EXPECT_FALSE(hzd))
             handle_hazard(hzd, idle);
 
         uint64 t1 = rdtsc();
@@ -582,7 +585,7 @@ void Ec::resolve_PIO_execption() {
 }
 
 //void Ec::resolve_temp_exception() {
-//    //    Console::print("Read TSC Ec: %p, is_idle(): %d  IP: %p", current, current->is_idle(), current->regs.REG(ip));
+//    //    Console::print("Read TSC Ec: %p, is_idle(): %d  IP: %p", current, is_idle(), current->regs.REG(ip));
 //    set_cr4(get_cr4() & ~Cpu::CR4_TSD);
 //    Ec::current->enable_step_debug(0, 0, 0, Step_reason::RDTSC);
 //}
@@ -641,7 +644,7 @@ void Ec::disable_step_debug() {
             Hpt::cow_flush(SPC_LOCAL_IOP + PAGE_SIZE);
             break;
         case RDTSC:
-            //            Console::print("TSC read Ec: %p, is_idle(): %d  IP: %p", current, current->is_idle(), current->regs.REG(ip));
+            //            Console::print("TSC read Ec: %p, is_idle(): %d  IP: %p", current, is_idle(), current->regs.REG(ip));
             set_cr4(get_cr4() | Cpu::CR4_TSD);
             break;
         case PMI:

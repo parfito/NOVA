@@ -80,6 +80,9 @@ class Sys_create_ec : public Sys_regs
 
         ALWAYS_INLINE
         inline unsigned evt() const { return static_cast<unsigned>(ARG_5); }
+        
+        ALWAYS_INLINE
+        inline char* name() const { return reinterpret_cast<char*>(ARG_6); }
 };
 
 class Sys_create_sc : public Sys_regs

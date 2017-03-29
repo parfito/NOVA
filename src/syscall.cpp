@@ -41,7 +41,7 @@ void Ec::sys_finish()
 
     current->regs.set_status (S);
 
-    if (current->xcpu_sm)
+    if (current->xcpu_sm && is_idle())
         xcpu_return();
 
     if (Pd::current->quota.hit_limit() && S != Sys_regs::QUO_OOM)
@@ -141,6 +141,7 @@ void Ec::sys_call()
 
         if (current->xcpu_sm) {
             current->regs.set_status (Sys_regs::QUO_OOM, false);
+            if(is_idle())
             xcpu_return();
         }
 
@@ -152,7 +153,7 @@ void Ec::sys_call()
         Ec::sys_xcpu_call();
 
     if (EXPECT_TRUE (!ec->cont)) {
-        current->cont = current->xcpu_sm ? xcpu_return : ret_user_sysexit;
+        current->cont = current->xcpu_sm ? is_idle() ? ret_user_sysexit : xcpu_return : ret_user_sysexit;
         current->set_partner (ec);
         ec->cont = recv_user;
         ec->regs.set_pt (pt->id);
@@ -201,7 +202,7 @@ void Ec::reply (void (*c)(), Sm * sm)
 {
     current->cont = c;
 
-    if (EXPECT_FALSE (current->glb))
+    if (EXPECT_FALSE (current->glb) && is_idle())
         Sc::schedule (true);
 
     Ec *ec = current->rcap;
@@ -333,7 +334,7 @@ void Ec::sys_create_pd()
     Crd crd = r->crd();
     pd->del_crd (Pd::current, Crd (Crd::OBJ), crd);
 
-//    Console::print("EC:%p SYS_CREATE PD:%#lx Pd: %p name: %s", current, r->sel(), pd, pd->get_name());
+//    Console::print("EC:%p SYS_CREATE PD: %p name: %s", current, pd, pd->get_name());
     sys_finish<Sys_regs::SUCCESS>();
 }
 
@@ -375,13 +376,14 @@ void Ec::sys_create_ec()
     Capability cap_pt = Space_obj::lookup (r->sel() + 1);
     Pt *pt = cap_pt.obj()->type() == Kobject::PT ? static_cast<Pt *>(cap_pt.obj()) : nullptr;
 
-    Ec *ec = new (pd->quota) Ec (Pd::current, r->sel(), pd, r->flags() & 1 ? static_cast<void (*)()>(send_msg<ret_user_iret>) : nullptr, r->cpu(), r->evt(), r->utcb(), r->esp(), pt);
+    Ec *ec = new (pd->quota) Ec (Pd::current, r->sel(), pd, r->flags() & 1 ? static_cast<void (*)()>(send_msg<ret_user_iret>) : nullptr, r->cpu(), r->evt(), r->utcb(), r->esp(), pt, r->name() ? r->name() : const_cast<char* const>("Unknown"));
 
     if (!Space_obj::insert_root (pd->quota, ec)) {
         trace (TRACE_ERROR, "%s: Non-NULL CAP (%#lx)", __func__, r->sel());
         delete ec;
         sys_finish<Sys_regs::BAD_CAP>();
     }
+//    Console::print("EC:%p SYS_CREATE EC: %p name: %s bound to Pd: %s", current, ec, ec->get_name(), ec->getPd()->get_name());
 
     sys_finish<Sys_regs::SUCCESS>();
 }
@@ -664,7 +666,8 @@ void Ec::sys_ec_ctrl()
 
         case 1: /* yield */
             current->cont = sys_finish<Sys_regs::SUCCESS>;
-            Sc::schedule (false, false);
+            if(is_idle())
+                Sc::schedule (false, false);
             break;
 
         case 2: /* helping */
@@ -690,7 +693,8 @@ void Ec::sys_ec_ctrl()
 
         case 3: /* re-schedule */
             current->cont = sys_finish<Sys_regs::SUCCESS>;
-            Sc::schedule (false, true);
+            if(is_idle())
+                Sc::schedule (false, true);
             break;
 
         default:

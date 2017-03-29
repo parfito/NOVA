@@ -117,11 +117,11 @@ bool Ec::handle_exc_gp(Exc_regs *r) {
         ec->resolve_PIO_execption();
         return true;
     }
-    Console::print("GP Here: Ec: %p  Pd: %p  err: %08lx  addr: %08lx  eip: %08lx  val: %08x rdi: %lx Pd: %s  lauch_state: %d", ec, ec->getPd(), r->err, r->cr2, eip, *(reinterpret_cast<uint32 *> (eip)), ec->regs.REG(di), ec->getPd()->get_name(), launch_state);
+    Console::print("GP Here: Ec: %s  Pd: %s  err: %08lx  addr: %08lx  eip: %08lx  val: %08x rdi: %lx", ec->get_name(), ec->getPd()->get_name(), r->err, r->cr2, eip, *(reinterpret_cast<uint32 *> (eip)), ec->regs.REG(di));
 
     Console::print("eip0: %lx  rcx0: %lx  r11_0: %lx  rdi_0: %lx", regs_0.REG(ip), regs_0.REG(cx), regs_0.r11, regs_0.REG(di));
     Console::print("eip1: %lx  rcx1: %lx  r11_1: %lx  rdi_1: %lx", regs_1.REG(ip), regs_1.REG(cx), regs_1.r11, regs_1.REG(di));
-    Pd::current->Space_mem::loc[Cpu::id].print_table(Pd::current->quota, USER_ADDR);
+    //    Pd::current->Space_mem::loc[Cpu::id].print_table(Pd::current->quota, USER_ADDR);
     return false;
 }
 

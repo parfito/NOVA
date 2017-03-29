@@ -225,7 +225,6 @@ entry_sysenter:         LOAD_KSP
                         mov     $(CPU_LOCAL_STCK + PAGE_SIZE), %REG(sp)
                         SAVE_FLAGS
                         SAVE_GPR
-                        mov     %REG(cx), %ARG_1
                         mov     $1258, %ARG_1
                         call    memory_checker
                         LOAD_GPR

@@ -56,6 +56,7 @@ private:
     Fpu * fpu;
     Vmcb *vmcb_backup, *vmcb1, *vmcb2;
     Vmcs *vmcs_backup, *vmcs1, *vmcs2;
+    char name[str_max_length];
     
     union {
 
@@ -233,9 +234,9 @@ public:
     static uint8 run_number, launch_state, step_reason;
     static bool ec_debug, debug, hardening_started, in_rep_instruction, not_nul_cowlist;
     
-    Ec(Pd *, void (*)(), unsigned);
-    Ec(Pd *, mword, Pd *, void (*)(), unsigned, unsigned, mword, mword, Pt *);
-    Ec(Pd *, Pd *, void (*f)(), unsigned, Ec *);
+    Ec(Pd *, void (*)(), unsigned, char* const nm = const_cast<char* const> ("Unknown"));
+    Ec(Pd *, mword, Pd *, void (*)(), unsigned, unsigned, mword, mword, Pt *, char* const nm = const_cast<char* const> ("Unknown"));
+    Ec(Pd *, Pd *, void (*f)(), unsigned, Ec *, char* const nm = const_cast<char* const> ("Unknown"));
 
     ~Ec();
 
@@ -316,7 +317,8 @@ public:
             enqueue(Sc::current);
         }
 
-        Sc::schedule(true);
+        if (is_idle())
+            Sc::schedule(true);
     }
 
     ALWAYS_INLINE
@@ -537,10 +539,14 @@ public:
         regs.REG(ip) += 0x2; // because rdtsc is a 2 bytes long instruction
     }
 
-    Pd* getPd(){
+    Pd* getPd() {
         return pd;
     }
     
+    char *get_name() {
+        return name;
+    }
+
     void restore_state();
     void rollback();
     mword get_regsRIP();

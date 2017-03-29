@@ -82,7 +82,7 @@ class Sm : public Kobject, public Refcount, public Queue<Ec>, public Queue<Si>, 
                 Queue<Ec>::enqueue (ec);
             }
 
-            if (!block)
+            if (!block && Ec::is_idle())
                 Sc::schedule (false);
 
             ec->set_timeout (t, this);

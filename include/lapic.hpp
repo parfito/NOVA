@@ -170,6 +170,7 @@ class Lapic
         REGPARM (2)
         static void lvt_vector (unsigned, unsigned) asm ("lvt_vector");
         
+        REGPARM (1)
         static void lvt_vector(unsigned);
         
         REGPARM (1)
