@@ -82,7 +82,7 @@ int Platform_thread::start(void *ip, void *sp)
 		uint8_t res;
 		do {
 			res = create_ec(_sel_ec(), _pd->pd_sel(), _location.xpos(),
-			                utcb, initial_sp, _sel_exc_base, !worker());
+			                utcb, initial_sp, _sel_exc_base, !worker(), &_name);
 			if (res == Nova::NOVA_PD_OOM && Nova::NOVA_OK != _pager->handle_oom()) {
 				_pager->assign_pd(Native_thread::INVALID_INDEX);
 				error("creation of new thread failed ", res);
@@ -137,7 +137,7 @@ int Platform_thread::start(void *ip, void *sp)
 	enum { KEEP_FREE_PAGES_NOT_AVAILABLE_FOR_UPGRADE = 2, UPPER_LIMIT_PAGES = 32 };
 	Obj_crd initial_pts(_sel_exc_base, pts, rights);
 	uint8_t res = create_pd(pd_sel, pd_core_sel, initial_pts,
-	                        KEEP_FREE_PAGES_NOT_AVAILABLE_FOR_UPGRADE, UPPER_LIMIT_PAGES, &_name);
+	                        KEEP_FREE_PAGES_NOT_AVAILABLE_FOR_UPGRADE, UPPER_LIMIT_PAGES, const_cast<char* const>(pd_name()));
 	if (res != NOVA_OK) {
 		error("create_pd returned ", res);
 		goto cleanup_pd;
@@ -146,7 +146,7 @@ int Platform_thread::start(void *ip, void *sp)
 	/* create first thread in task */
 	enum { THREAD_GLOBAL = true };
 	res = create_ec(_sel_ec(), pd_sel, _location.xpos(), pd_utcb, 0, 0,
-	                THREAD_GLOBAL);
+	                THREAD_GLOBAL, &_name);
 	if (res != NOVA_OK) {
 		error("create_ec returned ", res);
 		goto cleanup_pd;

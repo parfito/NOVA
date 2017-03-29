@@ -68,12 +68,12 @@ Echo::Echo(Genode::addr_t utcb_addr)
 	_utcb((Nova::Utcb *)utcb_addr)
 {
 	using namespace Nova;
-
+        char name[30] = "echo";
 	/* create echo EC */
 	Genode::addr_t pd_sel = Genode::Platform_pd::pd_core_sel();
 	uint8_t res = create_ec(_ec_sel, pd_sel, boot_cpu(), utcb_addr,
 	                        reinterpret_cast<mword_t>(echo_stack_top()),
-	                        ECHO_EXC_BASE, ECHO_GLOBAL);
+	                        ECHO_EXC_BASE, ECHO_GLOBAL, &name);
 
 	/* make error condition visible by raising an unhandled page fault */
 	if (res != Nova::NOVA_OK) { *reinterpret_cast<unsigned *>(0) = 0xdead; }

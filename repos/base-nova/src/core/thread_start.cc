@@ -94,7 +94,7 @@ void Thread::start()
 	addr_t utcb     = reinterpret_cast<addr_t>(&_stack->utcb());
 	Utcb * utcb_obj = reinterpret_cast<Utcb *>(&_stack->utcb());
 	addr_t pd_sel   = Platform_pd::pd_core_sel();
-
+        char name[30] = "core_local_ec";
 	Affinity::Location location = _affinity;
 
 	if (!location.valid())
@@ -103,7 +103,7 @@ void Thread::start()
 	/* create local EC */
 	enum { LOCAL_THREAD = false };
 	uint8_t res = create_ec(native_thread().ec_sel, pd_sel, location.xpos(),
-	                        utcb, sp, native_thread().exc_pt_sel, LOCAL_THREAD);
+	                        utcb, sp, native_thread().exc_pt_sel, LOCAL_THREAD, &name);
 	if (res != NOVA_OK) {
 		error("create_ec returned ", res, " cpu=", location.xpos());
 		throw Cpu_session::Thread_creation_failed();
