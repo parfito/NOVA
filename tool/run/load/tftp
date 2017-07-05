@@ -57,12 +57,17 @@ proc generate_tftp_config { } {
 			#exit -1
 		}
 		exec mkdir "$tftp_base_dir$tftp_offset_dir"
-		exec cp -R "[pwd]/var" "$tftp_base_dir$tftp_offset_dir"
+		exec ln -nfs "../build/nova_x86_64/var" "$tftp_base_dir$tftp_offset_dir"
 
 		set tftp_base ""
 		if {[load_tftp_use_absolute]} {
 			set tftp_base $tftp_base_dir
 		}
+
+                set fh [open "$tftp_base_dir/config-3c-97-0e-e4-79-81" "WRONLY CREAT TRUNC"]
+		puts $fh " root $tftp_base$tftp_offset_dir"
+		puts $fh " config config-00-00-00-00-00-00"
+		close $fh
 
 		set fh [open "$tftp_base_dir$tftp_offset_dir/config-00-00-00-00-00-00" "WRONLY CREAT TRUNC"]
 		puts $fh " root $tftp_base$tftp_offset_dir/[run_dir]"
