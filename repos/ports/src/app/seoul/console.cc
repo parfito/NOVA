@@ -220,6 +220,7 @@ void Vancouver_console::entry()
 	static Timer::Connection  timer;
 	Framebuffer::Connection  *framebuffer = 0;
 
+        Genode::printf("\n--- In Vancouver_console entry, going to create connections ---\n");
 	try {
 		framebuffer = new (env()->heap()) Framebuffer::Connection();
 	} catch (...) {
@@ -379,7 +380,7 @@ Vancouver_console::Vancouver_console(Synced_motherboard &mb,
 	_left(false), _middle(false), _right(false)
 {
 	start();
-
+        Genode::printf("\n--- Vancouver_console started ---\n");
 	/* shake hands with console thread */
 	_startup_lock.lock();
 }

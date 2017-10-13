@@ -535,7 +535,10 @@ Platform::Platform() :
 	mem_desc = (Hip::Mem_desc *)mem_desc_base;
 	for (unsigned i = 0; i < num_mem_desc; i++, mem_desc++) {
 
-		if (mem_desc->type == Hip::Mem_desc::AVAILABLE_MEMORY) continue;
+		error("region overlap ",
+			      Hex_range<addr_t>(mem_desc->addr, mem_desc->size), " "
+			      "(", (int)mem_desc->type, ")" );
+                if (mem_desc->type == Hip::Mem_desc::AVAILABLE_MEMORY) continue;
 
 		Hip::Mem_desc * mem_d = (Hip::Mem_desc *)mem_desc_base;
 		for (unsigned j = 0; j < num_mem_desc; j++, mem_d++) {

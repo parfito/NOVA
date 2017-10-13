@@ -345,7 +345,7 @@ class Genode::Service_registry
 		bool is_ambiguous(const char *name)
 		{
 			Lock::Guard lock_guard(_service_wait_queue_lock);
-
+                        log("Determining ambiguity for service ", name);
 			/* count number of services with the specified name */
 			unsigned cnt = 0;
 			for (Service *s = _services.first(); s; s = s->next())

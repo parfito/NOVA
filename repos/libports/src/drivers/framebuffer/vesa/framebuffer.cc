@@ -24,15 +24,17 @@
 #include "vesa.h"
 #include "vbe.h"
 
+#include "../../../../../base-nova/include/spec/64bit/nova/syscalls.h"
+
 using namespace Genode;
 using namespace Vesa;
-
+using namespace Nova;
 /**
  * Frame buffer I/O memory dataspace
  */
 static Dataspace_capability io_mem_cap;
 
-static const bool verbose = false;
+static const bool verbose = true;
 
 /***************
  ** Utilities **
@@ -56,14 +58,24 @@ static uint16_t get_vesa_mode(mb_vbe_ctrl_t *ctrl_info, mb_vbe_mode_t *mode_info
 	if (verbose)
 		log("Supported mode list");
 
+                log("Going to get virtual address VBE_INFO_FUNC ");
+
 	/*
 	 * The virtual address of the ctrl_info mapping may change on x86_cmd
 	 * execution. Therefore, we resolve the address on each iteration.
 	 */
 #define MODE_PTR(off) (X86emu::virt_addr<uint16_t>(to_phys(ctrl_info->video_mode)) + off)
 	for (unsigned off = 0; *MODE_PTR(off) != 0xFFFF; ++off) {
+                
+                log("In for loop", off, " ", *MODE_PTR(off));
+                if(off == 27)
+                    Nova::debug(4);
 		if (X86emu::x86emu_cmd(VBE_INFO_FUNC, 0, *MODE_PTR(off), VESA_MODE_OFFS) != VBE_SUPPORTED)
 			continue;
+                if(off == 27)
+                    Nova::debug(4);
+		
+                log("VBE_INFO_FUNC excuted");
 
 		enum { DIRECT_COLOR = 0x06 };
 		if (mode_info->memory_model != DIRECT_COLOR)

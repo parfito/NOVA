@@ -63,13 +63,13 @@ namespace Nova {
 
 	ALWAYS_INLINE
 	inline uint8_t syscall_1(Syscall s, uint8_t flags, mword_t sel, mword_t p1,
-	                         mword_t * p2 = 0)
+	                         mword_t * p2 = 0, mword_t debug = 0)
 	{
 		mword_t status = rdi(s, flags, sel);
-
+                register mword_t r9 asm ("r9") = debug;
 		asm volatile ("syscall"
 		              : "+D" (status), "+S" (p1)
-		              :
+		              : "r" (r9)
 		              : "rcx", "r11", "memory");
 		if (p2) *p2 = p1;
 		return status;
@@ -143,6 +143,13 @@ namespace Nova {
 
 
 	ALWAYS_INLINE
+	inline uint8_t debug(mword_t level)
+	{
+		return syscall_1(NOVA_CALL, 0, 0, 0, 0, level);
+	}
+
+             
+        ALWAYS_INLINE
 	__attribute__((noreturn))
 	inline void reply(void *next_sp, unsigned long sm = 0)
 	{

@@ -27,7 +27,7 @@ CC_OPT          += -mpreferred-stack-boundary=2 -mregparm=3
 else
 ifeq ($(filter-out $(SPECS),64bit),)
 CC_WARN         += -Wframe-larger-than=144
-CC_OPT          += -mpreferred-stack-boundary=4 -mcmodel=kernel -mno-red-zone
+CC_OPT          += -mpreferred-stack-boundary=4 -mcmodel=large -mno-red-zone
 else
 $(error Unsupported environment)
 endif
