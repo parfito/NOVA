@@ -535,9 +535,9 @@ Platform::Platform() :
 	mem_desc = (Hip::Mem_desc *)mem_desc_base;
 	for (unsigned i = 0; i < num_mem_desc; i++, mem_desc++) {
 
-		error("region overlap ",
-			      Hex_range<addr_t>(mem_desc->addr, mem_desc->size), " "
-			      "(", (int)mem_desc->type, ")" );
+//		error("region overlap ",
+//			      Hex_range<addr_t>(mem_desc->addr, mem_desc->size), " "
+//			      "(", (int)mem_desc->type, ") -->", Hex((size_t)mem_desc->size, Hex::PREFIX, Hex::PAD));
                 if (mem_desc->type == Hip::Mem_desc::AVAILABLE_MEMORY) continue;
 
 		Hip::Mem_desc * mem_d = (Hip::Mem_desc *)mem_desc_base;
@@ -655,7 +655,7 @@ Platform::Platform() :
 		memset(reinterpret_cast<void *>(zero_out), 0, round_page(zero_out) -
 		       zero_out);
 
-		if (verbose_boot_info)
+//		if (verbose_boot_info)
 			log("map multi-boot module: physical ",
 			    Hex((addr_t)mem_desc->addr, Hex::PREFIX, Hex::PAD), "+",
 			    Hex((size_t)mem_desc->size, Hex::PREFIX, Hex::PAD), " - ",

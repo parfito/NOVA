@@ -34,7 +34,7 @@ using namespace Nova;
  */
 static Dataspace_capability io_mem_cap;
 
-static const bool verbose = true;
+static const bool verbose = false;
 
 /***************
  ** Utilities **
@@ -67,15 +67,15 @@ static uint16_t get_vesa_mode(mb_vbe_ctrl_t *ctrl_info, mb_vbe_mode_t *mode_info
 #define MODE_PTR(off) (X86emu::virt_addr<uint16_t>(to_phys(ctrl_info->video_mode)) + off)
 	for (unsigned off = 0; *MODE_PTR(off) != 0xFFFF; ++off) {
                 
-                log("In for loop", off, " ", *MODE_PTR(off));
-                if(off == 27)
-                    Nova::debug(4);
+//                log("In for loop", off, " ", *MODE_PTR(off));
+//                if(off == 27)
+//                    Nova::debug(4);
 		if (X86emu::x86emu_cmd(VBE_INFO_FUNC, 0, *MODE_PTR(off), VESA_MODE_OFFS) != VBE_SUPPORTED)
 			continue;
-                if(off == 27)
-                    Nova::debug(4);
+//                if(off == 27)
+//                    Nova::debug(4);
 		
-                log("VBE_INFO_FUNC excuted");
+//                log("VBE_INFO_FUNC excuted");
 
 		enum { DIRECT_COLOR = 0x06 };
 		if (mode_info->memory_model != DIRECT_COLOR)

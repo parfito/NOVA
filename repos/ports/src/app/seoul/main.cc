@@ -1237,7 +1237,8 @@ class Machine : public StaticReceiver<Machine>
 		bool receive(MessageLegacy &msg)
 		{
 			if (msg.type == MessageLegacy::RESET) {
-				Logging::printf("MessageLegacy::RESET requested\n");
+                            Logging::printf("MessageLegacy::RESET requested\n");
+//                            Nova::debug(4);
 				return true;
 			}
 			return false;
@@ -1495,17 +1496,11 @@ int main(int argc, char **argv)
 	/* create the PC machine based on the configuration given */
 	static Machine machine(boot_modules, guest_memory, colocate);
         
-        Genode::printf("\n--- create console thread ---\n");
-
 	/* create console thread */
 	Vancouver_console vcon(machine.motherboard(), fb_size, guest_memory.fb_ds());
 
-        Genode::printf("\n--- Going to synchronize motherboard ---\n");
-        
 	vcon.register_host_operations(machine.unsynchronized_motherboard());
         
-        Genode::printf("\n--- create disk thread ---\n");
-
 	/* create disk thread */
 	Vancouver_disk vdisk(machine.motherboard(),
 	                     guest_memory.backing_store_local_base(),

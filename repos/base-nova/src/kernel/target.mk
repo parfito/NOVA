@@ -7,7 +7,7 @@ STARTUP_LIB      =
 SRC_CC           = $(sort $(notdir $(wildcard $(NOVA_SRC_DIR)/src/*.cpp)))
 SRC_S            = $(sort $(notdir $(wildcard $(NOVA_SRC_DIR)/src/*.S)))
 INC_DIR          = $(NOVA_SRC_DIR)/include
-CC_OLEVEL        = -Os
+CC_OLEVEL        = -O0
 CC_WARN          = -Wall -Wextra -Waggregate-return -Wcast-align -Wcast-qual \
                    -Wconversion -Wdisabled-optimization -Wformat=2 \
                    -Wmissing-format-attribute -Wmissing-noreturn -Wpacked \
@@ -17,7 +17,7 @@ CC_WARN          = -Wall -Wextra -Waggregate-return -Wcast-align -Wcast-qual \
                    -Wlogical-op -Wstrict-null-sentinel \
                    -Wstrict-overflow=5 -Wvolatile-register-var
 CC_OPT          += -pipe \
-                   -fdata-sections -fomit-frame-pointer -freg-struct-return \
+                   -fdata-sections -freg-struct-return \
                    -freorder-blocks -funit-at-a-time -fno-exceptions -fno-rtti \
                    -fno-stack-protector -fvisibility-inlines-hidden \
                    -fno-asynchronous-unwind-tables -std=gnu++0x 

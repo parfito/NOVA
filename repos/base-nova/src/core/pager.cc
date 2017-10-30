@@ -700,7 +700,7 @@ uint8_t Pager_object::handle_oom(addr_t transfer_from,
 		/* upgrade quota */
 		uint8_t res = Nova::pd_ctrl(transfer_from, Pd_op::TRANSFER_QUOTA,
 		                            pd_sel(), QUOTA_TRANSFER_PAGES);
-		if (res == Nova::NOVA_OK)
+                if (res == Nova::NOVA_OK)
 			return res;
 	}
 
@@ -839,6 +839,9 @@ void Pager_object::_oom_handler(addr_t pager_dst, addr_t pager_src,
 
 	uint8_t res = obj_dst->handle_oom(transfer_from, src_pd, src_thread,
 	                                  policy);
+//        log("obj_dst->handle_oom res ",res, " src_pd ", src_pd, " src_thread ", src_thread, " dst_clt_pd ", obj_dst->client_pd(),
+//        " dst_cl_thread ", obj_dst->client_thread(), " reply ", myself->stack_top());
+//        Nova::debug(4);
 	if (res == Nova::NOVA_OK)
 		/* handling succeeded - continue with original IPC */
 		reply(myself->stack_top());
