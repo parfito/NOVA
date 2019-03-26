@@ -83,6 +83,7 @@
 #define ARG_3           REG(dx)
 #define ARG_4           REG(ax)
 #define ARG_5           REG(8)
+#define ARG_6           REG(9)
 #define OFS_CR2         0x58
 #define OFS_VEC         0xa8
 #define OFS_CS          0xb8
