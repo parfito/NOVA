@@ -53,3 +53,51 @@ inline bool strmatch (char const *s1, char const *s2, size_t n)
 
     return n == 0;
 }
+
+extern "C" NONNULL
+inline int strcmp(char const *s1, char const *s2) {
+    while (*s1 && *s1 == *s2)
+        s1++, s2++;
+
+    return *s1 - *s2;
+}
+
+extern "C" NONNULL
+inline void copy_string(char *target, const char *source) {
+    uint32 length = 1;
+    while (*source) {
+        *target = *source;
+        source++;
+        target++;
+        length++;
+    }
+    *target = '\0';
+}
+
+extern "C" NONNULL
+inline int str_equal(char const *s1, char const *s2) {
+    return !strcmp(s1, s2) ? 1 : 0;
+}
+
+/*
+ * http://bxr.su/OpenBSD/lib/libc/string/strncat.c
+ * Concatenate src on the end of dst.  At most strlen(dst)+n+1 bytes
+ * are written at dst (at most n+1 bytes being appended).  Return dst.
+ */
+extern "C" NONNULL 
+inline char* strcat(char *dst, const char *src, size_t n){
+    if (n != 0) {
+        char *d = dst;
+        const char *s = src;
+
+        while (*d != '\0')
+            d++;
+        do {
+            if ((*d = *s++) == '\0')
+                break;
+            d++;
+        } while (--n != 0);
+        *d = '\0';
+    }
+    return (dst);
+}

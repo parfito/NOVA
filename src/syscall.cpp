@@ -320,7 +320,7 @@ void Ec::sys_create_pd()
         sys_finish<Sys_regs::QUO_OOM>();
     }
 
-    Pd *pd = new (Pd::current->quota) Pd (Pd::current, r->sel(), cap.prm());
+    Pd *pd = new (Pd::current->quota) Pd (Pd::current, r->sel(), cap.prm(), r->name());
 
     if (!pd->quota.set_limit(r->limit_lower(), r->limit_upper(), pd_src->quota)) {
         trace (0, "Insufficient kernel memory for creating new PD");
@@ -847,7 +847,7 @@ void Ec::sys_pd_ctrl()
     Pd *dst = static_cast<Pd *>(cap_pd.obj());
 
     if (!src->quota.transfer_to(dst->quota, r->tra())) {
-        trace (TRACE_ERROR, "%s: PD %p has insufficient kernel memory quota", __func__, src);
+        trace (TRACE_ERROR, "%s: PD %s has insufficient kernel memory quota for %s", __func__, src->get_name(), dst->get_name());
         sys_finish<Sys_regs::BAD_PAR>();
     }
 
