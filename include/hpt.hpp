@@ -116,6 +116,9 @@ class Hpt : public Pte<Hpt, mword, PTE_LEV, PTE_BPL, false>
         Paddr replace (Quota &quota, mword, mword);
 
         static void *remap (Quota &quota, Paddr);
+        static void *remap_cow(Quota &quota, Paddr, mword addr = 0);
+        Paddr replace_cow(Quota &quota, mword, mword);
+        void replace_cow_n(Quota &quota, mword, int, mword);
 
         static bool dest_hpt (Paddr p, mword, unsigned) { return (p != reinterpret_cast<Paddr>(&FRAME_0) && p != reinterpret_cast<Paddr>(&FRAME_1)); }
         static bool iter_hpt_lev(unsigned l, mword v)

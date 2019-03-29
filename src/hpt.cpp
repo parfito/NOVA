@@ -79,3 +79,26 @@ void *Hpt::remap (Quota &quota, Paddr phys)
 
     return reinterpret_cast<void *>(SPC_LOCAL_REMAP + offset);
 }
+
+void *Hpt::remap_cow(Quota &quota, Paddr phys, mword addr) {
+    Hptp hpt(current());
+    addr += COW_ADDR;
+    hpt.replace_cow(quota, addr, phys | Hpt::HPT_W | Hpt::HPT_P);
+//    Hpt::cow_flush(addr);
+    return reinterpret_cast<void *> (addr);
+}
+
+Paddr Hpt::replace_cow(Quota &quota, mword v, mword p) {
+    Hpt o, *e = walk(quota, v, 0);
+    if(!e) return 0;
+    
+    do o = *e; while (o.val != p && !e->set(o.val, p));
+
+    flush(v);
+    return e->addr();
+}
+
+void Hpt::replace_cow_n(Quota &quota, mword v, int n, mword p) {
+    for (int i = 0; i< n; i++)
+        replace_cow(quota, v+i*PAGE_SIZE, p+i*PAGE_SIZE);
+}
