@@ -36,6 +36,7 @@ class Counter
         static unsigned vtlb_hpf        CPULOCAL;
         static unsigned vtlb_fill       CPULOCAL;
         static unsigned vtlb_flush      CPULOCAL;
+        static unsigned vtlb_cow        CPULOCAL;
         static unsigned schedule        CPULOCAL;
         static unsigned helping         CPULOCAL;
         static uint64   cycles_idle     CPULOCAL;

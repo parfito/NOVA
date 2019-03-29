@@ -24,6 +24,7 @@
 #include "gsi.hpp"
 #include "keyb.hpp"
 #include "stdio.hpp"
+#include "vtlb.hpp"
 
 unsigned Keyb::gsi = ~0u;
 

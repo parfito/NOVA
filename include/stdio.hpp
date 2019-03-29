@@ -24,6 +24,7 @@
 #include "console.hpp"
 #include "cpu.hpp"
 #include "memory.hpp"
+#define DEBUG  1
 
 #define trace(T,format,...)                                         \
 do {                                                                \
@@ -46,6 +47,7 @@ enum {
     TRACE_VMX       = 1UL << 4,
     TRACE_SVM       = 1UL << 5,
     TRACE_ACPI      = 1UL << 8,
+    TRACE_EPT       = 1UL << 9,
     TRACE_MEMORY    = 1UL << 13,
     TRACE_PCI       = 1UL << 14,
     TRACE_SCHEDULE  = 1UL << 16,
@@ -72,10 +74,11 @@ unsigned const trace_mask =
                             TRACE_VMX       |
                             TRACE_SVM       |
 //                            TRACE_ACPI      |
+                            TRACE_EPT       |
 //                            TRACE_MEMORY    |
 //                            TRACE_PCI       |
 //                            TRACE_SCHEDULE  |
-//                            TRACE_VTLB      |
+                            TRACE_VTLB      |
 //                            TRACE_DEL       |
 //                            TRACE_REV       |
 //                            TRACE_RCU       |

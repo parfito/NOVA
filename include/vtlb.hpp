@@ -55,6 +55,7 @@ class Vtlb : public Pte<Vtlb, uint64, 3,  9, false>
             TLB_P   = 1UL << 0,
             TLB_W   = 1UL << 1,
             TLB_U   = 1UL << 2,
+            TLB_IO  = 1UL << 3,
             TLB_UC  = 1UL << 4,
             TLB_A   = 1UL << 5,
             TLB_D   = 1UL << 6,
@@ -62,7 +63,8 @@ class Vtlb : public Pte<Vtlb, uint64, 3,  9, false>
             TLB_G   = 1UL << 8,
             TLB_F   = 1UL << 9,
             TLB_M   = 1UL << 10,
-
+            TLB_COW = 1UL << 11,
+            
             PTE_P   = TLB_P,
             PTE_S   = TLB_S,
         };
@@ -83,9 +85,11 @@ class Vtlb : public Pte<Vtlb, uint64, 3,  9, false>
 
         void flush (mword);
         void flush (bool);
-
+        size_t lookup(mword, Paddr&, mword&);
+        
         static Reason miss (Exc_regs *, mword, mword &);
-
+        bool is_cow(mword, mword);
+        
         ALWAYS_INLINE
         static inline void *operator new (size_t, Quota &quota) { return Buddy::allocator.alloc (0, quota, Buddy::NOFILL); }
 
