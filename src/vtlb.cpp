@@ -246,9 +246,11 @@ bool Vtlb::is_cow(mword virt, mword error){
                 continue;            
         
         if(tlb->attr() & TLB_COW){
-            trace (TRACE_VTLB, "Cow fault A:%#010lx E:%#lx TLB:%#016llx GuestIP %#lx",             
-                virt, error, tlb->val, Vmcs::read(Vmcs::GUEST_RIP));
+//            trace (TRACE_VTLB, "Cow fault A:%#010lx E:%#lx TLB:%#016llx GuestIP %#lx",             
+//                virt, error, tlb->val, Vmcs::read(Vmcs::GUEST_RIP));
             Counter::vtlb_cow++;   
+//            tlb->val |= TLB_W;
+//            tlb->val &= ~TLB_COW;
             mword attr = tlb->attr();
             Paddr new_phys = Cow_elt::resolve_cow_fault(virt, tlb->addr(), tlb->attr());
             tlb->val = new_phys | attr| TLB_W;
