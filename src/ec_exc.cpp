@@ -23,6 +23,7 @@
 #include "gdt.hpp"
 #include "mca.hpp"
 #include "stdio.hpp"
+#include "lapic.hpp"
 
 void Ec::load_fpu()
 {
@@ -169,6 +170,10 @@ void Ec::handle_exc (Exc_regs *r)
     Counter::exc[r->vec]++;
 
     switch (r->vec) {
+        case Cpu::EXC_NMI:
+            Console::print("NMI Counter %llx inVMX %s", Lapic::read_instCounter(), 
+                    inVMX ? "true" : "false");
+            return;
 
         case Cpu::EXC_NM:
             handle_exc_nm();

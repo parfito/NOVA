@@ -217,6 +217,7 @@ class Ec : public Kobject, public Refcount, public Queue<Sc>
     public:
         static Ec *current CPULOCAL_HOT;
         static Ec *fpowner CPULOCAL;
+        static bool inVMX;
 
         Ec (Pd *, void (*)(), unsigned);
         Ec (Pd *, mword, Pd *, void (*)(), unsigned, unsigned, mword, mword, Pt *);

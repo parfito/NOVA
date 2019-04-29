@@ -105,7 +105,14 @@ class Lapic
     public:
         static unsigned freq_tsc;
         static unsigned freq_bus;
-
+        static uint64 prev_tsc;
+        static uint64 end_time, begin_time, counter, prev_counter, start_counter, perf_max_count;
+        static bool timeout_to_check, timeout_expired;
+        static uint32 tour, tour1;
+        static const uint32 max_info;
+        static uint64 perf_compteur[][2]; 
+        static mword info[][4];
+        
         ALWAYS_INLINE
         static inline unsigned id()
         {
@@ -157,4 +164,15 @@ class Lapic
 
         REGPARM (1)
         static void ipi_vector (unsigned) asm ("ipi_vector");
+        
+        REGPARM (0)
+        static void save_counter (void) asm ("save_counter");
+                
+        static void activate_pmi();
+        
+//        static uint64 readReset_instCounter(uint64 number = 0);
+        static uint64 read_instCounter();
+        static void program_pmi(uint64 number = 0);
+        static void cancel_pmi();
+
 };

@@ -437,7 +437,7 @@ class Vmcs
         }
 
         static bool has_secondary() { return ctrl_cpu[0].clr & CPU_SECONDARY; }
-        static bool has_ept()       { return false; }
+        static bool has_ept()       { return ctrl_cpu[1].clr & CPU_EPT; }
         static bool has_vpid()      { return ctrl_cpu[1].clr & CPU_VPID; }
         static bool has_urg()       { return ctrl_cpu[1].clr & CPU_URG; }
         static bool has_vnmi()      { return ctrl_pin.clr & PIN_VIRT_NMI; }

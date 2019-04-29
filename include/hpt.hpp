@@ -133,6 +133,8 @@ class Hpt : public Pte<Hpt, mword, PTE_LEV, PTE_BPL, false>
 
         static bool dest_loc (Paddr, mword v, unsigned l) { return v >= USER_ADDR && l >= 3; }
         static bool iter_loc_lev(unsigned l, mword) { return l > 3; }
+        void cow_update(Paddr, mword);
+
 };
 
 class Hptp : public Hpt

@@ -28,9 +28,17 @@
 #include "stdio.hpp"
 #include "timeout.hpp"
 #include "vectors.hpp"
+#include "pe.hpp"
+#include "vmx.hpp"
 
 unsigned    Lapic::freq_tsc;
 unsigned    Lapic::freq_bus;
+uint64 Lapic::counter = 0, Lapic::prev_counter, Lapic::start_counter, Lapic::perf_max_count; 
+bool Lapic::timeout_to_check = false, Lapic::timeout_expired = false;
+uint32 Lapic::tour = 0, Lapic::tour1 = 0;
+const uint32 Lapic::max_info = 100000;
+uint64 Lapic::perf_compteur[max_info][2];
+mword Lapic::info[max_info][4];
 
 void Lapic::init_cpuid()
 {
@@ -134,6 +142,8 @@ void Lapic::init(bool invariant_tsc)
 
     write (LAPIC_TMR_ICR, 0);
 
+    perf_max_count = (1ull<<Cpu::perf_bit_size);
+    
     trace (TRACE_APIC, "APIC:%#lx ID:%#x VER:%#x LVT:%#x (%s Mode)", apic_base & ~PAGE_MASK, id(), version(), lvt_max(), freq_bus ? "OS" : "DL");
 }
 
@@ -194,4 +204,62 @@ void Lapic::ipi_vector (unsigned vector)
     eoi();
 
     Counter::print<1,16> (++Counter::ipi[ipi], Console_vga::COLOR_LIGHT_GREEN, ipi + SPN_IPI);
+}
+
+/**
+ * Called only from entry.S
+ * Only used in case of virtualization
+ */
+void Lapic::save_counter(){
+//    Msr::write(Msr::MSR_PERF_FIXED_CTRL, 0xa); //unless we may face a pmi in the kernel
+//    unsigned bias = Pe::vmlaunch ? 44 : 9; // Pour calculer ces nombres, il faut activer le MTF (enable_mtf()).
+//    // le compteur contient alors le nombre d'instructions en mode privilegié + 1 instruction en machine virtuelle
+//    uint64 compteur_value = Msr::read<uint64>(Msr::MSR_PERF_FIXED_CTR0), deduced_cmpteurValue = compteur_value - bias;
+//        counter = compteur_value>start_counter? deduced_cmpteurValue : 
+//            compteur_value < bias ? perf_max_count + compteur_value - bias : deduced_cmpteurValue; 
+//    Msr::write(Msr::MSR_PERF_FIXED_CTR0, counter); //0x44 is the number of hypervisor's instruction for now
+//    Console::print("Prev Counter %llx counter %llx Eip: %lx compteur_value %llx", prev_counter, counter, Vmcs::read(Vmcs::GUEST_RIP), compteur_value);
+}  
+
+
+void Lapic::activate_pmi() {
+    uint64 msr_glb = Msr::read<uint64>(Msr::MSR_PERF_GLOBAL_CTRL);
+    Msr::write(Msr::MSR_PERF_GLOBAL_CTRL, msr_glb | (1ull<<32));
+    Msr::write(Msr::MSR_PERF_GLOBAL_OVF_CTRL, Msr::read<uint64>(Msr::MSR_PERF_GLOBAL_OVF_CTRL) & ~(1UL<<32));
+    program_pmi();
+}
+
+uint64 Lapic::read_instCounter() {
+    return Msr::read<uint64>(Msr::MSR_PERF_FIXED_CTR0); 
+}
+
+/**
+ * This pmi programming take as parameter the number of instruction to retrieve 
+ * from MAX_INSTRUCTION before PMI
+ * @param number
+ */
+void Lapic::program_pmi(uint64 number) {
+    start_counter = number ? perf_max_count - number : perf_max_count - MAX_INSTRUCTION;
+    set_lvt(LAPIC_LVT_PERFM, DLV_FIXED, VEC_LVT_PERFM);
+    Msr::write(Msr::MSR_PERF_FIXED_CTR0, start_counter);
+    //Qemu oddities : MSR_PERF_FIXED_CTRL must be the last PMU instruction to be 
+    //executed and be updated with a dummy value
+    Msr::write(Msr::MSR_PERF_FIXED_CTRL, 0x0);    
+//    Msr::write(Msr::MSR_PERF_FIXED_CTRL, 0xa);
+    tour = 0;
+    prev_counter = start_counter;
+}
+
+/**
+ * cancel by writing 1 to pmc
+ * We change it to program normal PMI. 
+ * De toute facon, il ne risque pas d'arriver avant le prochain check_memory
+ */
+void Lapic::cancel_pmi(){
+    start_counter = perf_max_count - MAX_INSTRUCTION;
+    set_lvt(LAPIC_LVT_PERFM, DLV_FIXED, VEC_LVT_PERFM);
+    Msr::write(Msr::MSR_PERF_FIXED_CTR0, start_counter);
+    Msr::write(Msr::MSR_PERF_FIXED_CTRL, 0x0);    
+    Msr::write(Msr::MSR_PERF_FIXED_CTRL, 0xa);
+    prev_counter = start_counter;
 }

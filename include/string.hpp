@@ -20,27 +20,76 @@
 
 #include "compiler.hpp"
 #include "types.hpp"
+#include "config.hpp"
+#include "util.hpp"
 
 extern "C" NONNULL
-inline void *memcpy (void *d, void const *s, size_t n)
-{
+inline void *memcpy(void *dst, const void *src, size_t n) {
+    const char *s;
+    char *d;
+
+    s = reinterpret_cast<const char*> (src);
+    d = reinterpret_cast<char*> (dst);
+    if (s < d && s + n > d) {
+        s += n;
+        d += n;
+        if ((mword) s % 4 == 0 && (mword) d % 4 == 0 && n % 4 == 0)
+            asm volatile("std; rep movsl\n"
+                        ::"D" (d - 4), "S" (s - 4), "c" (n / 4) : "cc", "memory");
+        else
+            asm volatile("std; rep movsb\n"
+                        ::"D" (d - 1), "S" (s - 1), "c" (n) : "cc", "memory");
+        // Some versions of GCC rely on DF being clear
+        asm volatile("cld" :: : "cc");
+    } else {
+        if ((mword) s % 4 == 0 && (mword) d % 4 == 0 && n % 4 == 0)
+            asm volatile("cld; rep movsl\n"
+                        ::"D" (d), "S" (s), "c" (n / 4) : "cc", "memory");
+        else
+            asm volatile("cld; rep movsb\n"
+                        ::"D" (d), "S" (s), "c" (n) : "cc", "memory");
+    }
+    return dst;
+}
+
+extern "C" NONNULL
+inline void copy_string(char *target, const char *source) {
+    uint32 length = 1;
+    while (*source) {
+        *target = *source;
+        source++;
+        target++;
+        length++;
+    }
+    *target = '\0';
+}
+
+//extern "C" NONNULL
+//inline void *memcpy(void *d, void const *s, size_t n) {
+//    mword dummy;
+//    asm volatile ("rep; movsb"
+//                : "=D" (dummy), "+S" (s), "+c" (n)
+//                : "0" (d)
+//                : "memory");
+//    return d;
+//}
+
+extern "C" NONNULL
+inline void *memset(void *d, int c, size_t n) {
     mword dummy;
-    asm volatile ("rep; movsb"
-                  : "=D" (dummy), "+S" (s), "+c" (n)
-                  : "0" (d)
-                  : "memory");
+    asm volatile ("rep; stosb"
+                : "=D" (dummy), "+c" (n)
+                : "0" (d), "a" (c)
+                : "memory");
     return d;
 }
 
 extern "C" NONNULL
-inline void *memset (void *d, int c, size_t n)
-{
-    mword dummy;
-    asm volatile ("rep; stosb"
-                  : "=D" (dummy), "+c" (n)
-                  : "0" (d), "a" (c)
-                  : "memory");
-    return d;
+inline int strcmp(char const *s1, char const *s2) {
+    while (*s1 && *s1 == *s2)
+        s1++, s2++;
+
+    return *s1 - *s2;
 }
 
 extern "C" NONNULL
@@ -54,24 +103,43 @@ inline bool strmatch (char const *s1, char const *s2, size_t n)
     return n == 0;
 }
 
+/**
+ * fonction a n'utiliser que pour comparer des tailles multiples de 4 et page aligned ex: 4ko
+ * @param s1
+ * @param s2
+ * @param len
+ * @return 
+ */
 extern "C" NONNULL
-inline int strcmp(char const *s1, char const *s2) {
-    while (*s1 && *s1 == *s2)
-        s1++, s2++;
-
-    return *s1 - *s2;
+inline int memcmp(const void *s1, const void *s2, size_t len) {
+    len /=4; // cmpsl compare double word (4 bytes)
+    int diff = 0;
+    asm volatile ("repe; cmpsl; movl %%ecx, %0;"
+                : "=qm" (diff), "+D" (s1), "+S" (s2), "+c" (len));
+    return diff;
 }
 
+/*
+ * Normalizes an instruction printing in hexadecimal format so that it may be given as input to 
+ * disassembler (in https://defuse.ca/online-x86-assembler.htm#disassembly2)  
+ * Eg of input  : 8348eb7530483948 as mword
+ * Eg of output : 4839483075eb4883 as char*
+ */
 extern "C" NONNULL
-inline void copy_string(char *target, const char *source) {
-    uint32 length = 1;
-    while (*source) {
-        *target = *source;
-        source++;
-        target++;
-        length++;
+
+inline void instruction_in_hex(mword instr, char *buffer ) {
+    uint8* u = reinterpret_cast<uint8*>(&instr);
+    int size = sizeof(mword);
+    char buff[3]; // 2 (each uint8 (byte) is two characters long) + 1 ('\0')
+    char *p_buffer = buffer, *p_buff ;
+    for(int i = 0; i<size; i++){
+        to_string(*(u+i), buff);
+        p_buff = buff;
+        while(*p_buff){
+            *p_buffer++ = *p_buff++;
+        }
     }
-    *target = '\0';
+    *p_buffer = '\0';
 }
 
 extern "C" NONNULL

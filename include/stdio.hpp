@@ -49,6 +49,7 @@ enum {
     TRACE_ACPI      = 1UL << 8,
     TRACE_EPT       = 1UL << 9,
     COW_FAULT       = 1UL << 10,
+    TRACE_PE        = 1UL << 11,
     TRACE_MEMORY    = 1UL << 13,
     TRACE_PCI       = 1UL << 14,
     TRACE_SCHEDULE  = 1UL << 16,
@@ -77,6 +78,7 @@ unsigned const trace_mask =
 //                            TRACE_ACPI      |
                             TRACE_EPT       |
                             COW_FAULT       |
+                            TRACE_PE        |
 //                            TRACE_MEMORY    |
 //                            TRACE_PCI       |
 //                            TRACE_SCHEDULE  |

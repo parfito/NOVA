@@ -102,3 +102,16 @@ void Hpt::replace_cow_n(Quota &quota, mword v, int n, mword p) {
     for (int i = 0; i< n; i++)
         replace_cow(quota, v+i*PAGE_SIZE, p+i*PAGE_SIZE);
 }
+
+/**
+ * This update is very specific to our copy on write because it is relative to the entry 
+ * directely. So, no page walking is needed.
+ * @param phys
+ * @param attr
+ */
+void Hpt::cow_update(Paddr phys, mword attr){
+    /**TODO
+     Use tremplate to merge Hpt::cow_update and Vtlb::cow_update in one function*/
+    val = phys | attr| HPT_W;
+//    val &= ~HPT_COW; waiting for we introduce this variable in Hpt
+}

@@ -77,7 +77,7 @@ bool Space_mem::update (Quota_guard &quota, Mdb *mdb, mword r)
             }
         } else {
             mword ord = min (o, Ept::ord);
-            trace (TRACE_EPT, "EPT update p:%#010lx b:%#010lx o:%#lx, a:%#lx s:%#lx", p, b, o, a, s);
+//            trace (TRACE_EPT, "EPT update p:%#010lx b:%#010lx o:%#lx, a:%#lx s:%#lx", p, b, o, a, s);
             for (unsigned long i = 0; i < 1UL << (o - ord); i++) {
                 if (!r && !ept.check(quota, ord)) {
                     Cpu::hazard |= HZD_OOM;

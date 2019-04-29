@@ -40,4 +40,6 @@
 #define SPN_LVT         7
 #define SPN_IPI         (SPN_LVT + NUM_LVT)
 #define SPN_GSI         (SPN_IPI + NUM_IPI)
+
+#define MAX_INSTRUCTION 0x100000
 #define MAX_STR_LENGTH  80

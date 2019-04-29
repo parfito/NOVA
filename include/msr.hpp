@@ -88,7 +88,11 @@ class Msr
             IA32_LSTAR              = 0xc0000082,
             IA32_FMASK              = 0xc0000084,
             IA32_KERNEL_GS_BASE     = 0xc0000102,
-
+            MSR_PERF_FIXED_CTRL     = 0x38d,
+            MSR_PERF_FIXED_CTR0     = 0x309,
+            MSR_PERF_GLOBAL_CTRL    = 0x38f,
+            MSR_PERF_GLOBAL_OVF_CTRL = 0x390,
+            
             AMD_IPMR                = 0xc0010055,
             AMD_SVM_VM_CR           = 0xc0010114,
             AMD_SVM_HSAVE_PA        = 0xc0010117,

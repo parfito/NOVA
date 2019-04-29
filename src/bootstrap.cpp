@@ -23,6 +23,7 @@
 #include "ec.hpp"
 #include "hip.hpp"
 #include "msr.hpp"
+#include "lapic.hpp"
 
 extern "C" NORETURN
 void bootstrap()
@@ -51,5 +52,6 @@ void bootstrap()
         root_sc->remote_enqueue();
     }
 
+    Lapic::activate_pmi();    
     Sc::schedule();
 }

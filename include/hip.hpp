@@ -24,6 +24,7 @@
 #include "atomic.hpp"
 #include "config.hpp"
 #include "extern.hpp"
+#include "stdio.hpp"
 
 class Hip_cpu
 {
@@ -45,6 +46,7 @@ class Hip_mem
 {
     public:
         enum {
+            AVAILABLE   =  1u,
             HYPERVISOR  = -1u,
             MB_MODULE   = -2u,
             ACPI_RSDT   = -3u,
@@ -57,6 +59,10 @@ class Hip_mem
         uint64  size;
         uint32  type;
         uint32  aux;
+        
+        void print() const {
+            Console::print("deb %llx fin %llx size %llu type %x aux %x", addr, addr + size-1, size/(1024*1024), type, aux);
+        }
 };
 
 class Hip
@@ -81,6 +87,12 @@ class Hip
         uint32  reserved;               // 0x34
         Hip_cpu cpu_desc[NUM_CPU];
         Hip_mem mem_desc[];
+        
+        template <typename FUNC>
+        inline void for_each_mem(FUNC fn) {
+            mword const mhv_cnt = (length - mem_offs) / mem_size;
+            for (uint32 i = 0; i < mhv_cnt; i++) fn(mem_desc[i]);
+        }        
 
     public:
         enum Feature {
@@ -147,4 +159,6 @@ class Hip
 
         static void add_cpu();
         static void add_check();
+        static void print_mem();
+        static bool is_mmio(Paddr const);
 };

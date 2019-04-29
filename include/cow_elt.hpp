@@ -17,6 +17,7 @@
 #include "compiler.hpp"
 #include "queue.hpp"
 #include "vtlb.hpp"
+#include "hpt.hpp"
 #include "pd.hpp"
 
 class Cow_elt {
@@ -45,9 +46,12 @@ public:
     }
 
     Cow_elt &operator = (Cow_elt const &);
-    static Paddr resolve_cow_fault(mword virt, Paddr phys, mword attr);
+    static void resolve_cow_fault(Vtlb*, mword virt, Paddr phys, mword attr);
     static bool is_mapped_elsewhere(Paddr, Cow_elt*);
-    static bool subtitute(Cow_elt*, mword);
+    static void copy_frame(Cow_elt*, mword);
+    static bool is_empty(){ return !cow_elts.head(); }
+    static void restore_state();
+    static bool compare_and_commit();
     
 private:
     Page_type type; 
@@ -55,6 +59,8 @@ private:
     Paddr old_phys = {};
     mword attr = {};
     Paddr new_phys[2];
+    Vtlb *vtlb = nullptr;
+    Hpt *hpt = nullptr;
     void* linear_add = nullptr;
     Cow_elt *prev;
     Cow_elt *next;

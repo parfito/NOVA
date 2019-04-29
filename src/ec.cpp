@@ -31,9 +31,11 @@
 #include "vtlb.hpp"
 #include "sm.hpp"
 #include "pt.hpp"
+#include "pe.hpp"
+#include "lapic.hpp"
 
 Ec *Ec::current, *Ec::fpowner;
-
+bool Ec::inVMX = false;
 // Constructors
 Ec::Ec (Pd *own, void (*f)(), unsigned c) : Kobject (EC, static_cast<Space_obj *>(own)), cont (f), pd (own), partner (nullptr), prev (nullptr), next (nullptr), fpu (nullptr), cpu (static_cast<uint16>(c)), glb (true), evt (0), timeout (this), user_utcb (0), xcpu_sm (nullptr), pt_oom(nullptr)
 {
@@ -316,11 +318,31 @@ void Ec::ret_user_vmresume()
     if (EXPECT_FALSE (get_cr2() != current->regs.cr2))
         set_cr2 (current->regs.cr2);
 
-    asm volatile ("lea %0," EXPAND (PREG(sp); LOAD_GPR)
-                  "vmresume;"
-                  "vmlaunch;"
-                  "mov %1," EXPAND (PREG(sp);)
-                  : : "m" (current->regs), "i" (CPU_LOCAL_STCK + PAGE_SIZE) : "memory");
+//    trace(0, "VMResume  GuestRip %lx", Vmcs::read(Vmcs::GUEST_RIP));   
+    Lapic::cancel_pmi();
+    inVMX = true;
+    asm volatile ("mov %2," EXPAND(PREG(sp);)
+            EXPAND(SAVE_GPR)
+            "movb $0x0, %0;"
+            "lea %1," EXPAND(PREG(sp); LOAD_GPR)
+            "push " EXPAND(PREG(ax);)
+            "push " EXPAND(PREG(cx);)
+            "push " EXPAND(PREG(dx);)
+            "mov $0x38d," EXPAND(PREG(cx);)
+            "xor " EXPAND(PREG(dx)) ", " EXPAND(PREG(dx);)
+            "mov $0xb," EXPAND(PREG(ax);)
+            "wrmsr;"  
+            "pop " EXPAND(PREG(dx);)
+            "pop " EXPAND(PREG(cx);)
+            "pop " EXPAND(PREG(ax);)
+            "vmresume;" // VMRESUME is not counted as instruction; we don't know why
+            "mov %3," EXPAND(PREG(sp);)
+            EXPAND(LOAD_GPR)
+            "movb $0x1, %0;"
+            "lea %1," EXPAND(PREG(sp); LOAD_GPR)
+            "vmlaunch;"
+            "mov %2," EXPAND(PREG(sp);)
+            : "=m" (Pe::vmlaunch) : "m" (current->regs), "i" (CPU_LOCAL_STCK + PAGE_SIZE), "i" (CPU_LOCAL_STCK + PAGE_SIZE - 0x80) : "memory");
 
     trace (0, "VM entry failed with error %#lx", Vmcs::read (Vmcs::VMX_INST_ERROR));
 
@@ -371,7 +393,7 @@ void Ec::idle()
         asm volatile ("sti; hlt; cli" : : : "memory");
         uint64 t2 = rdtsc();
 
-        Counter::dump();
+//        Counter::dump();
         Counter::cycles_idle += t2 - t1;
     }
 }
