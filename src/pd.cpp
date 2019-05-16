@@ -61,7 +61,6 @@ Pd::Pd(Pd *own, mword sel, mword a, char* const s) : Kobject(PD, static_cast<Spa
         assert(res);
     } else {
         copy_string(name, s);
-        trace(0, "new pd %s", name);        
     }
 }
 

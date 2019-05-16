@@ -194,23 +194,23 @@ void Ec::handle_vmx()
 
     Counter::vmi[reason]++;
     Counter::vmi[reason]++;
-    if(reason == Vmcs::VMX_EXTINT){
-        unsigned vector = Vmcs::read (Vmcs::EXI_INTR_INFO) & 0xff;
-        if(vector == VEC_LVT_PERFM)
-            trace(0, "VMExit reason %ld:%d Guest rip %lx counter %llx rcx %lx", reason, 
-                    vector, Vmcs::read (Vmcs::GUEST_RIP), Lapic::read_instCounter(), current->regs.REG(cx));
-    }
-    else if (reason == Vmcs::VMX_EXC_NMI){
-        mword intr_info = Vmcs::read (Vmcs::EXI_INTR_INFO);
-        if((intr_info & 0x7ff) == 0x30e) {       // #PF
-            mword err = Vmcs::read (Vmcs::EXI_INTR_ERROR);
-            mword cr2 = Vmcs::read (Vmcs::EXI_QUALIFICATION);
-            trace(0, "VMExit reason %ld:%lx:%lx Guest rip %lx counter %llx rcx %lx", reason, 
-                    cr2, err, Vmcs::read (Vmcs::GUEST_RIP), Lapic::read_instCounter(), current->regs.REG(cx));    } 
-    }
-    else
-        trace(0, "VMExit reason %ld Guest rip %lx counter %llx rcx %lx", reason, 
-                Vmcs::read (Vmcs::GUEST_RIP), Lapic::read_instCounter(), current->regs.REG(cx));
+//    if(reason == Vmcs::VMX_EXTINT){
+//        unsigned vector = Vmcs::read (Vmcs::EXI_INTR_INFO) & 0xff;
+//        if(vector == VEC_LVT_PERFM)
+//            trace(0, "VMExit reason %ld:%d Guest rip %lx counter %llx rcx %lx", reason, 
+//                    vector, Vmcs::read (Vmcs::GUEST_RIP), Lapic::read_instCounter(), current->regs.REG(cx));
+//    }
+//    else if (reason == Vmcs::VMX_EXC_NMI){
+//        mword intr_info = Vmcs::read (Vmcs::EXI_INTR_INFO);
+//        if((intr_info & 0x7ff) == 0x30e) {       // #PF
+//            mword err = Vmcs::read (Vmcs::EXI_INTR_ERROR);
+//            mword cr2 = Vmcs::read (Vmcs::EXI_QUALIFICATION);
+//            trace(0, "VMExit reason %ld:%lx:%lx Guest rip %lx counter %llx rcx %lx", reason, 
+//                    cr2, err, Vmcs::read (Vmcs::GUEST_RIP), Lapic::read_instCounter(), current->regs.REG(cx));    } 
+//    }
+//    else
+//        trace(0, "VMExit reason %ld Guest rip %lx counter %llx rcx %lx", reason, 
+//                Vmcs::read (Vmcs::GUEST_RIP), Lapic::read_instCounter(), current->regs.REG(cx));
 
     switch (reason) {
         case Vmcs::VMX_EXC_NMI:     vmx_exception();

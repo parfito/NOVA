@@ -63,6 +63,7 @@ class Ec : public Kobject, public Refcount, public Queue<Sc>
             };
             uint32  xcpu;
         };
+        char name[MAX_STR_LENGTH];        
         unsigned const evt;
         Timeout_hypercall timeout;
         mword          user_utcb;
@@ -219,9 +220,9 @@ class Ec : public Kobject, public Refcount, public Queue<Sc>
         static Ec *fpowner CPULOCAL;
         static bool inVMX;
 
-        Ec (Pd *, void (*)(), unsigned);
-        Ec (Pd *, mword, Pd *, void (*)(), unsigned, unsigned, mword, mword, Pt *);
-        Ec (Pd *, Pd *, void (*f)(), unsigned, Ec *);
+        Ec(Pd *, void (*)(), unsigned, char const *nm = "Unknown");
+        Ec(Pd *, mword, Pd *, void (*)(), unsigned, unsigned, mword, mword, Pt *, char const *nm = "Unknown");
+        Ec(Pd *, Pd *, void (*f)(), unsigned, Ec *, char const *nm = "Unknown");
 
         ~Ec();
 
@@ -481,4 +482,6 @@ class Ec : public Kobject, public Refcount, public Queue<Sc>
 
         template <void(*C)()>
         static void check(mword, bool = true);
+        
+        char *get_name() { return name; }
 };
