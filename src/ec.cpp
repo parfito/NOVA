@@ -787,6 +787,9 @@ void Ec::save_regs(Exc_regs *r) {
 void Ec::save_state() {
     regs_0 = regs;
 //    Cow_elt::place_phys0(!utcb);
+    if(str_equal("init", Pd::current->get_name())){
+        trace(0, "INIT");
+    }
     Fpu::dwc_save(); // If FPU activated, save fpu state
     if (fpu)         // If fpu defined, save it 
         fpu->save_data();
