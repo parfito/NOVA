@@ -788,8 +788,14 @@ void Ec::save_state() {
     regs_0 = regs;
 //    Cow_elt::place_phys0(!utcb);
     if(str_equal("init", Pd::current->get_name())){
-        trace(0, "INIT");
+        trace(0, "INIT Pe_num %lu", Pe::get_number());
+        Counter::init++;
+        if(Counter::init == 3){
+            Pe::dump(true);
+        }
     }
+    Pe::add_pe(new (Pd::kern.quota)Pe(current->get_name(), current->getPd()->get_name(), 
+            regs.REG(ip), 0, 0, ""));
     Fpu::dwc_save(); // If FPU activated, save fpu state
     if (fpu)         // If fpu defined, save it 
         fpu->save_data();

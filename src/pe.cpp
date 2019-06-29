@@ -76,6 +76,7 @@ void Pe::free_recorded_pe() {
 
 void Pe::dump(bool all){    
     Pe *p = pes.head(), *head = pes.head(), *n = nullptr;
+    trace(0, "PE nb %lu", number);
     while(p) {
         if(all || p->is_marked())
             p->print();

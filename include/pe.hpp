@@ -166,7 +166,7 @@ public:
 
     void mark();
     void print(){
-        trace(0,"%s PD: %s EC %s rip %lx *v %lx:%lx from %d:%d mmio %lx:%lx cr3 %lx nb_pe %u", type, pd, ec, rip, val, ss_val, from1, from2, mmio_v, mmio_p, cr3, pe_number);        
+        trace(0,"%s PD: %s EC %s rip %lx *v %lx:%lx from %d:%d mmio %lx:%lx cr3 %lx numero %lu", type, pd, ec, rip, val, ss_val, from1, from2, mmio_v, mmio_p, cr3, numero);        
     };
     
     bool is_marked() { return marked; }

@@ -47,6 +47,7 @@ unsigned Counter::nb_pe;
 unsigned Counter::pio;
 unsigned Counter::mmio;
 uint64 Counter::cycles_idle;
+unsigned Counter::init;
 
 void Counter::dump() {
     trace(0, "TIME: %16llu", rdtsc());

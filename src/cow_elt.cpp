@@ -174,8 +174,10 @@ void Cow_elt::commit(){
         if(c->hpt){
             c->hpt->cow_update(old_phys, c->attr, c->page_addr);
         }
+        trace(0, "cow_elt %lx ", c->page_addr);    
         destroy(c, Pd::kern.quota);
     }
+    trace(0, "============================================ Ec %s", Ec::current->get_name());
     if(Pe::in_recover_from_stack_fault_mode){
         Pe::in_recover_from_stack_fault_mode = false;
         debug_started_trace(0,"Rollback finished");
