@@ -664,9 +664,6 @@ class Ec : public Kobject, public Refcount, public Queue<Sc>, public Queue<Pe>
         mword get_reg(int);
         int compare_regs_mute();
         bool single_step_finished();
-        void free_recorded_pe();
-        static void dump_pe(bool = false);
-        void mark_pe_tail();
         static void count_interrupt(mword);
         static void check_instr_number_equals(int);
         void start_debugging(Debug_type);
@@ -676,4 +673,6 @@ class Ec : public Kobject, public Refcount, public Queue<Sc>, public Queue<Pe>
         size_t get_cow_number() { return cow_elts.size(); }
 
 //        void dump_regs();
+        static bool is_debug_requested_from_user_space() { return Console::log_on || 
+            current->pd->is_debug() || current->debug; }
 };

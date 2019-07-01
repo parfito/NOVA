@@ -21,7 +21,18 @@
 #include "stdio.hpp"
 
 class Pe_state {
+    
+public:
+    enum Type {
+        PE_STATE_DEFAULT              = 0,
+        PE_STATE_RESOLVE_COWFAULT     = 1,
+        PE_STATE_PLACE_PHYS0          = 2,
+        PE_STATE_INTERRUPT            = 3,
+    };
+    
+private:
     friend class Queue<Pe_state>;
+    friend class Pe;
     static Slab_cache cache;    
     static Queue<Pe_state> pe_states, log_pe_states;
     
@@ -29,16 +40,22 @@ class Pe_state {
     mword rax = 0, rbx = 0, rcx = 0, rdx = 0, rbp = 0, rdi = 0, rsi = 0, rsp = 0, rip = 0, r8 = 0, r9 = 0, r10 = 0, r11 = 0, r12 = 0, r13 = 0, r14 = 0, r15 = 0;
     mword rsp_content = 0, rip_content = 0;
     uint64 retirement_counter = 0;
-    uint8 run_no; 
-    mword int_no;
-    bool is_vcpu;
-    Pe_state* prev;
-    Pe_state* next;
+    uint8 run_number = 123; 
+    mword interrupt_number = 0;
+    bool is_vcpu = false;
     size_t numero = 0;
     mword instruction = 0;
     mword attr = 0; 
     mword sub_reason = 0;
     mword diff_reason = 0;
+    Type type = PE_STATE_DEFAULT;
+    size_t count = 0, page_twin_index = 0;
+    int missmatch_addr = 0;
+    mword page_addr = 0, page_twin_addr = 0, page_addr_placed = 0, page_twin_addr_placed = 0;
+    Paddr phys0 = 0, phys1 = 0, phys2 = 0, phys0_placed = 0, phys1_placed = 0, phys2_placed = 0;
+    
+    Pe_state* prev;
+    Pe_state* next;
     
 public:
     
@@ -52,6 +69,9 @@ public:
     Pe_state(Exc_regs*, uint64, uint8, mword, bool = false); 
     Pe_state(Cpu_regs*, uint64, uint8, mword, bool = false); 
     Pe_state &operator = (Pe_state const &);
+    Pe_state(size_t, int, mword, Paddr, Paddr, Paddr, mword, mword);
+    Pe_state(mword, Paddr, Paddr, Paddr, mword);
+    Pe_state(mword, uint8, mword, uint64);
     
     ALWAYS_INLINE
     static inline void *operator new (size_t, Quota &quota) { return cache.alloc(quota); }
@@ -69,20 +89,8 @@ public:
         cache.free (ptr, quota);
     }
     
-    Pe_state* get_next(){
-        return next;
-    };
+    void print();
     
-    Pe_state* get_previous(){
-        return prev;
-    };
-    
-    void print(){
-        trace(0, "%d, A %010lx B %010lx C %010lx D %010lx S %010lx D %010lx B %010lx S %010lx I %010lx R8 %010lx %010lx %010lx %010lx %010lx "
-        "%010lx %010lx %010lx, %0#12llx, %ld:%ld %lx", run_no, rax, rbx, rcx, rdx, rbp, rdi, rsi, rsp, rip, r8, r9, 
-                r10, r11, r12, r13, r14, r15, retirement_counter, int_no, sub_reason, diff_reason);
-    }
-
     static size_t get_number(){
         return number;
     }

@@ -43,3 +43,22 @@
 
 #define MAX_INSTRUCTION 0x100000
 #define MAX_STR_LENGTH  80
+
+#define DEBUG_CMD_SHIFT          0
+#define DEBUG_CMD_KILL           1
+#define DEBUG_CMD_LOG            2
+#define DEBUG_CMD_BITS           2
+#define DEBUG_CMD_MASK           ((1 << DEBUG_CMD_BITS) - 1)
+
+#define DEBUG_SCOPE_SHIFT        DEBUG_CMD_BITS
+#define DEBUG_SCOPE_EC           0
+#define DEBUG_SCOPE_PD           1
+#define DEBUG_SCOPE_SYSTEM       2
+#define DEBUG_SCOPE_BITS         2
+#define DEBUG_SCOPE_MASK         ((1 << DEBUG_SCOPE_BITS) - 1)
+
+#define DEBUG_STATE_SHIFT        (DEBUG_CMD_BITS + DEBUG_SCOPE_BITS)
+#define DEBUG_STATE_OFF          0
+#define DEBUG_STATE_ON           1
+#define DEBUG_STATE_BITS         1
+#define DEBUG_STATE_MASK         ((1 << DEBUG_STATE_BITS) - 1)

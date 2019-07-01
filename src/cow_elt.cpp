@@ -83,6 +83,8 @@ void Cow_elt::resolve_cow_fault(Vtlb* tlb, Hpt *hpt, mword virt, Paddr phys, mwo
     }
     cow_elts.enqueue(ce);
 //    Console::print("Cow error  v: %lx  phys: %lx attr %lx phys1: %lx  phys2: %lx", virt, phys, ce->attr, ce->new_phys[0], ce->new_phys[1]);            
+    Pe::add_pe_state(0, 0, ce->page_addr, ce->old_phys, ce->new_phys[0], ce->new_phys[1], reinterpret_cast<mword>(
+                c ? c->page_addr : 0), 0);
 }
 
 Cow_elt* Cow_elt::is_mapped_elsewhere(Paddr phys){
@@ -174,10 +176,10 @@ void Cow_elt::commit(){
         if(c->hpt){
             c->hpt->cow_update(old_phys, c->attr, c->page_addr);
         }
-        trace(0, "cow_elt %lx ", c->page_addr);    
+//        trace(0, "cow_elt %lx ", c->page_addr);    
         destroy(c, Pd::kern.quota);
     }
-    trace(0, "============================================ Ec %s", Ec::current->get_name());
+//    trace(0, "============================================ Ec %s", Ec::current->get_name());
     if(Pe::in_recover_from_stack_fault_mode){
         Pe::in_recover_from_stack_fault_mode = false;
         debug_started_trace(0,"Rollback finished");

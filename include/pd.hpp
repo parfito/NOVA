@@ -6,6 +6,7 @@
  *
  * Copyright (C) 2012 Udo Steinberg, Intel Corporation.
  * Copyright (C) 2015 Alexander Boettcher, Genode Labs GmbH
+ * Copyright (C) 2016-2019 Parfait Tokponnon, UCLouvain.
  *
  * This file is part of the NOVA microhypervisor.
  *
@@ -30,7 +31,7 @@
 class Pd : public Kobject, public Refcount, public Space_mem, public Space_pio, public Space_obj {
 private:
     char name[MAX_STR_LENGTH];
-    bool to_be_cowed = false;
+    bool to_be_cowed = false, debug = false;
     static Slab_cache cache;
     static const char *unprotected_pd_names[];
 
@@ -93,7 +94,6 @@ private:
 public:
     static Pd *current CPULOCAL_HOT;
     static Pd kern, root;
-    bool pd_debug = false;
     Quota quota { };
     
     Slab_cache pt_cache;
@@ -193,4 +193,6 @@ public:
         return to_be_cowed;
     }
     bool compare_memory_mute();
+    bool is_debug() { return debug;}  
+    void set_debug(bool db) { debug = db;}
 };

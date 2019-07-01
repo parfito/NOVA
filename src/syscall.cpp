@@ -122,40 +122,41 @@ void Ec::send_msg()
 }
 
 void Ec::debug_call(mword r9){
-    if(current->debug){
-        if(current->debug != r9)
-            die("r9 not equal to current.debug");
-        switch(current->debug){
-            case global_debug:
-                Console::print("Deactivating debuging for all system threads requested by %s", current->get_name());
-                glb_debug = false;
+    switch((r9>>DEBUG_CMD_SHIFT) & DEBUG_CMD_MASK){
+        case DEBUG_CMD_KILL :
+            die("Die command received from user space. Going to kill ..");
                 break;
-            case pd_debug:
-                Console::print("Deactivating debuging for all PD %s 's threads requested by %s", current->getPd()->get_name(), current->get_name());
-                current->getPd()->pd_debug = false;
+        case DEBUG_CMD_LOG :
+        {
+            bool debug_state = (r9>>DEBUG_STATE_SHIFT) & DEBUG_STATE_MASK ? true : false;
+            if(debug_state)
+                trace_no_newline(0, "Activating ");
+            else 
+                trace_no_newline(0, "De-activating ");                
+            switch((r9 >> DEBUG_SCOPE_SHIFT) & DEBUG_SCOPE_MASK){
+                case DEBUG_SCOPE_EC :
+                    trace(0, "debuging for ec %s", current->get_name());
+                    current->debug = debug_state;
                 break;
-            case private_debug:
-                Console::print("Deactivating debuging for ec %s", current->get_name());
+                case DEBUG_SCOPE_PD :
+                    trace(0, "debuging for all PD %s 's threads requested by %s", current->getPd()->get_name(), current->get_name());
+                    current->pd->set_debug(debug_state);
+                break;
+                case DEBUG_SCOPE_SYSTEM :
+                    trace(0, "debuging for all system threads requested by %s", current->get_name());
+                    Console::log_on = debug_state;
+                    break;
+                default:
+                    Console::panic("Wrong DEBUG_SCOPE %lx %lx command received from %s", r9, 
+                            (r9 >> DEBUG_SCOPE_SHIFT) & DEBUG_SCOPE_MASK, current->name);
+        }
+        }
+                break;
+        default : 
+            Console::panic("Wrong DEBUG_CMD %lx received from %s", r9, current->name);
                 break;
         }
-        current->debug = 0;
-    }else{
-        switch(r9){
-            case global_debug:
-                Console::print("Activating debuging for all system threads requested by %s", current->get_name());
-                glb_debug = true;
-                break;
-            case pd_debug:
-                Console::print("Activating debuging for all PD %s 's threads requested by %s", current->getPd()->get_name(), current->get_name());
-                current->getPd()->pd_debug  = true;
-                break;
-            case private_debug:
-                Console::print("Activating debuging for ec %s", current->get_name());
-                break;
-        }
-        current->debug = r9;
     }
-}
 
 void Ec::sys_call()
 {

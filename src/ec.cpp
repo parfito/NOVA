@@ -7,6 +7,7 @@
  * Copyright (C) 2012-2013 Udo Steinberg, Intel Corporation.
  * Copyright (C) 2014 Udo Steinberg, FireEye, Inc.
  * Copyright (C) 2012-2018 Alexander Boettcher, Genode Labs GmbH.
+ * Copyright (C) 2016-2019 Parfait Tokponnon, UCLouvain.
  *
  * This file is part of the NOVA microhypervisor.
  *
@@ -570,7 +571,7 @@ void Ec::die(char const *reason, Exc_regs *r) {
     bool const pf_in_kernel = str_equal(reason, "#PF (kernel)");
 //    prepare_checking();    
 //    Pe::print_current(current->utcb ? false : true);
-    Pe::dump(true);
+    Pe::dump(false);
     if (current->utcb || show || pf_in_kernel) {
 //        if (show || !strmatch(reason, "PT not found", 12))
             trace(0, "Killed EC:%s SC:%p V:%#lx CS:%#lx IP:%#lx(%#lx) CR2:%#lx ERR:%#lx (%s) %s",
@@ -779,23 +780,14 @@ void Ec::save_regs(Exc_regs *r) {
     last_rcx = r->REG(cx);
     exc_counter++;
     count_interrupt(r->vec);
-    Pe_state::add_pe_state(new(Pd::kern.quota) Pe_state(r, Lapic::read_instCounter(), 
-            run_number, r->vec));
+//    Pe::add_pe_state(current->regs.REG(ip), run_number, r->vec);
     return;
 }
 
 void Ec::save_state() {
     regs_0 = regs;
-//    Cow_elt::place_phys0(!utcb);
-    if(str_equal("init", Pd::current->get_name())){
-        trace(0, "INIT Pe_num %lu", Pe::get_number());
-        Counter::init++;
-        if(Counter::init == 3){
-            Pe::dump(true);
-        }
-    }
-    Pe::add_pe(new (Pd::kern.quota)Pe(current->get_name(), current->getPd()->get_name(), 
-            regs.REG(ip), 0, 0, ""));
+    Pe::add_pe(getPd()->get_name(), get_name(), regs.REG(ip), 0, 0, "");
+//    Cow_elt::place_phys0();
     Fpu::dwc_save(); // If FPU activated, save fpu state
     if (fpu)         // If fpu defined, save it 
         fpu->save_data();
@@ -950,8 +942,9 @@ int Ec::compare_regs(int reason) {
     if (regs_2.r11 != regs_1.r11) {
         // resume flag  or trap flag may be set if reason is step-mode
         // but it is unclear why. Must be fixed later
-        if (((regs_2.r11 | 1u << 16) == regs_1.r11) || (regs_2.r11 == (regs_1.r11 | 1u << 8)))
-            return 0;
+        if (((regs_2.r11 | 1u << 16) == regs_1.r11) || (regs_2.r11 == (regs_1.r11 | 1u << 8))){
+            // Nothing to do, just continue;
+        }
         else {
             regs_missmatch_print("R11", regs_0.r11, regs_1.r11, regs_2.r11);
             return 11;
@@ -1066,7 +1059,7 @@ void Ec::debug_func(const char* source) {
 }
 
 void Ec::debug_print(const char* source) {
-    if (current->getPd()->pd_debug || current->debug)
+    if (current->pd->is_debug() || current->debug)
         debug_func(source);
     return;
 
@@ -1223,32 +1216,6 @@ bool Ec::single_step_finished() {
     return !(compare_regs_mute() || pd->compare_memory_mute());
 }
 
-void Ec::free_recorded_pe() {
-//    if(str_equal(current->get_name(), "fb_drv"))
-//        return;
-    Pe *pe = nullptr;
-    while (Queue<Pe>::dequeue(pe = Queue<Pe>::head())) {
-        Pe::destroy(pe, Pd::kern.quota);
-    }
-}
-
-void Ec::dump_pe(bool all){
-    Pe *pe = current->Queue<Pe>::head();
-    if(!pe)
-        return;
-    do {
-        if(all || pe->is_marked())
-            pe->print_current();
-        pe = pe->get_next();
-    } while(pe != current->Queue<Pe>::head());
-}
-
-void Ec::mark_pe_tail(){
-    Pe *tail = Queue<Pe>::tail();        
-    assert(tail);
-    tail->mark(); 
-}
-
 void Ec::count_interrupt(mword vector){
     switch (vector) {
         case 0 ... VEC_GSI - 1:
@@ -1321,7 +1288,7 @@ void Ec::check_instr_number_equals(int from){
         Console::print("%s %d: ec %s pd %s counter1 %llu counter2 %llu %s ss %llu ",
         instr_number_comp, from, current->get_name(), current->getPd()->get_name(), counter1, counter2, to_print, nb_inst_single_step);
     }
-    current->dump_pe();
+    Pe::dump();
 }
 
 void Ec::step_debug(){

@@ -52,6 +52,11 @@ class Queue
             }
         }
 
+        /**
+         * retrieve t from the head
+         * @param t
+         * @return true if t is valid object of the queue, in this case it is retrieve from the head
+         */
         ALWAYS_INLINE
         inline bool dequeue (T *t)
         {
@@ -73,11 +78,15 @@ class Queue
             return true;
         }
         
+        /**
+         * 
+         * @return the size of the queue
+         */
         ALWAYS_INLINE
-        inline uint32 size ()
+        inline size_t size ()
         {
             T *c = headptr, *n = nullptr;
-            uint32 count = 0;
+            size_t count = 0;
             while(c) {
                 count++;
                 n = c->next;

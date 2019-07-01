@@ -20,8 +20,8 @@ Slab_cache Pe_state::cache(sizeof (Pe_state), 32);
 size_t Pe_state::number = 0;
 Queue<Pe_state> Pe_state::pe_states, Pe_state::log_pe_states;
 
-Pe_state::Pe_state(Exc_regs* r, uint64 inst_count, uint8 run_number, mword int_number, bool vcpu) : 
-    retirement_counter(inst_count), run_no(run_number), int_no(int_number), is_vcpu(vcpu), prev(nullptr), next(nullptr) {
+Pe_state::Pe_state(Exc_regs* r, uint64 inst_count, uint8 run, mword int_number, bool vcpu) : 
+    retirement_counter(inst_count), run_number(run), interrupt_number(int_number), is_vcpu(vcpu), prev(nullptr), next(nullptr) {
     rax = r->REG(ax);
     rbx = r->REG(bx);
     rcx = r->REG(cx);
@@ -48,8 +48,8 @@ Pe_state::Pe_state(Exc_regs* r, uint64 inst_count, uint8 run_number, mword int_n
     number++;
 };
 
-Pe_state::Pe_state(Cpu_regs* cpu_regs, uint64 inst_count, uint8 run_number, mword int_number, bool vcpu) : 
-    retirement_counter(inst_count), run_no(run_number), int_no(int_number), is_vcpu(vcpu), prev(nullptr), next(nullptr) {
+Pe_state::Pe_state(Cpu_regs* cpu_regs, uint64 inst_count, uint8 run, mword int_number, bool vcpu) : 
+    retirement_counter(inst_count), run_number(run), interrupt_number(int_number), is_vcpu(vcpu), prev(nullptr), next(nullptr) {
     rax = cpu_regs->REG(ax);
     rbx = cpu_regs->REG(bx);
     rcx = cpu_regs->REG(cx);
@@ -77,7 +77,7 @@ Pe_state::Pe_state(Cpu_regs* cpu_regs, uint64 inst_count, uint8 run_number, mwor
 };
 
 Pe_state::Pe_state(const Pe_state& orig) : retirement_counter(orig.retirement_counter), 
-        run_no(orig.run_no), int_no(orig.int_no), is_vcpu(orig.is_vcpu), prev(nullptr), next(nullptr){
+        run_number(orig.run_number), interrupt_number(orig.interrupt_number), is_vcpu(orig.is_vcpu), prev(nullptr), next(nullptr){
     rax = orig.rax;
     rbx = orig.rbx;
     rcx = orig.rcx;
@@ -99,6 +99,23 @@ Pe_state::Pe_state(const Pe_state& orig) : retirement_counter(orig.retirement_co
     number++;
 }
 
+Pe_state::Pe_state(size_t c, int mm, mword pa, Paddr p0, Paddr p1, Paddr p2, mword pta, mword pti) : 
+    count(c), page_twin_index(pti), missmatch_addr(mm), page_addr(pa), page_twin_addr(pta), 
+        phys0(p0), phys1(p1), phys2(p2), prev(nullptr), next(nullptr){
+    type = PE_STATE_RESOLVE_COWFAULT;
+}
+
+Pe_state::Pe_state(mword addr, Paddr p0, Paddr p1, Paddr p2, mword ptap) : page_addr_placed(addr), 
+        page_twin_addr_placed(ptap), phys0_placed(p0), phys1_placed(p1), phys2_placed(p2),
+        prev(nullptr), next(nullptr){
+    type = PE_STATE_PLACE_PHYS0;    
+}
+
+Pe_state::Pe_state(mword int_rip, uint8 run, mword int_number, uint64 inst_count) : 
+        rip_content(int_rip), retirement_counter(inst_count), run_number(run), 
+        interrupt_number(int_number), prev(nullptr), next(nullptr){
+    type = PE_STATE_INTERRUPT;    
+}
 
 Pe_state::~Pe_state() {
     number--;
@@ -162,3 +179,25 @@ void Pe_state::dump_log(){
         p = (p == n || n == head) ? nullptr : n;
     }
 }
+
+void Pe_state::print(){
+//        trace(0, "%d, A %010lx B %010lx C %010lx D %010lx S %010lx D %010lx B %010lx S %010lx I %010lx R8 %010lx %010lx %010lx %010lx %010lx "
+//        "%010lx %010lx %010lx, %0#12llx, %ld:%ld %lx", run_no, rax, rbx, rcx, rdx, rbp, rdi, rsi, rsp, rip, r8, r9, 
+//                r10, r11, r12, r13, r14, r15, retirement_counter, int_no, sub_reason, diff_reason);
+        switch(type){
+            case PE_STATE_RESOLVE_COWFAULT:
+                trace(0, "  count %lu MM %x c %lx %lx %lx %lx ce %lx  index %lu", count, missmatch_addr, 
+                    page_addr, phys0, phys1, phys2, page_twin_addr, page_twin_index);
+                break;
+            case PE_STATE_PLACE_PHYS0:
+                trace(0, "  Placing c %lx %lx %lx %lx ce %lx", page_addr_placed, phys0_placed, 
+                        phys1_placed, phys2_placed, page_twin_addr_placed);
+                break;
+            case PE_STATE_INTERRUPT:
+                trace(0, "  Interupt rip %lx run %u vec %lu counter %llx", rip_content, run_number, 
+                        interrupt_number, retirement_counter);
+                break;
+            case PE_STATE_DEFAULT:
+                break;
+        }
+    }
