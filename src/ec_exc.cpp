@@ -435,6 +435,7 @@ void Ec::handle_exc(Exc_regs *r) {
  * @param from : where it is called from
  */
 void Ec::check_memory(PE_stopby from) {
+    Pe::set_froms(run_number, from);        
     if (Cow_elt::is_empty() && !Pe::in_recover_from_stack_fault_mode && !Pe::in_debug_mode) {
         launch_state = UNLAUNCHED;
         reset_all();

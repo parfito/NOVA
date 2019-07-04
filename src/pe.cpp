@@ -167,11 +167,15 @@ void Pe::set_ss_val(mword v){
         p->ss_val = v;
 }
 
-void Pe::set_froms(int f1, int f2){
-     Pe *p = pes.tail();
+void Pe::set_froms(uint8 run, int from){
+    if(!Ec::current->is_debug_requested_from_user_space())
+        return;    
+    Pe *p = pes.tail();
     if(p){
-        p->from1 = f1;
-        p->from2 = f2;
+        if (run) 
+            p->from1 = from;
+        else
+            p->from2 = from;
     }
 }
 

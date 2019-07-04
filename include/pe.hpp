@@ -196,8 +196,7 @@ public:
 
     static void set_ss_val(mword);
     
-    static void set_froms(int, int);
-    
+    static void set_froms(uint8, int);    
     static void set_mmio(mword, Paddr);
     
     static void add_pe_state(mword, Paddr, Paddr, Paddr, mword);
