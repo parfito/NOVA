@@ -166,9 +166,9 @@ public:
     }
 
     void print(bool from_head = false){
-        trace(0,"PD: %s EC %s rip %lx rip1 %lx rip2 %lx cow_elts_size %lx:%lx from %d:%d mmio %lx:%lx cr3 %lx numero %lu "
-                "pe_state %lu", pd, ec, rip0, rip1, rip2, val, ss_val, from1, from2, mmio_v, mmio_p, cr3, 
-                numero, pe_states.size());        
+        trace(0,"PD: %s EC %s rip %lx rip1 %lx rip2 %lx cow_elts_size %lx:%lx numero %lu from %d:%d mmio %lx:%lx cr3 %lx "
+                "pe_state %lu", pd, ec, rip0, rip1, rip2, val, ss_val, numero, from1, from2, mmio_v, mmio_p, cr3, 
+                pe_states.size());        
         Pe_state *pe_state = from_head ? pe_states.head() : pe_states.tail(), *end = from_head ? pe_states.head() : pe_states.tail(), 
             *n = nullptr;
         while(pe_state) {
@@ -205,4 +205,5 @@ public:
     static void set_rip1(mword);
 
     static void set_rip2(mword);
+    static void set_missmatch(int);
 };

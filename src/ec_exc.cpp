@@ -446,6 +446,7 @@ void Ec::check_memory(PE_stopby from) {
     switch (run_number) {
         case 0:
             prev_reason = from;
+            Pe::set_rip1(ec->utcb? ec->regs.REG(ip) : Vmcs::read(Vmcs::GUEST_RIP));
             ec->restore_state();
             counter1 = Lapic::read_instCounter(); // to be removed after we found the cause of "Attention : reason >< prevreason 1:22 counter1 160e7b counter2 ffffffffffbd "
             if (from == PES_PMI) {
@@ -584,6 +585,7 @@ void Ec::check_memory(PE_stopby from) {
         {
             prepare_checking();    
             reg_diff = ec->compare_regs(from);
+            Pe::set_rip2(ec->utcb? ec->regs_2.REG(ip) : Vmcs::read(Vmcs::GUEST_RIP));            
             if (Cow_elt::compare() ||reg_diff) {
                 if(Pe::in_recover_from_stack_fault_mode){
                     Pd *pd = ec->getPd();

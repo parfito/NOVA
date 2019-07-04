@@ -169,13 +169,18 @@ void Cow_elt::commit(){
         Paddr old_phys = c->old_phys;
         void *ptr = Hpt::remap_cow(Pd::kern.quota, old_phys);
         mword *ptr1 = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, c->new_phys[0], PAGE_SIZE));
-        memcpy(ptr, ptr1, PAGE_SIZE);
+        
+        int missmatch_addr = memcmp(ptr, ptr1, PAGE_SIZE);
+        if (missmatch_addr) { 
+            memcpy(ptr, ptr1, PAGE_SIZE);
+        } 
         if(c->vtlb){
             c->vtlb->cow_update(old_phys, c->attr);
         }
         if(c->hpt){
             c->hpt->cow_update(old_phys, c->attr, c->page_addr);
         }
+        Pe::set_missmatch(missmatch_addr);
 //        trace(0, "cow_elt %lx ", c->page_addr);    
         destroy(c, Pd::kern.quota);
     }

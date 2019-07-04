@@ -233,3 +233,11 @@ void Pe::set_rip2(mword r){
     assert(p);
     p->rip2 = r;
 }
+
+void Pe::set_missmatch(int mm){
+    if(!Ec::current->is_debug_requested_from_user_space())
+        return;    
+    Pe *p = pes.tail();
+    assert(p);    
+    p->missmatch_addr = mm;
+}
