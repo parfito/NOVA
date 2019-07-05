@@ -36,6 +36,8 @@ unsigned Counter::vtlb_gpf;
 unsigned Counter::vtlb_hpf;
 unsigned Counter::vtlb_fill;
 unsigned Counter::vtlb_flush;
+unsigned Counter::vtlb_cow_fault;
+unsigned Counter::cow_fault;
 unsigned Counter::vtlb_cow;
 unsigned Counter::schedule;
 unsigned Counter::helping;
@@ -52,57 +54,59 @@ unsigned Counter::init;
 void Counter::dump() {
     trace(0, "TIME: %16llu", rdtsc());
     trace(0, "IDLE: %16llu", cycles_idle);
-    trace(0, "VGPF: %16u", vtlb_gpf);
-    trace(0, "VHPF: %16u", vtlb_hpf);
-    trace(0, "VFIL: %16u", vtlb_fill);
-    trace(0, "VFLU: %16u", vtlb_flush);
-    trace(0, "VCOW: %16u", vtlb_cow);
-    trace(0, "SCHD: %16u", schedule);
-    trace(0, "HELP: %16u", helping);
-    trace(0, "REP_IO: %14u", rep_io);
-    trace(0, "SIMPLE_IO: %11u", simple_io);
-    trace(0, "PIO: %17u", pio);
-    trace(0, "MMIO: %16u", mmio);
-    trace(0, "T_IO: %16u", io);
-    trace(0, "PMI_SS: %14u", pmi_ss);
+//    trace(0, "VGPF: %16u", vtlb_gpf);
+//    trace(0, "VHPF: %16u", vtlb_hpf);
+//    trace(0, "VFIL: %16u", vtlb_fill);
+//    trace(0, "VFLU: %16u", vtlb_flush);
+    trace(0, "COWF: %16u", cow_fault);
+//    trace(0, "VCOW: %16u", vtlb_cow_fault);
+//    trace(0, "SCHD: %16u", schedule);
+//    trace(0, "HELP: %16u", helping);
+//    trace(0, "REP_IO: %14u", rep_io);
+//    trace(0, "SIMPLE_IO: %11u", simple_io);
+//    trace(0, "PIO: %17u", pio);
+//    trace(0, "MMIO: %16u", mmio);
+    trace(0, "VMIO: %16u", pio);
+//    trace(0, "T_IO: %16u", io);
+//    trace(0, "PMI_SS: %14u", pmi_ss);
     trace(0, "NB_PE: %15u", nb_pe);
 
-    vtlb_gpf = vtlb_hpf = vtlb_fill = vtlb_flush = schedule = helping = rep_io =
-    io = simple_io = pmi_ss = nb_pe = pio = mmio = 0;
+    vtlb_gpf = vtlb_hpf = vtlb_fill = vtlb_flush = vtlb_cow_fault = schedule = helping = rep_io =
+    io = simple_io = pmi_ss = pio = mmio = 0;
 
-    for (unsigned i = 0; i < sizeof (ipi) / sizeof (*ipi); i++)
-        if (ipi[i]) {
-            trace(0, "IPI %#4x: %12u", i, ipi[i]);
-            ipi[i] = 0;
-        }
-
-    for (unsigned i = 0; i < sizeof (lvt) / sizeof (*lvt); i++)
-        if (lvt[i]) {
-            uint64 mean = lag_lvt[i]/(delayed_lvt[i]?delayed_lvt[i]:lvt[i]);
-            trace(0, "LVT %#4x: %12u %12u lag %12llu %12llu", i, lvt[i], delayed_lvt[i], lag_lvt[i], mean);
-            lvt[i] = 0;
-            delayed_lvt[i] = 0;
-            lag_lvt[i] = 0;
-        }
-
-    for (unsigned i = 0; i < sizeof (gsi) / sizeof (*gsi); i++)
-        if (gsi[i]) {
-            uint64 mean = lag_gsi[i]/(delayed_gsi[i]?delayed_gsi[i]:gsi[i]);
-            trace(0, "GSI %#4x: %12u %12u lag %12llu %12llu", i, gsi[i], delayed_gsi[i], lag_gsi[i], mean);
-            gsi[i] = 0;
-            delayed_gsi[i] = 0;
-            lag_gsi[i] = 0;            
-        }
-
-    for (unsigned i = 0; i < sizeof (exc) / sizeof (*exc); i++)
-        if (exc[i]) {
-            trace(0, "EXC %#4x: %12u", i, exc[i]);
-            exc[i] = 0;
-        }
-
-    for (unsigned i = 0; i < sizeof (vmi) / sizeof (*vmi); i++)
-        if (vmi[i]) {
-            trace(0, "VMI %#4x: %12u", i, vmi[i]);
-            vmi[i] = 0;
-        }
+//    for (unsigned i = 0; i < sizeof (ipi) / sizeof (*ipi); i++)
+//        if (ipi[i]) {
+//            trace(0, "IPI %#4x: %12u", i, ipi[i]);
+//            ipi[i] = 0;
+//        }
+//
+//    for (unsigned i = 0; i < sizeof (lvt) / sizeof (*lvt); i++)
+//        if (lvt[i]) {
+//            uint64 mean = lag_lvt[i]/(delayed_lvt[i]?delayed_lvt[i]:lvt[i]);
+//            trace(0, "LVT %#4x: %12u %12u lag %12llu %12llu", i, lvt[i], delayed_lvt[i], lag_lvt[i], mean);
+//            lvt[i] = 0;
+//            delayed_lvt[i] = 0;
+//            lag_lvt[i] = 0;
+//        }
+//
+//    for (unsigned i = 0; i < sizeof (gsi) / sizeof (*gsi); i++)
+//        if (gsi[i]) {
+//            uint64 mean = lag_gsi[i]/(delayed_gsi[i]?delayed_gsi[i]:gsi[i]);
+//            trace(0, "GSI %#4x: %12u %12u lag %12llu %12llu", i, gsi[i], delayed_gsi[i], lag_gsi[i], mean);
+//            gsi[i] = 0;
+//            delayed_gsi[i] = 0;
+//            lag_gsi[i] = 0;            
+//        }
+//
+//    for (unsigned i = 0; i < sizeof (exc) / sizeof (*exc); i++)
+//        if (exc[i]) {
+//            trace(0, "EXC %#4x: %12u", i, exc[i]);
+//            exc[i] = 0;
+//        }
+//
+//    for (unsigned i = 0; i < sizeof (vmi) / sizeof (*vmi); i++)
+//        if (vmi[i]) {
+//            trace(0, "VMI %#4x: %12u", i, vmi[i]);
+//            vmi[i] = 0;
+//        }
 }

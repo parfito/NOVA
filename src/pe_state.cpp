@@ -112,9 +112,17 @@ Pe_state::Pe_state(mword addr, Paddr p0, Paddr p1, Paddr p2, mword ptap) : page_
 }
 
 Pe_state::Pe_state(mword int_rip, uint8 run, mword int_number, uint64 inst_count) : 
-        rip_content(int_rip), retirement_counter(inst_count), run_number(run), 
+        m_rip(int_rip), retirement_counter(inst_count), run_number(run), 
         interrupt_number(int_number), prev(nullptr), next(nullptr){
     type = PE_STATE_INTERRUPT;    
+}
+
+Pe_state::Pe_state(mword eip, mword esp, mword eflag, mword reason, uint8 run, uint64 inst_count) : 
+        m_rip(eip), m_rsp(esp), m_eflag(eflag), retirement_counter(inst_count), 
+        run_number(run), interrupt_number(reason), prev(nullptr), next(nullptr){
+    type = PE_STATE_VM_EXIT;    
+    numero = number;
+    number++;
 }
 
 Pe_state::~Pe_state() {
@@ -194,8 +202,12 @@ void Pe_state::print(){
                         phys1_placed, phys2_placed, page_twin_addr_placed);
                 break;
             case PE_STATE_INTERRUPT:
-                trace(0, "  Interupt rip %lx run %u vec %lu counter %llx", rip_content, run_number, 
+                trace(0, "  Interupt rip %lx run %u vec %lu counter %llx", m_rip, run_number, 
                         interrupt_number, retirement_counter);
+                break;
+            case PE_STATE_VM_EXIT:
+                trace(0, "  VM Exit reason rip %lx esp %lx eflag %lx reason %lx run %u counter %llx", 
+                        m_rip, m_rsp, m_eflag, interrupt_number, run_number, retirement_counter);
                 break;
             case PE_STATE_DEFAULT:
                 break;

@@ -218,6 +218,16 @@ void Pe::add_pe_state(mword eip, uint8 run_number, mword interrupt_number){
     p->pe_states.enqueue(pe_state);  
 }
 
+void Pe::add_pe_state(mword eip, mword esp, mword eflag, mword reason, uint8 run){
+    if(!Ec::current->is_debug_requested_from_user_space())
+        return;    
+    Pe *p = pes.tail();
+    assert(p);
+    Pe_state* pe_state = new(Pd::kern.quota) Pe_state(eip, esp, eflag, reason, run,
+            Lapic::read_instCounter());
+    p->pe_states.enqueue(pe_state);  
+}
+
 void Pe::set_rip1(mword r){
     if(!Ec::current->is_debug_requested_from_user_space())
         return;    

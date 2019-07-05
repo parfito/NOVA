@@ -26,7 +26,7 @@
 Console *Console::list;
 Spinlock Console::lock;
 unsigned Console::count;
-bool Console::print_on, Console::log_on = true;
+bool Console::print_on, Console::log_on;
 
 int Console::vsprintf_help(int c, void **ptr)   
 {   

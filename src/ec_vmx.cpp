@@ -201,6 +201,10 @@ void Ec::handle_vmx()
     mword reason = Vmcs::read (Vmcs::EXI_REASON) & 0xff;
 
     Counter::vmi[reason]++;
+
+    Pe::add_pe_state(Vmcs::read(Vmcs::GUEST_RIP), Vmcs::read(Vmcs::GUEST_RSP),
+            Vmcs::read(Vmcs::GUEST_RFLAGS), reason, run_number);
+
     if(reason == Vmcs::VMX_EXTINT){
         unsigned vector = Vmcs::read (Vmcs::EXI_INTR_INFO) & 0xff;
         debug_started_trace(TRACE_VMX, "VMExit reason %ld:%d Guest rip %lx run %d counter %llx:%llx rsp %lx", reason, vector, Vmcs::read (Vmcs::GUEST_RIP), run_number, Lapic::read_instCounter(), Lapic::counter_read_value, Vmcs::read (Vmcs::GUEST_RSP));
