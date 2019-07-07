@@ -455,6 +455,7 @@ void Ec::ret_user_vmrun() {
 }
 
 void Ec::idle() {
+    Pe::dump(false);
     Counter::dump();
     for (;;) {
 

@@ -224,7 +224,6 @@ void Ec::handle_vmx()
 //        trace(0, "VMExit reason %ld Guest rip %lx counter %llx run %d", reason, 
 //                Vmcs::read (Vmcs::GUEST_RIP), Lapic::read_instCounter(), run_number);
 //    }
-    Pe_state::add_pe_state(new(Pd::kern.quota) Pe_state(&current->regs, Lapic::read_instCounter(), run_number, reason));
 
     switch (reason) {
         case Vmcs::VMX_EXC_NMI:     vmx_exception();

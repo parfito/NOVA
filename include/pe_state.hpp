@@ -29,6 +29,7 @@ public:
         PE_STATE_PLACE_PHYS0          = 2,
         PE_STATE_INTERRUPT            = 3,
         PE_STATE_VM_EXIT              = 4,
+        PE_STATE_VM_STACK             = 5, 
     };
     
 private:
@@ -52,7 +53,8 @@ private:
     Type type = PE_STATE_DEFAULT;
     size_t count = 0, page_twin_index = 0;
     int missmatch_addr = 0;
-    mword page_addr = 0, page_twin_addr = 0, page_addr_placed = 0, page_twin_addr_placed = 0;
+    mword page_addr = 0, page_twin_addr = 0, page_addr_placed = 0, page_twin_addr_placed = 0, 
+    val0 = 0, val1 = 0, val2 = 0;
     Paddr phys0 = 0, phys1 = 0, phys2 = 0, phys0_placed = 0, phys1_placed = 0, phys2_placed = 0;
     
     Pe_state* prev;
@@ -74,6 +76,7 @@ public:
     Pe_state(mword, Paddr, Paddr, Paddr, mword);
     Pe_state(mword, uint8, mword, uint64);
     Pe_state(mword, mword, mword, mword, uint8, uint64);   
+    Pe_state(mword, Paddr, Paddr, Paddr, mword, mword, mword, uint64);
     
     ALWAYS_INLINE
     static inline void *operator new (size_t, Quota &quota) { return cache.alloc(quota); }

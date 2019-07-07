@@ -125,6 +125,14 @@ Pe_state::Pe_state(mword eip, mword esp, mword eflag, mword reason, uint8 run, u
     number++;
 }
 
+Pe_state::Pe_state(mword v, Paddr p0, Paddr p1, Paddr p2, mword v0, mword v1, mword v2, 
+        uint64 inst_count) : retirement_counter(inst_count), page_addr(v), val0(v0), val1(v1), 
+        val2(v2), phys0(p0), phys1(p1), phys2(p2), prev(nullptr), next(nullptr){
+    type = PE_STATE_VM_STACK;    
+    numero = number;
+    number++;
+}
+
 Pe_state::~Pe_state() {
     number--;
 }
@@ -208,6 +216,11 @@ void Pe_state::print(){
             case PE_STATE_VM_EXIT:
                 trace(0, "  VM Exit reason rip %lx esp %lx eflag %lx reason %lx run %u counter %llx", 
                         m_rip, m_rsp, m_eflag, interrupt_number, run_number, retirement_counter);
+                break;
+            case PE_STATE_VM_STACK:
+                trace(0, "  VM stack fault page_addr %lx phys0 %lx phys1 %lx phys2 %lx val0 %lx val1"
+                        " %lx val2 %lx counter %llx", page_addr, phys0, phys1, phys2, val0, val1, 
+                        val2, retirement_counter);
                 break;
             case PE_STATE_DEFAULT:
                 break;

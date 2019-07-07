@@ -139,20 +139,24 @@ bool Cow_elt::compare(){
                 *ptr2 = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, c->new_phys[1], PAGE_SIZE));
         int missmatch_addr = memcmp(ptr1, ptr2, PAGE_SIZE); 
         if (missmatch_addr) {
+            asm volatile ("" :: "m" (missmatch_addr)); // to avoid gdb "optimized out"            
+            asm volatile ("" :: "m" (c)); // to avoid gdb "optimized out"                        
+            mword index = (PAGE_SIZE - 4 * (missmatch_addr + 1)) / sizeof(mword); // because memcmp compare by grasp of 4 bytes
+            mword val1 = *(ptr1 + index);
+            mword val2 = *(ptr2 + index);
+            mword *ptr3 = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, c->old_phys, 2*PAGE_SIZE));
+            mword val0 = *(ptr3 + index);
             if(Pe::in_recover_from_stack_fault_mode){
-                asm volatile ("" :: "m" (missmatch_addr)); // to avoid gdb "optimized out"            
-                asm volatile ("" :: "m" (c)); // to avoid gdb "optimized out"                        
-                mword index = (PAGE_SIZE - 4 * (missmatch_addr + 1)) / sizeof(mword); // because memcmp compare by grasp of 4 bytes
-                mword val1 = *(ptr1 + index);
-                mword val2 = *(ptr2 + index);
-                mword *ptr3 = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, c->old_phys, 2*PAGE_SIZE));
-                mword val0 = *(ptr3 + index);
                 Pe::missmatch_addr = c->page_addr + index * sizeof(mword);
                 Console::print("MISSMATCH Pd: %s virt %lx phys0:%lx phys1 %lx phys2 %lx ptr1: %p  ptr2: %p  val0: 0x%lx  val1: 0x%lx val2 0x%lx missmatch_addr: %p",
                         Pd::current->get_name(), c->page_addr, c->old_phys, c->new_phys[0], c->new_phys[1], ptr1, ptr2, val0, val1, val2, ptr2 + index);
                 Console::print_page(reinterpret_cast<void*>(ptr1));
                 Console::print_page(reinterpret_cast<void*>(ptr2));
             }
+            Console::log_on = true;
+            Pe::add_pe(Ec::current->getPd()->get_name(), Ec::current->get_name(), Ec::current->get_regsRIP(), 0, 0, "");
+            Pe::add_pe_state(c->page_addr, c->old_phys, c->new_phys[0], c->new_phys[1], val0, val1, val2);
+            Console::log_on = false;
             return true;
         }
         n = c->next;

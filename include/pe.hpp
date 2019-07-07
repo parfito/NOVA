@@ -203,6 +203,7 @@ public:
     static void add_pe_state(size_t, int, mword, Paddr, Paddr, Paddr, mword, mword pti);
     static void add_pe_state(mword, uint8, mword);
     static void add_pe_state(mword, mword, mword, mword, uint8);
+    static void add_pe_state(mword, Paddr, Paddr, Paddr, mword, mword, mword);
     static void set_rip1(mword);
 
     static void set_rip2(mword);
