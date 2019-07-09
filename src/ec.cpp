@@ -775,7 +775,7 @@ void Ec::disable_step_debug() {
         case SR_PMI:
         case SR_EQU:            
             if (in_rep_instruction) {
-                Cpu::disable_fast_string();
+                Cpu::enable_fast_string();
                 in_rep_instruction = false;
             }
             nbInstr_to_execute = 0;
@@ -1001,7 +1001,7 @@ void Ec::vmx_rollback() {
 }
 
 mword Ec::get_regsRIP() {
-    return regs.REG(ip);
+    return utcb ? regs.REG(ip) : Vmcs::read(Vmcs::GUEST_RIP);
 }
 
 mword Ec::get_regsRCX() {
@@ -1391,4 +1391,8 @@ void Ec::check_instr_number_equals(int from){
 void Ec::step_debug(){
     step_reason = SR_GP;
     current->regs.REG(fl) |= Cpu::EFL_TF;
+}
+
+size_t Ec::vtlb_lookup(mword v, Paddr &p, mword &a){
+    return regs.vtlb->vtlb_lookup(v, p, a);    
 }

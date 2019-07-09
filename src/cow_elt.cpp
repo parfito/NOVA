@@ -88,7 +88,7 @@ void Cow_elt::resolve_cow_fault(Vtlb* tlb, Hpt *hpt, mword virt, Paddr phys, mwo
     // If this page fault occurs in a virtual address that points to an already mapped (and in-use) 
     // physical frame, Do not triplicate frame to the newly allocated frames; use the existing ones
     if (c) { 
-        trace(COW_FAULT, "virt %lx Pe %u", virt, Counter::nb_pe);
+//        trace(COW_FAULT, "virt %lx Pe %u", virt, Counter::nb_pe);
         ce->new_phys[0] = c->new_phys[0];
         ce->new_phys[1] = c->new_phys[1];
         ce->v_is_mapped_elsewhere = c;
@@ -128,9 +128,9 @@ Cow_elt* Cow_elt::is_mapped_elsewhere(Paddr phys) {
     Cow_elt *c = cow_elts.head(), *n = nullptr;
     while (c) {
         if (c->old_phys == phys) {//frame already mapped elsewhere
-            trace_no_newline(COW_FAULT, "Is already mapped in Cow_elts::cow_elts: "
-                    "c->old_phys == phys : virt %lx Phys:%lx new_phys[0]:%lx new_phys[1]:%lx",
-                    c->page_addr, c->old_phys, c->new_phys[0], c->new_phys[1]);
+//            trace_no_newline(COW_FAULT, "Is already mapped in Cow_elts::cow_elts: "
+//                    "c->old_phys == phys : virt %lx Phys:%lx new_phys[0]:%lx new_phys[1]:%lx",
+//                    c->page_addr, c->old_phys, c->new_phys[0], c->new_phys[1]);
             assert(!c->v_is_mapped_elsewhere);
             return c;
         }
@@ -198,35 +198,39 @@ bool Cow_elt::compare() {
         } else {
 // if in production, uncomment this, for not to get too many unncessary Missmatch errors because 
 // just of error in vm stack            
-             if(Pe::in_recover_from_stack_fault_mode){ 
+            int missmatch_addr = 0;
+            int diff = memcmp(reinterpret_cast<char*>(ptr1), reinterpret_cast<char*>(ptr2), 
+                    missmatch_addr, PAGE_SIZE);
+            assert(diff);
+//                asm volatile ("" ::"m" (missmatch_addr)); // to avoid gdb "optimized out"            
+//                asm volatile ("" ::"m" (c)); // to avoid gdb "optimized out"     
+            // because memcmp compare by grasp of 4 bytes
+            mword index = (PAGE_SIZE - 4 * (missmatch_addr + 1)) / sizeof (mword); 
+            if(Ec::current->is_virutalcpu()){ /*&& hamming_weight(val1 ^ val2) < 4){*/
+                // Cow fault due to change of VM stack
+                *(ptr1 + index) = *(ptr2 + index);
+                crc1 = Crc::compute(0, ptr1, PAGE_SIZE);
+                if(crc1 == crc2)
+                return false;
+            }
+            mword val1 = *(ptr1 + index);
+            mword val2 = *(ptr2 + index);
+            // if in production, comment this and return true, for not to get too many unncessary 
+            // Missmatch errors           
+            
+            mword *ptr0 = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, c->old_phys, 
+                    2 * PAGE_SIZE));
+            mword val0 = *(ptr0 + index);
+            Pe::missmatch_addr = c->page_addr + index * sizeof (mword);
+            Console::print("MISSMATCH Pd: %s PE %lu virt %lx phys0:%lx phys1 %lx phys2 %lx rip %lx ptr1: %p"
+            " ptr2: %p  val0: 0x%lx  val1: 0x%lx val2 0x%lx missmatch_addr: %p, nb_cow_fault %u "
+            "counter1 %llx counter2 %llx", Pd::current->get_name(), Pe::get_number(), c->page_addr, 
+                    c->old_phys, c->new_phys[0], c->new_phys[1], c->ec_rip, ptr1, ptr2, val0, val1, val2, ptr2 
+            + index, Counter::cow_fault, Ec::counter1, Lapic::read_instCounter());
+            if(Pe::in_recover_from_stack_fault_mode){ 
                 // If already in recovering from stack fault, 
                 // if in development, we got a real bug, print info, 
                 // if in production, we got an SEU, just return true
-                int missmatch_addr = 0;
-                int diff = memcmp(reinterpret_cast<char*>(ptr1), reinterpret_cast<char*>(ptr2), 
-                        missmatch_addr, PAGE_SIZE);
-                assert(diff);
-//                asm volatile ("" ::"m" (missmatch_addr)); // to avoid gdb "optimized out"            
-//                asm volatile ("" ::"m" (c)); // to avoid gdb "optimized out"     
-                // because memcmp compare by grasp of 4 bytes
-                mword index = (PAGE_SIZE - 4 * (missmatch_addr + 1)) / sizeof (mword); 
-                mword val1 = *(ptr1 + index);
-                mword val2 = *(ptr2 + index);
-                mword *ptr3 = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, c->old_phys, 
-                        2 * PAGE_SIZE));
-                mword val0 = *(ptr3 + index);
-    //            if(Ec::current->is_virutalcpu() && hamming_weight(val1 ^ val2) < 4){
-    //                // Cow fault due to change of VM stack
-    //                return false;
-    //            }
-                // if in production, comment this and return true, for not to get too many unncessary 
-                // Missmatch errors           
-                Pe::missmatch_addr = c->page_addr + index * sizeof (mword);
-                Console::print("MISSMATCH Pd: %s PE %lu virt %lx phys0:%lx phys1 %lx phys2 %lx rip %lx ptr1: %p"
-                " ptr2: %p  val0: 0x%lx  val1: 0x%lx val2 0x%lx missmatch_addr: %p, nb_cow_fault %u "
-                "counter1 %llx counter2 %llx", Pd::current->get_name(), Pe::get_number(), c->page_addr, 
-                        c->old_phys, c->new_phys[0], c->new_phys[1], c->ec_rip, ptr1, ptr2, val0, val1, val2, ptr2 
-                + index, Counter::cow_fault, Ec::counter1, Lapic::read_instCounter());
                 c = cow_elts.head(), n = nullptr;
                 while (c) {
                     trace(0, "Cow v: %lx  phys: %lx phys1: %lx  phys2: %lx", c->page_addr, c->old_phys, 
@@ -258,25 +262,26 @@ void Cow_elt::commit() {
         //        Console::print("c %p", c);
         asm volatile ("" ::"m" (c)); // to avoid gdb "optimized out"                        
         Paddr old_phys = c->old_phys;
-        void *ptr0 = Hpt::remap_cow(Pd::kern.quota, old_phys);
-        void *ptr1 = Hpt::remap_cow(Pd::kern.quota, c->new_phys[0],
-                PAGE_SIZE);
-
+        
         int diff = (c->crc != c->crc1);
         if(diff) {
+            void *ptr0 = Hpt::remap_cow(Pd::kern.quota, old_phys);
+            void *ptr1 = Hpt::remap_cow(Pd::kern.quota, c->new_phys[0],
+                    PAGE_SIZE);
             memcpy(ptr0, ptr1, PAGE_SIZE); 
             c->crc = c->crc1;
         }
-        size_t ce_index = 0;
+//        size_t ce_index = 0;
         Cow_elt *ce = c->v_is_mapped_elsewhere;
         if (count < current_ec_cow_elts_size) { // if c comes from previous PE
             if (ce) { // if ce->old_phys is used elsewhere
                 // if ce was also in previous PE
-                if(Pd::current->cow_elts.index_of(ce, ce_index) && ce_index + count < current_ec_cow_elts_size){
-                    count++;
-                    if(Ec::keep_cow || diff)
-                        Counter::used_cows_in_old_cow_elts++;
-                }
+//                if(Pd::current->cow_elts.index_of(ce, ce_index) && ce_index + count < current_ec_cow_elts_size){
+//                    Pd::current->cow_elts.index_of(ce, ce_index) will always be false because Pd::current->cow_elts was empty;
+//                    count++;
+//                    if(Ec::keep_cow || diff)
+//                        Counter::used_cows_in_old_cow_elts++;
+//                }
                 assert(cow_elts.dequeue(ce));
                 if (Ec::keep_cow || diff) { 
                     Counter::used_cows_in_old_cow_elts++;
@@ -450,7 +455,6 @@ void Cow_elt::place_phys0() {
         Pe::add_pe_state(d->page_addr, d->old_phys, d->new_phys[0], 
                 d->new_phys[1], reinterpret_cast<mword>(de ? de->page_addr : 0));
     }
-    Pe::set_val(current_ec_cow_elts_size);
 }
 
 /**

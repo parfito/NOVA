@@ -31,6 +31,7 @@
 #include "acpi_rsdp.hpp"
 #include "acpi.hpp"
 #include "string.hpp"
+#include "stdio.hpp"
 
 extern char _mempool_e;
 
@@ -353,4 +354,16 @@ bool Hip::is_mmio(const Paddr phys){
                 return false;
     }
     return true;
+}
+
+void Hip::list_mmio(){
+    Hip *h = hip();
+    mword const mem_cnt = (h->length - h->mem_offs) / h->mem_size;
+    for (uint32 i = 0; i < mem_cnt; i++){
+        Hip_mem mem = h->mem_desc[i];
+        if(mem.type == Hip_mem::AVAILABLE){
+            Console::print("[%lx -- %lx] : %llx", align_up(mem.addr, PAGE_SIZE), 
+                    align_dn(mem.addr + mem.size, PAGE_SIZE), mem.size);
+        }
+    }
 }

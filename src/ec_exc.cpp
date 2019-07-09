@@ -713,7 +713,11 @@ void Ec::check_memory(PE_stopby from) {
                 Cow_elt::commit();
 //                trace(0, "check_memory run %d from %d name %s qce %lu:%u:%u count %llx", 
 //                run_number, from, current->get_name(), cow_elt_number, Counter::cow_fault, 
-//                Counter::used_cows_in_old_cow_elts, Lapic::read_instCounter());     
+//                Counter::used_cows_in_old_cow_elts, Lapic::read_instCounter());   
+                if(in_rep_instruction){
+                    in_rep_instruction = false;
+                    Cpu::enable_fast_string();                    
+                }
                 launch_state = UNLAUNCHED;
                 reset_all();
                 return;

@@ -196,7 +196,6 @@ class Exc_regs : public Sys_regs
 
         void svm_write_gpr (unsigned, mword);
         void vmx_write_gpr (unsigned, mword);
-        size_t vtlb_lookup(mword, uint64 &);
         
         template <typename T> void nst_ctrl (bool = T::has_urg());
 

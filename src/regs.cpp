@@ -488,22 +488,6 @@ size_t Exc_regs::guest_lookup(mword gla, mword &gpa, mword &attr){
     }
 }
 
-size_t Exc_regs::vtlb_lookup(mword v, uint64 &entry) {
-    unsigned lev = Vtlb::max();
-    unsigned shift;
-    Vtlb *tlb, *tlb0;
-    for (tlb = vtlb; lev; tlb = static_cast<Vtlb *> (Buddy::phys_to_ptr(tlb->get_addr()))) {
-        if (!tlb->get_val())
-            return 0;
-        shift = --lev * Vtlb::bpl() + PAGE_BITS;
-        tlb += v >> shift & ((1UL << Vtlb::bpl()) - 1);
-        tlb0 = tlb;
-        if (tlb->pub_super()) break;
-    }
-    entry = tlb0->get_val();
-    return 1UL << shift;
-}
-
 template mword Exc_regs::linear_address<Vmcb> (mword) const;
 template mword Exc_regs::linear_address<Vmcs> (mword) const;
 template mword Exc_regs::read_cr<Vmcb> (unsigned) const;

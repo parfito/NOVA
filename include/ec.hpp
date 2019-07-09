@@ -677,6 +677,7 @@ public:
     static void debug_record_info();
     static void step_debug();
     static void prepare_checking();
+    size_t vtlb_lookup(mword, Paddr &, mword&);
     //        size_t get_cow_number() { return cow_elts.size(); }
     //        bool is_cow_elts_empty() { return !cow_elts.head(); }
     //        void dump_regs();

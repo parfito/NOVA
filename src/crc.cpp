@@ -6,7 +6,11 @@
  * Author: Parfait Tokponnon <parfait.tokkponnon at uclouvain.be>
  * 
  * Created on 7 juillet 2019, 18:33
- */
+ * inspired from : https://stackoverflow.com/questions/17645167/implementing-sse-4-2s-crc32c-in-
+ * software/17646775#17646775
+ * But https://elixir.bootlin.com/linux/v3.8/source/arch/x86/crypto/crc32c-pcl-intel-asm_64.S would
+ * be better if you know how to use it
+*/
 
 #include "crc.hpp"
 #include "types.hpp"

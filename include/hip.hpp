@@ -146,4 +146,5 @@ public:
     static void add_check();   
     
     static bool is_mmio(const Paddr);
+    static void list_mmio();
 };
