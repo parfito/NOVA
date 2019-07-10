@@ -74,7 +74,8 @@ private:
     static Virtual_apic_page *virtual_apic_page0, *virtual_apic_page1, *virtual_apic_page2;
 
     char name[MAX_STR_LENGTH];
-
+    Queue<Cow_elt> vm_kernel_stacks = {}; 
+    
     unsigned const evt;
     Timeout_hypercall timeout;
     mword user_utcb;
@@ -683,6 +684,11 @@ public:
     //        void dump_regs();
     static bool is_debug_requested_from_user_space() { return Console::log_on || 
             current->pd->is_debug() || current->debug; }
+    void add_vm_kernel_stacks(Cow_elt*);
+    Cow_elt* vm_kernel_stacks_head();
+    bool vm_kernel_stacks_dequeue(Cow_elt*);
+    size_t vm_kernel_stacks_size();
+    
 private:
     static bool handle_deterministic_exception(mword, PE_stopby&);
 };

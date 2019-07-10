@@ -24,7 +24,7 @@ public:
         NORMAL,
         BIG_PAGE,
     };
-    Cow_elt(mword, Paddr, mword, Page_type = NORMAL);
+    Cow_elt(mword, Paddr, mword, Page_type = NORMAL, mword = 0);
     Cow_elt(const Cow_elt& orig);
     ~Cow_elt();
 
@@ -59,12 +59,19 @@ public:
         return !cow_elts.head();
     }
     static void restore_state0();
+    static void restore_vm_stack_state0();
     static bool compare();
+    static bool compare_vm_stack();
     static void commit();
+    static void commit_vm_stack();
+    static void commit_vm_stack_ce(Cow_elt*, uint32, mword*);
     static void restore_state1();
+    static void restore_vm_stack_state1();
     static void rollback();
+    static void rollback_vm_stack();
     static void place_phys0();
     static bool would_have_been_cowed_in_place_phys0(mword);
+    static bool is_kernel_vm_modified();
     
 private:
     Page_type type;
@@ -72,8 +79,8 @@ private:
     Paddr old_phys = {};
     mword attr = {};
     Paddr new_phys[2];
-    mword ec_rip = 0;
-    uint32 crc = 0, crc1 = 0;
+    mword ec_rip = 0, ec_rcx = 0, ec_rsp = 0, ec_rsp_content = 0, m_fault_addr = 0;
+    uint32 crc = 0, crc1 = 0, not_pointed = 0;
     Cow_elt* v_is_mapped_elsewhere = nullptr;
     /*---These should moved to Pe class when it will be used -----*/
     Vtlb *vtlb = nullptr;

@@ -239,7 +239,7 @@ void Vtlb::flush (bool full)
 }
 
 bool Vtlb::is_cow(mword virt, mword gpa, mword error){
-    if(!(error & ERR_W))
+    if(!(error & ERR_W) || !(error & ERR_P)) // VM doesn't do I/O so there should not be COW IO here
         return false;
     unsigned l = max();
     unsigned b = bpl();

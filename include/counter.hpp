@@ -52,6 +52,7 @@ class Counter
         static unsigned io              CPULOCAL;
         static unsigned pmi_ss          CPULOCAL;
         static unsigned nb_pe           CPULOCAL;
+        static unsigned nb_vm_pe        CPULOCAL;
         static unsigned pio             CPULOCAL;
         static unsigned mmio            CPULOCAL;
         static unsigned vmio            CPULOCAL;

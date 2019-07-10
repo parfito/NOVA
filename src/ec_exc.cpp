@@ -486,7 +486,8 @@ void Ec::check_memory(PE_stopby from) {
     Pe::set_froms(run_number, from);    
     // Is cow_elts empty? If yes, and if we are not in recovering from stack fault or debuging our 
     // code, no memory to check
-    if (Cow_elt::is_empty() && !Pe::in_recover_from_stack_fault_mode && !Pe::in_debug_mode) {
+    if (Cow_elt::is_empty() && !Cow_elt::is_kernel_vm_modified() && 
+            !Pe::in_recover_from_stack_fault_mode && !Pe::in_debug_mode) {
         launch_state = UNLAUNCHED;
         reset_all();
         return;

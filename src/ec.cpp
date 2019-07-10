@@ -856,7 +856,8 @@ void Ec::save_state0() {
 //        mword cr0_shadow = current->regs.cr0_shadow, cr3_shadow = current->regs.cr3_shadow, 
 //              cr4_shadow = current->regs.cr4_shadow; 
 //        regs.vtlb->reserve_stack(cr0_shadow, cr3_shadow, cr4_shadow);
-        vmx_save_state();        
+        vmx_save_state();  
+        Counter::nb_vm_pe++;
     }
     copy_string(Pe::current_ec, current->get_name());
     copy_string(Pe::current_pd, current->getPd()->get_name());
@@ -1395,4 +1396,20 @@ void Ec::step_debug(){
 
 size_t Ec::vtlb_lookup(mword v, Paddr &p, mword &a){
     return regs.vtlb->vtlb_lookup(v, p, a);    
+}
+
+void Ec::add_vm_kernel_stacks(Cow_elt* c){
+    vm_kernel_stacks.enqueue(c);
+}
+
+Cow_elt* Ec::vm_kernel_stacks_head(){
+    return vm_kernel_stacks.head();
+}
+
+bool Ec::vm_kernel_stacks_dequeue(Cow_elt* c){
+    return vm_kernel_stacks.dequeue(c);
+}
+
+size_t Ec::vm_kernel_stacks_size(){
+    return vm_kernel_stacks.size();
 }
