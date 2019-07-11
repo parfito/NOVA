@@ -209,7 +209,8 @@ void Cow_elt::restore_state0() {
 
 bool Cow_elt::compare_vm_stack(){
     assert(Ec::current->is_virutalcpu());
-    Cow_elt *c = Ec::current->vm_kernel_stacks_head(), *head = c, *n = nullptr;    
+    Cow_elt *c = Ec::current->vm_kernel_stacks_head(), *head = Ec::current->vm_kernel_stacks_head(), 
+            *n = nullptr;    
     while(c) {
         mword *ptr1 = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, c->new_phys[0])),
                 *ptr2 = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, c->new_phys[1],
@@ -295,6 +296,16 @@ bool Cow_elt::compare() {
             //                asm volatile ("" ::"m" (c)); // to avoid gdb "optimized out"     
             // because memcmp compare by grasp of 4 bytes
             mword index = (PAGE_SIZE - 4 * (missmatch_addr + 1)) / sizeof (mword);
+            if(Ec::current->is_virutalcpu()){
+                // Cow fault due to instruction side effect in VM kernel stack
+                *(ptr1 + index) = *(ptr2 + index);
+                crc1 = Crc::compute(0, ptr1, PAGE_SIZE);
+                if(crc1 == crc2){
+                    commit_vm_stack_ce(c, crc1, ptr1);
+                    Ec::current->add_vm_kernel_stacks(c);
+                    return false;
+                }
+            }
             mword val1 = *(ptr1 + index);
             mword val2 = *(ptr2 + index);
             // if in production, comment this and return true, for not to get too many unncessary 
@@ -321,21 +332,12 @@ bool Cow_elt::compare() {
 
             Console::print("MISSMATCH Pd: %s PE %lu virt %lx:%lx phys0:%lx phys1 %lx phys2 %lx "
                     "rip %lx:%s rcx %lx rsp %lx:%lx ptr1: %p ptr2: %p  val0: 0x%lx  val1: 0x%lx "
-                    "val2 0x%lx, nb_cow_fault %u counter1 %llx counter2 %llx Nb_pe %u nb_vm_pe %u", 
+                    "val2 0x%lx, nb_cow_fault %u counter1 %llx counter2 %llx Nb_pe %u nb_vm_pe %u "
+                    "vm_size %lu", 
                     Pd::current->get_name(), Pe::get_number(), c->page_addr, index * sizeof (mword),
                     c->old_phys, c->new_phys[0], c->new_phys[1], c->ec_rip, instr_buff, c->ec_rcx, 
                     c->ec_rsp, c->ec_rsp_content, ptr1, ptr2, val0, val1, val2, Counter::cow_fault, 
-                    Ec::counter1, Lapic::read_instCounter(), Counter::nb_pe, Counter::nb_vm_pe);
-            if(Ec::current->is_virutalcpu()){
-                // Cow fault due to instruction side effect in VM kernel stack
-                *(ptr1 + index) = *(ptr2 + index);
-                crc1 = Crc::compute(0, ptr1, PAGE_SIZE);
-                if(crc1 == crc2){
-                    commit_vm_stack_ce(c, crc1, ptr1);
-                    Ec::current->add_vm_kernel_stacks(c);
-                    return false;
-                }
-            }
+                    Ec::counter1, Lapic::read_instCounter(), Counter::nb_pe, Counter::nb_vm_pe, Ec::current->vm_kernel_stacks_size());
             if (Pe::in_recover_from_stack_fault_mode) {
                 // If already in recovering from stack fault, 
                 // if in development, we got a real bug, print info, 
@@ -360,27 +362,25 @@ bool Cow_elt::compare() {
 
 void Cow_elt::commit_vm_stack(){
     assert(Ec::current->is_virutalcpu());
-    Cow_elt *c = Ec::current->vm_kernel_stacks_head(), *head = c, *n = nullptr;    
+    Cow_elt *c = Ec::current->vm_kernel_stacks_head(), *head = Ec::current->vm_kernel_stacks_head(), 
+            *n = nullptr;    
     while(c) {
         Paddr old_phys = c->old_phys;
-        if (c->crc == c->crc1) {
-            if(c->not_pointed >= 100){
-                trace(0, "Destroying c %lx for not pointing frequently", c->page_addr);
-                assert(Ec::current->vm_kernel_stacks_dequeue(c));
-                destroy(c, Pd::kern.quota);
-            }
-            c->not_pointed++;
-        } else {
+        if (c->crc != c->crc1) {
             void *ptr0 = Hpt::remap_cow(Pd::kern.quota, old_phys), 
                     *ptr1 = Hpt::remap_cow(Pd::kern.quota, c->new_phys[0], PAGE_SIZE);
             memcpy(ptr0, ptr1, PAGE_SIZE);
             c->crc = c->crc1;
-            c->not_pointed = 0;
         }
         c->vtlb->cow_update(old_phys, c->attr);
         n = c->next;
         c = (c == n || n == head) ? nullptr : n;
-    }     
+    }  
+    if(Ec::current->vm_kernel_stacks_size() > 3){
+        head = Ec::current->vm_kernel_stacks_head();
+        Ec::current->vm_kernel_stacks_dequeue(head);
+        Cow_elt::free(head);
+    }
 }
 
 void Cow_elt::commit_vm_stack_ce(Cow_elt* c, uint32 crc1, mword* ptr1){
@@ -504,7 +504,8 @@ void Cow_elt::commit() {
 
 void Cow_elt::restore_vm_stack_state1() {
     assert(Ec::current->is_virutalcpu());
-    Cow_elt *c = Ec::current->vm_kernel_stacks_head(), *head = c, *n = nullptr;    
+    Cow_elt *c = Ec::current->vm_kernel_stacks_head(), *head = Ec::current->vm_kernel_stacks_head(), 
+            *n = nullptr;    
     while (c) {
         c->vtlb->cow_update(c->new_phys[0], c->attr);
         n = c->next;
@@ -539,7 +540,8 @@ void Cow_elt::restore_state1() {
 
 void Cow_elt::rollback_vm_stack() {
     assert(Ec::current->is_virutalcpu());
-    Cow_elt *c = Ec::current->vm_kernel_stacks_head(), *head = c, *n = nullptr;    
+    Cow_elt *c = Ec::current->vm_kernel_stacks_head(), *head = Ec::current->vm_kernel_stacks_head(),
+            *n = nullptr;    
     while (c) {
         void *phys_to_ptr = Hpt::remap_cow(Pd::kern.quota, c->old_phys, 2 * PAGE_SIZE);
         copy_frames(c->new_phys[0], c->new_phys[1], phys_to_ptr);
@@ -640,7 +642,8 @@ void Cow_elt::place_phys0() {
     }
     
     if(Ec::current->is_virutalcpu()){
-        Cow_elt *c = Ec::current->vm_kernel_stacks_head(), *head = c, *n = nullptr;    
+        Cow_elt *c = Ec::current->vm_kernel_stacks_head(), 
+                *head = Ec::current->vm_kernel_stacks_head(), *n = nullptr;    
         while(c) {
             void *ptr0 = Hpt::remap_cow(Pd::kern.quota, c->old_phys);
             uint32 crc0 = Crc::compute(0, ptr0, PAGE_SIZE);
@@ -658,7 +661,8 @@ void Cow_elt::place_phys0() {
 bool Cow_elt::is_kernel_vm_modified(){
     if(!Ec::current->is_virutalcpu())
         return false;
-    Cow_elt *c = Ec::current->vm_kernel_stacks_head(), *head = c, *n = nullptr;    
+    Cow_elt *c = Ec::current->vm_kernel_stacks_head(), *head = Ec::current->vm_kernel_stacks_head(), 
+            *n = nullptr;    
     while(c) {
         void *ptr1 = Hpt::remap_cow(Pd::kern.quota, c->new_phys[0], PAGE_SIZE);
         uint32 crc1 = Crc::compute(0, ptr1, PAGE_SIZE);
@@ -685,4 +689,11 @@ bool Cow_elt::would_have_been_cowed_in_place_phys0(mword v) {
         c = (c == n || n == head) ? nullptr : n;
     }
     return false;
+}
+
+void Cow_elt::free(Cow_elt* c){
+    mword a = c->attr | Vtlb::TLB_COW;
+    a &= ~Vtlb::TLB_W;
+    c->vtlb->cow_update(c->old_phys, a);
+    Cow_elt::destroy(c, Pd::kern.quota);    
 }

@@ -72,6 +72,7 @@ public:
     static void place_phys0();
     static bool would_have_been_cowed_in_place_phys0(mword);
     static bool is_kernel_vm_modified();
+    static void free(Cow_elt*);
     
 private:
     Page_type type;
