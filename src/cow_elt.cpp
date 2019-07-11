@@ -296,6 +296,35 @@ bool Cow_elt::compare() {
             //                asm volatile ("" ::"m" (c)); // to avoid gdb "optimized out"     
             // because memcmp compare by grasp of 4 bytes
             mword index = (PAGE_SIZE - 4 * (missmatch_addr + 1)) / sizeof (mword);
+//            mword val1 = *(ptr1 + index);
+//            mword val2 = *(ptr2 + index);
+            // if in production, comment this and return true, for not to get too many unncessary 
+            // Missmatch errors           
+            
+//            mword *ptr0 = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, c->old_phys, 
+//                    2 * PAGE_SIZE));
+//            mword val0 = *(ptr0 + index);
+//            Pe::missmatch_addr = c->page_addr + index * sizeof (mword);
+//
+//            Paddr hpa_guest_rip;
+//            mword attr;
+//            Ec::current->vtlb_lookup(c->ec_rip, hpa_guest_rip, attr);
+//            void *rip_ptr = reinterpret_cast<char*> (Hpt::remap_cow(Pd::kern.quota, hpa_guest_rip,
+//                    3 * PAGE_SIZE)) +
+//                    (c->ec_rip & PAGE_MASK);
+//            // if *(rip_ptr as mword) overflows to the next page 
+//            if ((reinterpret_cast<mword> (rip_ptr) & PAGE_MASK) + sizeof (mword) > PAGE_SIZE) {
+//                Hpt::remap_cow(Pd::kern.quota, (hpa_guest_rip &= ~PAGE_MASK) + PAGE_SIZE,
+//                        4 * PAGE_SIZE);
+//            }
+//            char instr_buff[MIN_STR_LENGTH];
+//            instruction_in_hex(*reinterpret_cast<mword*> (rip_ptr), instr_buff);
+
+            Console::print("MISSMATCH virt %lx:%lx phys0:%lx phys1 %lx phys2 %lx "
+                    "nb_cow_fault %u counter1 %llx counter2 %llx Nb_pe %u nb_vm_pe %u "
+                    "vm_size %lu", c->page_addr, index * sizeof (mword),
+                    c->old_phys, c->new_phys[0], c->new_phys[1], Counter::cow_fault, 
+                    Ec::counter1, Lapic::read_instCounter(), Counter::nb_pe, Counter::nb_vm_pe, Ec::current->vm_kernel_stacks_size());
             if(Ec::current->is_virutalcpu()){
                 // Cow fault due to instruction side effect in VM kernel stack
                 *(ptr1 + index) = *(ptr2 + index);
@@ -306,38 +335,6 @@ bool Cow_elt::compare() {
                     return false;
                 }
             }
-            mword val1 = *(ptr1 + index);
-            mword val2 = *(ptr2 + index);
-            // if in production, comment this and return true, for not to get too many unncessary 
-            // Missmatch errors           
-            
-            mword *ptr0 = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, c->old_phys, 
-                    2 * PAGE_SIZE));
-            mword val0 = *(ptr0 + index);
-            Pe::missmatch_addr = c->page_addr + index * sizeof (mword);
-
-            Paddr hpa_guest_rip;
-            mword attr;
-            Ec::current->vtlb_lookup(c->ec_rip, hpa_guest_rip, attr);
-            void *rip_ptr = reinterpret_cast<char*> (Hpt::remap_cow(Pd::kern.quota, hpa_guest_rip,
-                    3 * PAGE_SIZE)) +
-                    (c->ec_rip & PAGE_MASK);
-            // if *(rip_ptr as mword) overflows to the next page 
-            if ((reinterpret_cast<mword> (rip_ptr) & PAGE_MASK) + sizeof (mword) > PAGE_SIZE) {
-                Hpt::remap_cow(Pd::kern.quota, (hpa_guest_rip &= ~PAGE_MASK) + PAGE_SIZE,
-                        4 * PAGE_SIZE);
-            }
-            char instr_buff[MIN_STR_LENGTH];
-            instruction_in_hex(*reinterpret_cast<mword*> (rip_ptr), instr_buff);
-
-            Console::print("MISSMATCH Pd: %s PE %lu virt %lx:%lx phys0:%lx phys1 %lx phys2 %lx "
-                    "rip %lx:%s rcx %lx rsp %lx:%lx ptr1: %p ptr2: %p  val0: 0x%lx  val1: 0x%lx "
-                    "val2 0x%lx, nb_cow_fault %u counter1 %llx counter2 %llx Nb_pe %u nb_vm_pe %u "
-                    "vm_size %lu", 
-                    Pd::current->get_name(), Pe::get_number(), c->page_addr, index * sizeof (mword),
-                    c->old_phys, c->new_phys[0], c->new_phys[1], c->ec_rip, instr_buff, c->ec_rcx, 
-                    c->ec_rsp, c->ec_rsp_content, ptr1, ptr2, val0, val1, val2, Counter::cow_fault, 
-                    Ec::counter1, Lapic::read_instCounter(), Counter::nb_pe, Counter::nb_vm_pe, Ec::current->vm_kernel_stacks_size());
             if (Pe::in_recover_from_stack_fault_mode) {
                 // If already in recovering from stack fault, 
                 // if in development, we got a real bug, print info, 
@@ -371,15 +368,32 @@ void Cow_elt::commit_vm_stack(){
                     *ptr1 = Hpt::remap_cow(Pd::kern.quota, c->new_phys[0], PAGE_SIZE);
             memcpy(ptr0, ptr1, PAGE_SIZE);
             c->crc = c->crc1;
+            c->not_pointed = 0;
+        } else {
+            c->not_pointed++;
         }
         c->vtlb->cow_update(old_phys, c->attr);
         n = c->next;
         c = (c == n || n == head) ? nullptr : n;
     }  
-    if(Ec::current->vm_kernel_stacks_size() > 3){
-        head = Ec::current->vm_kernel_stacks_head();
-        Ec::current->vm_kernel_stacks_dequeue(head);
-        Cow_elt::free(head);
+    if(Ec::current->vm_kernel_stacks_size() > 10){
+        n = nullptr;
+        c = head = Ec::current->vm_kernel_stacks_head();
+        int freed = 0;
+        while(c) {
+            if(c->not_pointed > 0){
+                Ec::current->vm_kernel_stacks_dequeue(c);
+                Cow_elt::free(c);
+                freed++;
+            }
+            n = c->next;
+            c = (c == n || n == head) ? nullptr : n;
+        }
+        if(freed == 0){
+            head = Ec::current->vm_kernel_stacks_head();
+            Ec::current->vm_kernel_stacks_dequeue(head);
+            Cow_elt::free(head);
+        }    
     }
 }
 
