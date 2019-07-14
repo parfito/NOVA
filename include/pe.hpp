@@ -76,7 +76,7 @@ public:
     static char current_pd[MAX_STR_LENGTH];
     static Cpu_regs c_regs[4]; //current_regs
     static mword vmcsRIP[4], vmcsRSP[4], vmcsRIP_0, vmcsRIP_1, vmcsRIP_2, vmcsRSP_0, vmcsRSP_1, vmcsRSP_2;
-    static bool inState1, in_recover_from_stack_fault_mode, in_debug_mode;
+    static bool inState1, in_debug_mode;
     static bool pmi_pending;
     static mword missmatch_addr;
     static void* missmatch_ptr;

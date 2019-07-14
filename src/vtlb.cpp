@@ -355,7 +355,7 @@ void Vtlb::reserve_stack(mword cr0_shadow, mword cr3_shadow, mword cr4_shadow){
     Pe_stack::stack = 0;
     // The stack must always be checked except in in_recover_from_stack_fault_mode on in_debug_mode
     mword gpa, rsp = Vmcs::read (Vmcs::GUEST_RSP);
-   if(Pe::in_recover_from_stack_fault_mode || Pe::in_debug_mode || Cow_elt::would_have_been_cowed_in_place_phys0(rsp))
+   if(Pe::in_debug_mode || Cow_elt::would_have_been_cowed_in_place_phys0(rsp))
         return;
      size_t size_g = gla_to_gpa(cr0_shadow, cr3_shadow, cr4_shadow, rsp, gpa);
 //    debug_started_trace(0, "rsp %lx size %lx gpa %lx", rsp, s, gpa);

@@ -47,6 +47,7 @@ unsigned Counter::simple_io;
 unsigned Counter::io;
 unsigned Counter::pmi_ss;
 unsigned Counter::nb_pe;
+unsigned Counter::nb_vm_pe;
 unsigned Counter::pio;
 unsigned Counter::mmio;
 unsigned Counter::vmio;
