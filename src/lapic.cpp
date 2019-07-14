@@ -363,10 +363,6 @@ bool Lapic::too_few_instr(){
     return (read_instCounter() - prev_counter) < MAX_INSTRUCTION/10;
 }
 
-void Lapic::check_dwc(){
-//    print_compteur();                
-}
-
 uint64 Lapic::nb_executed_instr(){
     uint64 compteur_value = Msr::read<uint64>(Msr::MSR_PERF_FIXED_CTR0);
     return compteur_value >= start_counter ? compteur_value - start_counter : perf_max_count - start_counter + compteur_value; 
