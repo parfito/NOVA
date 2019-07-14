@@ -64,7 +64,7 @@ public:
     static bool compare_vm_stack();
     static void commit();
     static void commit_vm_stack();
-    static void commit_vm_stack_ce(Cow_elt*, uint32, mword*);
+    static void commit_vm_stack_ce(Cow_elt*, uint32, void*);
     static void restore_state1();
     static void restore_vm_stack_state1();
     static void rollback();
@@ -81,7 +81,7 @@ private:
     mword attr = {};
     Paddr new_phys[2];
     mword ec_rip = 0, ec_rcx = 0, ec_rsp = 0, ec_rsp_content = 0, m_fault_addr = 0;
-    uint32 crc = 0, crc1 = 0, not_pointed = 0;
+    uint32 crc = 0, crc1 = 0;
     Cow_elt* v_is_mapped_elsewhere = nullptr;
     /*---These should moved to Pe class when it will be used -----*/
     Vtlb *vtlb = nullptr;

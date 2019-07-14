@@ -486,8 +486,7 @@ void Ec::check_memory(PE_stopby from) {
     Pe::set_froms(run_number, from);    
     // Is cow_elts empty? If yes, and if we are not in recovering from stack fault or debuging our 
     // code, no memory to check
-    if (Cow_elt::is_empty() && !Cow_elt::is_kernel_vm_modified() && 
-            !Pe::in_recover_from_stack_fault_mode && !Pe::in_debug_mode) {
+    if (Cow_elt::is_empty() && !Cow_elt::is_kernel_vm_modified() && !Pe::in_debug_mode) {
         launch_state = UNLAUNCHED;
         reset_all();
         return;
@@ -646,13 +645,11 @@ void Ec::check_memory(PE_stopby from) {
             reg_diff = ec->compare_regs(from);
             Pe::set_rip2(ec->utcb? ec->regs_2.REG(ip) : Vmcs::read(Vmcs::GUEST_RIP));
             if (Cow_elt::compare() ||reg_diff) {
-                if(Pe::in_recover_from_stack_fault_mode){
-                    Pd *pd = ec->getPd();
-                    Pe::print_current(ec->utcb ? false : true);
-                    Pe_state::dump();
-                    Console::print("Checking failed : Ec %s  Pd: %s From: %d:%d launch_state: %d ", 
-                            ec->get_name(), pd->get_name(), prev_reason, from, launch_state);
-                }
+                Pd *pd = ec->getPd();
+                Pe::print_current(ec->utcb ? false : true);
+                Pe_state::dump();
+                Console::print("Checking failed : Ec %s  Pd: %s From: %d:%d launch_state: %d ", 
+                        ec->get_name(), pd->get_name(), prev_reason, from, launch_state);
                 /**
                  * Following instructions must come in this order.
                  * At this point, may be the failing check comes from guest stack change
@@ -673,19 +670,16 @@ void Ec::check_memory(PE_stopby from) {
                  * Re-inforce this by !utcb, when we will be sure that stack Fail check is only 
                  * related to guest OS
                  */ 
-                if((from_value == prev_reason_value) && (!reg_diff) && 
-                        (!Pe::in_recover_from_stack_fault_mode)){
+                if((from_value == prev_reason_value) && (!reg_diff)){
                     debug_started_trace(0, "Rollback started %d", launch_state);  
-                    Pe::in_recover_from_stack_fault_mode = true;
                     check_exit();
                 }
-                Pe::in_recover_from_stack_fault_mode = false;
                 /*
                  * If we get here, it means that we have a bug or when in production, we have an SEU
                  * This is for debugging the rollback part of the hardening program.
                  * Before send in production, uncomment the previous check_exit();
                  */ 
-// In production, we meust check_exit() to start the second redundancy round
+                // In production, we meust check_exit() to start the second redundancy round
 //                check_exit(); 
                 nbInstr_to_execute = nbInstr_to_execute_value;
                 Pe::in_debug_mode = true;

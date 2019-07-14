@@ -215,7 +215,7 @@ void Hpt::cow_update(Paddr phys, mword attr, mword v){
 
 void Hpt::reserve_stack(Quota &quota, mword v){
     Pe_stack::stack = 0;
-    if(Pe::in_recover_from_stack_fault_mode || Pe::in_debug_mode || Cow_elt::would_have_been_cowed_in_place_phys0(v))
+    if(Pe::in_debug_mode || Cow_elt::would_have_been_cowed_in_place_phys0(v))
         return;
     v &= ~PAGE_MASK; 
     Paddr phys;

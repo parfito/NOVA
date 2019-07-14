@@ -19,7 +19,7 @@
 #include "lapic.hpp"
 Slab_cache Pe::cache(sizeof (Pe), 32);
 size_t Pe::number = 0;
-bool Pe::inState1 = false, Pe::in_recover_from_stack_fault_mode = false, Pe::in_debug_mode = false;
+bool Pe::inState1 = false, Pe::in_debug_mode = false;
 bool Pe::pmi_pending = false;
 mword Pe::missmatch_addr;
 void* Pe::missmatch_ptr;
