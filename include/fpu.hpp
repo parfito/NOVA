@@ -108,23 +108,23 @@ class Fpu
             fpu_2->save();
             save_state(statedata_2);
             load_state(statedata_2);
-            int  d1= 0, d2 = 0;
+            size_t  d1= 0, d2 = 0;
             int d_diff = memcmp(fpu_1->data, fpu_2->data, d1, data_size);
             int s_diff = memcmp(statedata_1, statedata_2, d2, state_size);
             bool ret = d_diff || s_diff;
             if(ret){
                 if(d_diff){
-                    mword fpu_index = (data_size / 4 - d1 - 1)*4;
+                    mword fpu_index = d1/sizeof(mword);
                     mword vald1 = *reinterpret_cast<mword*> (fpu_1->data + fpu_index),
                             vald2 = *reinterpret_cast<mword*> (fpu_2->data + fpu_index);
-                    Console::print("d1 %d fpu_d1 %p fpu_d2 %p vald1 %lx vald2 %lx", 
+                    Console::print("d1 %lu fpu_d1 %p fpu_d2 %p vald1 %lx vald2 %lx", 
                              d1, fpu_1->data+fpu_index, fpu_2->data+fpu_index, vald1, vald2);
                 }
                 if(s_diff){
-                    mword state_index = (state_size / 4 - d2 - 1)*4;
+                    mword state_index = d2/sizeof(mword);
                     mword vals1 = *reinterpret_cast<mword*> (statedata_1 + state_index),
                             vals2 = *reinterpret_cast<mword*> (statedata_2 + state_index);
-                    Console::print("s1 %d statedata_1 %p statedata_2 %p vals1 %lx vals2 %lx",
+                    Console::print("s1 %lu statedata_1 %p statedata_2 %p vals1 %lx vals2 %lx",
                             d2, statedata_1+state_index, statedata_2+state_index, vals1, vals2);
                 }
                 
@@ -160,13 +160,13 @@ class Fpu
         }
         
         mword data_check(){
-            int d = 0;
+            size_t d = 0;
             int ret = memcmp(data, data_1, d, data_size);
             if(ret){
-                mword data_index = (data_size / 4 - d - 1)*4;
+                mword data_index = d/sizeof(mword);
                 mword vald1 = *reinterpret_cast<mword*> (data + data_index);
                 mword vald2 = *reinterpret_cast<mword*> (data_1 + data_index);
-                Console::print("d %d data %p data_1 %p vald1 %lx vald2 %lx", 
+                Console::print("d %lu data %p data_1 %p vald1 %lx vald2 %lx", 
                     d, data+data_index, data_1+data_index, vald1, vald2);
             }
             return ret;

@@ -388,8 +388,6 @@ void Ec::ret_user_vmresume() {
         current->save_state0();
         launch_state = Ec::VMRESUME;
         Lapic::program_pmi();
-    } else {
-        Lapic::check_dwc();
     }
 
     if (EXPECT_FALSE(Pd::current->gtlb.chk(Cpu::id))) {
@@ -402,32 +400,6 @@ void Ec::ret_user_vmresume() {
 
     if (EXPECT_FALSE(get_cr2() != current->regs.cr2))
         set_cr2(current->regs.cr2);
-//    trace(TRACE_VMX, "VMResume  GuestRip %lx Run %d", Vmcs::read(Vmcs::GUEST_RIP), run_number);   
-//    Msr::write(Msr::MSR_PERF_FIXED_CTRL, 0xb);
-    Paddr heip, hpa, ept_hpa;
-    mword attr, gpeip, ept_attr, eip = Vmcs::read (Vmcs::GUEST_RIP);
-    current->regs.vtlb->vtlb_lookup(eip, heip, attr);
-    current->regs.vtlb->vtlb_lookup(Pe::missmatch_addr, hpa, attr);
-    mword *ptr1 = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, heip)) + 
-            (heip & PAGE_MASK)/sizeof(mword);
-    mword *ptr2 = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, hpa)) + 
-            (hpa & PAGE_MASK)/sizeof(mword);
-    mword cr0_shadow = current->regs.cr0_shadow, cr3_shadow = current->regs.cr3_shadow, cr4_shadow = 
-            current->regs.cr4_shadow; 
-    size_t size_g = current->regs.vtlb->gla_to_gpa(cr0_shadow, cr3_shadow, cr4_shadow, eip, gpeip),
-            size_h = Pd::current->ept.lookup (gpeip, ept_hpa, ept_attr);
-
-    char buffer[MIN_STR_LENGTH];
-    instruction_in_hex(*ptr1, buffer);
-    debug_started_trace(0, "Geip %lx heip %lx, *heip %lx instr %s hpa %lx *hpa %lx size_g %lx gpeip"
-            " %lx size_h %lx ept_hpa %lx run %u", 
-            eip, heip, *ptr1, buffer, hpa, *ptr2, size_g, gpeip, size_h, ept_hpa, run_number);
-        
-//        if(heip && ept_hpa && (size_g != ~0UL) && !(*ptr1)){
-//            trace(0, "INSTR0 Geip %lx heip %lx, *heip %lx instr %s hpa %lx *hpa %lx size_g %lx "
-//              "gpeip %lx size_h %lx ept_hpa %lx run %u", 
-//                eip, heip, *ptr1, buffer, hpa, *ptr2, size_g, gpeip, size_h, ept_hpa, run_number);
-//        }
     if(step_reason == SR_DBG)
         enable_mtf();
     asm volatile ("mov %2," EXPAND(PREG(sp);)

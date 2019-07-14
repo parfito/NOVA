@@ -222,20 +222,20 @@ bool Cow_elt::compare_vm_stack(){
         } else {
             // if in production, uncomment this, for not to get too many unncessary Missmatch errors because 
             // just of error in vm stack            
-            int missmatch_addr = 0;
+            size_t missmatch_addr = 0;
             int diff = memcmp(reinterpret_cast<char*> (ptr1), reinterpret_cast<char*> (ptr2),
                     missmatch_addr, PAGE_SIZE);
             assert(diff);
             //                asm volatile ("" ::"m" (missmatch_addr)); // to avoid gdb "optimized out"            
             //                asm volatile ("" ::"m" (c)); // to avoid gdb "optimized out"     
             // because memcmp compare by grasp of 4 bytes
-            mword index = (PAGE_SIZE - 4 * (missmatch_addr + 1)) / sizeof (mword);
+            mword index = missmatch_addr / sizeof (mword);
             mword val1 = *(ptr1 + index);
             mword val2 = *(ptr2 + index);
             mword *ptr0 = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, c->old_phys, 
                     2 * PAGE_SIZE));
             mword val0 = *(ptr0 + index);
-            Pe::missmatch_addr = c->page_addr + index * sizeof (mword);
+            Pe::missmatch_addr = c->page_addr + index;
             Paddr hpa_guest_rip;
             mword attr;
             Ec::current->vtlb_lookup(c->ec_rip, hpa_guest_rip, attr);
@@ -288,14 +288,14 @@ bool Cow_elt::compare() {
         } else {
             // if in production, uncomment this, for not to get too many unncessary Missmatch errors because 
             // just of error in vm stack            
-            int missmatch_addr = 0;
+            size_t missmatch_addr = 0;
             int diff = memcmp(ptr1, ptr2, missmatch_addr, PAGE_SIZE);
             assert(diff);
             //                asm volatile ("" ::"m" (missmatch_addr)); // to avoid gdb "optimized out"            
             //                asm volatile ("" ::"m" (c)); // to avoid gdb "optimized out"     
             // because memcmp compare by grasp of 4 bytes
-            int ratio = sizeof(mword)/4; // sizeof(mword) == 4 ? 1 ; sizeof(mword) == 8 ? 2
-            int index = (PAGE_SIZE - 4 * (missmatch_addr + 1))/(4*ratio);
+//            int ratio = sizeof(mword)/4; // sizeof(mword) == 4 ? 1 ; sizeof(mword) == 8 ? 2
+            size_t index = missmatch_addr/sizeof(mword);
             if(Ec::current->is_virutalcpu()){
                 // Cow fault due to instruction side effect in VM kernel stack
                 mword temp = *(reinterpret_cast<mword*>(ptr1) + index);
@@ -330,13 +330,13 @@ bool Cow_elt::compare() {
             }
             char instr_buff[MIN_STR_LENGTH];
             instruction_in_hex(*reinterpret_cast<mword*> (rip_ptr), instr_buff);
-            Console::print("MISSMATCH Pd: %s PE %lu virt %lx:%d phys0:%lx phys1 %lx phys2 %lx "
-                    "rip %lx:%s rcx %lx rsp %lx:%lx ptr1: %p ptr2: %p  val0: 0x%lx  val1: 0x%lx "
+            Console::print("MISSMATCH Pd: %s PE %lu virt %lx: phys0:%lx phys1 %lx phys2 %lx "
+                    "rip %lx:%s rcx %lx rsp %lx:%lx MM %lu index %lu  val0: 0x%lx  val1: 0x%lx "
                     "val2 0x%lx, nb_cow_fault %u counter1 %llx counter2 %llx Nb_pe %u nb_vm_pe %u "
                     "vm_size %lu", 
-                    Pd::current->get_name(), Pe::get_number(), c->page_addr, index, c->old_phys, 
+                    Pd::current->get_name(), Pe::get_number(), c->m_fault_addr, c->old_phys, 
                     c->new_phys[0], c->new_phys[1], c->ec_rip, instr_buff, c->ec_rcx, c->ec_rsp, 
-                    c->ec_rsp_content, ptr1, ptr2, val0, val1, val2, Counter::cow_fault, 
+                    c->ec_rsp_content, missmatch_addr, index, val0, val1, val2, Counter::cow_fault, 
                     Ec::counter1, Lapic::read_instCounter(), Counter::nb_pe, Counter::nb_vm_pe, 
                     Ec::current->vm_kernel_stacks_size());
                         
@@ -476,6 +476,8 @@ void Cow_elt::commit() {
                 }
             }
         }
+        // Because Kernel never uses same entries as user process to read/write user processes' pages,
+        // we may set entry back to Read-only.
         if (c->vtlb) {
             c->vtlb->cow_update(old_phys, c->attr);
         }

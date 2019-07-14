@@ -112,11 +112,6 @@ inline int strmemcmp(char const *s1, char const *s2, int &addr, int n) {
 }
 
 /**
- * Intel CRC32C https://stackoverflow.com/questions/17645167/implementing-sse-4-2s-crc32c-in-software/17646775#17646775
- * Fast, Parallelized CRC Computation Using the Nehalem CRC32 Instruction
- * http://www.drdobbs.com/parallel/fast-parallelized-crc-computation-using/229401411
- * https://android.googlesource.com/platform/bionic/+/6719500/libc/arch-x86/string/memcmp.S
- * https://sourceware.org/git/?p=glibc.git;a=blob;f=sysdeps/x86_64/memcmp.S
  * fonction a n'utiliser que pour comparer des tailles multiples de 4 et page aligned ex: 4ko
  * @param s1
  * @param s2
@@ -124,8 +119,8 @@ inline int strmemcmp(char const *s1, char const *s2, int &addr, int n) {
  * @return 
  */
 extern "C" NONNULL
-inline int memcmp(const void *s1, const void *s2, int &addr, size_t len) {
-    len /=4; // cmpsl compare double word (4 bytes)
+inline int memcmp(const void *s1, const void *s2, size_t &addr, size_t size) {
+    size_t len = size / 4; // cmpsl compare double word (4 bytes)
     int diff = 0;
     asm volatile (
     	"cld;"
@@ -134,8 +129,9 @@ inline int memcmp(const void *s1, const void *s2, int &addr, size_t len) {
 	"movl	$0, %1;"		
         "jmp    2f;"
 "1:	movl	$1, %1;"			
-"2:	movl	%%ecx, %0\n"
+"2:	movq	%%rcx, %0\n"
         : "=qm" (addr), "=qm" (diff), "+D" (s1), "+S" (s2), "+c" (len));
+    addr = size - 4*(addr + 1);
     return diff;
 }
 
