@@ -28,7 +28,7 @@
 extern "C" NORETURN
 void bootstrap()
 {
-    static mword barrier;
+//    static mword barrier;
 
     Cpu::init();
 
@@ -40,7 +40,7 @@ void bootstrap()
     Sc::current->add_ref();
 
     // Barrier: wait for all ECs to arrive here
-    for (Atomic::add (barrier, 1UL); barrier != Cpu::online; pause()) ;
+//    for (Atomic::add (barrier, 1UL); barrier != Cpu::online; pause()) ;
 
     Msr::write<uint64>(Msr::IA32_TSC, 0);
 

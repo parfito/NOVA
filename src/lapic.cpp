@@ -116,7 +116,7 @@ void Lapic::init(bool invariant_tsc)
             }
         }
 
-        send_ipi (0, 0, DLV_INIT, DSH_EXC_SELF);
+//        send_ipi (0, 0, DLV_INIT, DSH_EXC_SELF);
 
         if (!freq_tsc) {
             uint32 const delay = (dl || !invariant_tsc) ? 10 : 500;
@@ -135,9 +135,9 @@ void Lapic::init(bool invariant_tsc)
 
         trace (0, "TSC:%u kHz BUS:%u kHz%s%s", freq_tsc, freq_bus, !ratio ? " (measured)" : "", dl ? " DL" : "");
 
-        send_ipi (0, AP_BOOT_PADDR >> PAGE_BITS, DLV_SIPI, DSH_EXC_SELF);
-        Acpi::delay (1);
-        send_ipi (0, AP_BOOT_PADDR >> PAGE_BITS, DLV_SIPI, DSH_EXC_SELF);
+//        send_ipi (0, AP_BOOT_PADDR >> PAGE_BITS, DLV_SIPI, DSH_EXC_SELF);
+//        Acpi::delay (1);
+//        send_ipi (0, AP_BOOT_PADDR >> PAGE_BITS, DLV_SIPI, DSH_EXC_SELF);
     }
 
     write (LAPIC_TMR_ICR, 0);
