@@ -41,9 +41,10 @@
 #define SPN_IPI         (SPN_LVT + NUM_LVT)
 #define SPN_GSI         (SPN_IPI + NUM_IPI)
 
+#define DEBUG           1
 #define MAX_INSTRUCTION 0x100000
-#define MAX_STR_LENGTH  80
-#define MIN_STR_LENGTH  20
+#define STR_MAX_LENGTH  80
+#define STR_MIN_LENGTH  20
 
 #define DEBUG_CMD_SHIFT          0
 #define DEBUG_CMD_KILL           1
@@ -63,3 +64,11 @@
 #define DEBUG_STATE_ON           1
 #define DEBUG_STATE_BITS         1
 #define DEBUG_STATE_MASK         ((1 << DEBUG_STATE_BITS) - 1)
+
+#define IN_PRODUCTION            0
+#define LOG_MAX                 10000
+#define LOG_PERCENT_TO_BE_LEFT  10
+#define LOG_ENTRY_MAX           20*LOG_MAX
+
+#define ENTRY_OFFSET    PAGE_SIZE
+#define BUFFER_ORDER    2

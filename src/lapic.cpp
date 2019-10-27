@@ -181,7 +181,7 @@ void Lapic::timer_handler(){
 
 void Lapic::lvt_vector (unsigned vector){    
     if(vector == VEC_LVT_PERFM){
-        Counter::print<1,16> (++Counter::lvt[vector - VEC_LVT], Console_vga::COLOR_LIGHT_BLUE, vector - VEC_LVT + SPN_LVT);
+        Counter::print<1,16> (++Counter::lvt[vector - VEC_LVT][Pe::run_number], Console_vga::COLOR_LIGHT_BLUE, vector - VEC_LVT + SPN_LVT);
         perfm_handler();
         return;
     }
@@ -203,7 +203,7 @@ void Lapic::exec_lvt(unsigned vector, bool pending){
         case VEC_LVT_THERM: therm_handler(); if(!pending) eoi(); break;
     }    
  
-    Counter::print<1,16> (++Counter::lvt[lvt], Console_vga::COLOR_LIGHT_BLUE, lvt + SPN_LVT);    
+    Counter::print<1,16> (++Counter::lvt[lvt][Pe::run_number], Console_vga::COLOR_LIGHT_BLUE, lvt + SPN_LVT);    
 }
 
 void Lapic::ipi_vector (unsigned vector){
@@ -217,7 +217,7 @@ void Lapic::ipi_vector (unsigned vector){
 
     eoi();
 
-    Counter::print<1,16> (++Counter::ipi[ipi], Console_vga::COLOR_LIGHT_GREEN, ipi + SPN_IPI);
+    Counter::print<1,16> (++Counter::ipi[ipi][Pe::run_number], Console_vga::COLOR_LIGHT_GREEN, ipi + SPN_IPI);
 }
 /**
  * Called only from entry.S
@@ -324,7 +324,7 @@ void Lapic::print_compteur(){
 
 void Lapic::write_perf(mword reason){
     perf_compteur[tour][0] = counter;
-    info[tour][0] = Ec::run_number;
+    info[tour][0] = Pe::run_number;
     info[tour][1] = Ec::last_rip;
     info[tour][2] = reason;
     info[tour][3] = diff_counter();

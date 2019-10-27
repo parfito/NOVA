@@ -118,7 +118,8 @@ public:
 
     Paddr replace(Quota &quota, mword, mword);
 
-    static void *remap(Quota &quota, Paddr);
+//    static void *remap(Quota &quota, Paddr);
+    static void *remap (Quota &quota, Paddr, bool = false);
 
     static bool dest_hpt (Paddr p, mword, unsigned) { return (p != reinterpret_cast<Paddr>(&FRAME_0) && p != reinterpret_cast<Paddr>(&FRAME_1)); }
     static bool iter_hpt_lev(unsigned l, mword v){

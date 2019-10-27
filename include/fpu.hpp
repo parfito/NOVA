@@ -27,6 +27,8 @@
 #include "pd.hpp"
 #include "string.hpp"
 #include "stdio.hpp"
+#include "log.hpp"
+#include "log_store.hpp"
 
 class Fpu
 {
@@ -35,7 +37,7 @@ class Fpu
         char data[data_size];
         static char statedata[state_size], statedata_0[state_size], statedata_1[state_size], statedata_2[state_size], data_0[data_size], data_1[data_size], data_2[data_size];
         static Slab_cache cache;
-        static bool is_saved;
+        static bool saved;
         
         ALWAYS_INLINE
         static inline bool is_enabled() { return !(get_cr0() & (Cpu::CR0_TS|Cpu::CR0_EM)); }
@@ -75,14 +77,16 @@ class Fpu
             fpu_0->save();
             save_state(statedata_0);
             load_state(statedata_0);
-            is_saved = true;
+            saved = true;
         }
         
         static void dwc_restore(){
             if(get_cr0() & (Cpu::CR0_TS | Cpu::CR0_EM))
                 return;
-            if(!is_saved)
+            if(!saved){
+                Logstore::dump("dwc_restore", false, 5);
                 Console::panic("TCHA HO HO: Cpu::CR0_TS || Cpu::CR0_EM = 0 but is_saved is false - dwc_restore");// TS ou EM ont été désactivé en cours de route  
+            }
             fpu_1->save();
             save_state(statedata_1);
             fpu_0->load();
@@ -92,7 +96,7 @@ class Fpu
         static void dwc_restore1(){
             if(get_cr0() & (Cpu::CR0_TS | Cpu::CR0_EM))
                 return;
-            if(!is_saved)
+            if(!saved)
                 Console::panic("TCHA HO HO: Cpu::CR0_TS || Cpu::CR0_EM = 0 but is_saved is false - dwc_restore1");// TS ou EM ont été désactivé en cours de route  
             fpu_2->save();
             save_state(statedata_2);
@@ -103,7 +107,7 @@ class Fpu
         static mword dwc_check(){
             if(get_cr0() & (Cpu::CR0_TS | Cpu::CR0_EM))
                 return 0;
-            if(!is_saved)
+            if(!saved)
                 Console::panic("TCHA HO HO: Cpu::CR0_TS || Cpu::CR0_EM = 0 but is_saved is false - dwc_check");// TS ou EM ont été désactivé en cours de route  
             fpu_2->save();
             save_state(statedata_2);
@@ -129,7 +133,7 @@ class Fpu
                 }
                 
          }else
-                is_saved = false;                
+                saved = false;                
             return ret;
         }
         
@@ -138,7 +142,7 @@ class Fpu
                 return;
             fpu_0->load();
             load_state(statedata_0);
-            is_saved = false;            
+            saved = false;            
         }
         
         void save_data(){
@@ -171,4 +175,6 @@ class Fpu
             }
             return ret;
         }
+        
+        static bool is_saved() { return saved; };
 };

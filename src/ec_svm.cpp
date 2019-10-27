@@ -21,6 +21,7 @@
 #include "ec.hpp"
 #include "svm.hpp"
 #include "vtlb.hpp"
+#include "pe.hpp"
 
 uint8 Ec::ifetch (mword virt)
 {
@@ -164,7 +165,7 @@ void Ec::handle_svm() {
             break;
     }
 
-    Counter::vmi[reason]++;
+    Counter::vmi[reason][Pe::run_number]++;
 
     switch (reason) {
 

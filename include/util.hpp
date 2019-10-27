@@ -19,7 +19,6 @@
 #pragma once
 
 #include "compiler.hpp"
-#include "console.hpp"
 
 template <typename T>
 ALWAYS_INLINE

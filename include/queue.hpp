@@ -29,17 +29,16 @@ class Queue
 {
     private:
         T *headptr;
-        T *tailptr;
 
     public:
         ALWAYS_INLINE
-        inline Queue() : headptr (nullptr), tailptr(nullptr) {}
+        inline Queue() : headptr (nullptr) {}
 
         ALWAYS_INLINE
         inline T *head() const { return headptr; }
 
         ALWAYS_INLINE
-        inline T *tail() const { return headptr ? headptr->prev : tailptr; }
+        inline T *tail() const { return headptr ? headptr->prev : nullptr; }
 
         ALWAYS_INLINE
         inline void enqueue (T *t)
@@ -50,6 +49,20 @@ class Queue
                 t->next = headptr;
                 t->prev = headptr->prev;
                 t->next->prev = t->prev->next = t;
+            }
+        }
+
+        ALWAYS_INLINE
+        inline void enhead (T *t)
+        {
+            if (!headptr)
+                headptr = t->prev = t->next = t;
+            else {
+                t->next = headptr;
+                t->prev = headptr->prev;
+                headptr->prev = t;
+                t->prev->next = t;
+                headptr = t;
             }
         }
 
@@ -134,5 +147,33 @@ class Queue
                 c = (c == n || n == headptr) ? nullptr : n;
             }
             return false;
+        }
+        
+        /**
+         * swap elements position 
+         * @param t1, 
+         * @param t2
+         * @return true if the object t1 et t2 are valid object of the queue, in this case it swap
+         */
+        ALWAYS_INLINE
+        bool swap(T *&t1, T *&t2){
+            if (!t1 || !t1->next || !t1->prev)
+                return false;
+            if (!t2 || !t2->next || !t2->prev)
+                return false;
+            T *t1_prev = t1->prev, *t1_next = t1->next, *t2_prev = t2->prev, *t2_next = t2->next;
+            
+            T *temp = t1;
+            t1 = t2;
+            t2 = temp;
+            t1_prev->next = t1;
+            t1_next->prev = t1;
+            t2_prev->next = t2;
+            t2_next->prev = t2;
+            t1->next = t1_next;
+            t1->prev = t1_prev;
+            t2->next = t2_next;
+            t2->prev = t2_prev;
+            return true;
         }
 };

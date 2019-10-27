@@ -27,7 +27,7 @@
 #include "cow_elt.hpp"
 #include "ec.hpp"
 #include "pe_stack.hpp"
-#include "pe.hpp"
+#include "log.hpp"
 
 size_t Vtlb::gwalk (Exc_regs *regs, mword gla, mword &gpa, mword &attr, mword &error)
 {
@@ -345,56 +345,4 @@ size_t Vtlb::gla_to_gpa (mword cr0_shadow, mword cr3_shadow, mword cr4_shadow, m
 
         return size;
     }
-}
-/**
- * This method checks if the guest stack is mapped in EPT and in this case, 
- * make it writable so that it will not triggers cow fault.
- * @param gpa
- */
-void Vtlb::reserve_stack(mword cr0_shadow, mword cr3_shadow, mword cr4_shadow){
-    Pe_stack::stack = 0;
-    // The stack must always be checked except in in_recover_from_stack_fault_mode on in_debug_mode
-    mword gpa, rsp = Vmcs::read (Vmcs::GUEST_RSP);
-   if(Pe::in_debug_mode || Cow_elt::would_have_been_cowed_in_place_phys0(rsp))
-        return;
-     size_t size_g = gla_to_gpa(cr0_shadow, cr3_shadow, cr4_shadow, rsp, gpa);
-//    debug_started_trace(0, "rsp %lx size %lx gpa %lx", rsp, s, gpa);
-    if(rsp && size_g && (size_g != ~0UL)){
-        unsigned l = max();
-        unsigned b = bpl();
-        unsigned shift = --l * b + PAGE_BITS;
-        Vtlb *tlb = static_cast<Vtlb *> (this) ;
-        mword a;
-        tlb += rsp >> shift & ((1UL << b) - 1);
-
-        for (;; tlb = static_cast<Vtlb *> (Buddy::phys_to_ptr(tlb->addr())) + (rsp >> (--l * b + PAGE_BITS) & ((1UL << b) - 1))) {
-            if (EXPECT_FALSE(!tlb->val))
-                break;
-
-            if (EXPECT_FALSE(l && !tlb->super()))
-                    continue; 
-
-            size_t s = 1UL << (l * b + tlb->order());
-
-            if(!s)
-                break;
-
-            a = tlb->attr();
-
-            if(a & TLB_COW){
-
-                mword hpa, ept_attr;
-                size_t size = Pd::current->ept.lookup (gpa, hpa, ept_attr);
-
-    //            debug_started_trace(0, "save_guest_stack rsp: %lx tlb->addr: %lx attr %lx gpa %lx hpa %lx size %lx", 
-    //                rsp, tlb->addr(), a, gpa, hpa, size);
-                if(size && (tlb->addr() == (hpa & ~PAGE_MASK))){ 
-                    Pe_stack::stack = rsp & ~PAGE_MASK;                
-                    Cow_elt::resolve_cow_fault(tlb, nullptr, rsp, tlb->addr(), tlb->attr());    
-                }
-            }
-            return;
-        }
-    }
-    return;
 }
