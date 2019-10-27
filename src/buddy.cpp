@@ -26,8 +26,9 @@
 #include "stdio.hpp"
 #include "string.hpp"
 #include "pd.hpp"
-#include "pe.hpp"
+#include "log.hpp"
 #include "cow_elt.hpp"
+#include "log_store.hpp"
 
 extern char _mempool_p, _mempool_l, _mempool_f, _mempool_e;
 
@@ -135,8 +136,8 @@ void *Buddy::alloc (unsigned short ord, Quota &quota, Fill fill)
 
     quota.dump(Pd::current);
 
-    Console::panic ("Out of memory PE %lu PE_State %lu CowElt %lu", Pe::get_number(), 
-            Pe_state::get_number(), Cow_elt::get_number());
+    Console::panic ("Out of memory PE %lu PE_State %lu CowElt %lu", Logstore::get_number(), 
+            Log_entry::get_total_log_size(), Cow_elt::get_number());
 }
 
 /*
@@ -208,6 +209,7 @@ void Buddy::free (mword virt, Quota &quota)
         }
     }
 
+    Logstore::dump("Buddy::free", false);
     Console::panic ("Invalid memory free");
 }
 

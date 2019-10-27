@@ -32,7 +32,7 @@
 class Pd : public Kobject, public Refcount, public Space_mem, public Space_pio, public Space_obj {
     friend class Cow_elt;
 private:
-    char name[MAX_STR_LENGTH];
+    char name[STR_MAX_LENGTH];
     bool to_be_cowed = false, debug = false;
     static Slab_cache cache;
     static const char *unprotected_pd_names[];
@@ -116,7 +116,7 @@ public:
     Pd(const Pd&);
     Pd &operator=(Pd const &);
 
-    Pd(Pd *own, mword sel, mword a, char* const s = const_cast<char* const> ("Unknown"));
+    Pd(Pd *own, mword sel, mword a, char const *s = "Unknown");
 
     ALWAYS_INLINE HOT
     inline void make_current() {
@@ -197,8 +197,6 @@ public:
         return to_be_cowed;
     }
     bool compare_memory_mute();
-    size_t get_cow_number() { return cow_elts.size(); }
-    bool is_cow_elts_empty() { return !cow_elts.head(); }
     bool is_debug() { return debug;}  
     void set_debug(bool db) { debug = db;}
 };

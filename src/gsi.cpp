@@ -28,6 +28,7 @@
 #include "sm.hpp"
 #include "vectors.hpp"
 #include "pending_int.hpp"
+#include "pe.hpp"
 
 Gsi         Gsi::gsi_table[NUM_GSI];
 unsigned    Gsi::irq_table[NUM_IRQ];
@@ -117,5 +118,5 @@ void Gsi::exec_gsi(unsigned vector, bool pending){
 
     gsi_table[gsi].sm->submit();
 
-    Counter::print<1,16> (++Counter::gsi[gsi], Console_vga::Color (Console_vga::COLOR_LIGHT_YELLOW - gsi / 64), SPN_GSI + gsi % 64);
+    Counter::print<1,16> (++Counter::gsi[gsi][Pe::run_number], Console_vga::Color (Console_vga::COLOR_LIGHT_YELLOW - gsi / 64), SPN_GSI + gsi % 64);
 }

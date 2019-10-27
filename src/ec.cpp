@@ -36,10 +36,11 @@
 #include "lapic.hpp"
 #include "string.hpp"
 #include "vectors.hpp"
-#include "pe.hpp"
+#include "log.hpp"
 #include "cow_elt.hpp"
-#include "pe_state.hpp"
 #include "pe_stack.hpp"
+#include "pe.hpp"
+#include "log_store.hpp"
 
 mword Ec::prev_rip = 0, Ec::last_rip = 0, Ec::last_rcx = 0, Ec::end_rip, Ec::end_rcx,
         Ec::tscp_rcx1 = 0, Ec::tscp_rcx2 = 0;
@@ -50,7 +51,7 @@ uint64 Ec::exc_counter = 0, Ec::exc_counter1 = 0, Ec::exc_counter2 = 0, Ec::coun
         Ec::nb_inst_single_step = 0, Ec::second_run_instr_number = 0, 
         Ec::first_run_instr_number = 0, Ec::distance_instruction = 0;
        
-uint8 Ec::run_number = 0, Ec::launch_state = 0, Ec::step_reason = 0, Ec::debug_nb = 0, 
+uint8 Ec::launch_state = 0, Ec::step_reason = 0, Ec::debug_nb = 0, 
         Ec::debug_type = 0, Ec::replaced_int3_instruction, Ec::replaced_int3_instruction2;
 uint64 Ec::tsc1 = 0, Ec::tsc2 = 0;
 int Ec::prev_reason = 0, Ec::previous_ret = 0, Ec::nb_try = 0, Ec::reg_diff = 0;
@@ -336,7 +337,7 @@ void Ec::ret_user_sysexit() {
         launch_state = Ec::SYSEXIT;
     }
 
-    debug_started_trace(0, "Sysreting");
+//    debug_started_trace(0, "Sysreting");
     if (step_reason == SR_NIL) {
         asm volatile ("lea %0," EXPAND(PREG(sp); LOAD_GPR RET_USER_HYP) : : "m" (current->regs) : 
                     "memory");
@@ -358,7 +359,7 @@ void Ec::ret_user_iret() {
         current->save_state0();
         launch_state = Ec::IRET;
     }
-    debug_started_trace(0, "Ireting");
+//    debug_started_trace(0, "Ireting");
     asm volatile ("lea %0," EXPAND(PREG(sp); LOAD_GPR LOAD_SEG RET_USER_EXC) : : "m" (current->regs)
     : "memory");
 
@@ -468,7 +469,6 @@ void Ec::ret_user_vmrun() {
 }
 
 void Ec::idle() {
-    Pe::dump(false);
     Counter::dump();
     for (;;) {
 
@@ -588,10 +588,6 @@ bool Ec::fixup(mword &eip) {
 void Ec::die(char const *reason, Exc_regs *r) {
     bool const show = current->pd == &Pd::kern || current->pd == &Pd::root;
     bool const pf_in_kernel = str_equal(reason, "#PF (kernel)");
-//    prepare_checking();    
-//    Pe::print_current(current->utcb ? false : true);
-    Pe_state::dump(false, 100);
-    Pe::dump(false);
     if (current->utcb || show || pf_in_kernel) {
 //        if (show || !strmatch(reason, "PT not found", 12))
             trace(0, "Killed EC:%s SC:%p V:%#lx CS:%#lx IP:%#lx(%#lx) CR2:%#lx ERR:%#lx (%s) %s",
@@ -802,13 +798,18 @@ void Ec::rollback() {
     }
 }
 
-void Ec::save_regs(Exc_regs *r) {
-    last_rip = r->REG(ip);
-    last_rcx = r->REG(cx);
-    exc_counter++;
-    count_interrupt(r->vec);
-//    Pe::add_pe_state(current->regs.REG(ip), run_number, r->vec);
-    return;
+/**
+ * cancel the double execution effects
+ */
+void Ec::debug_rollback() {
+    regs = regs_0;
+    Fpu::dwc_rollback();
+    if (fpu)
+        fpu->roll_back();
+    Cow_elt::debug_rollback();
+    if (!utcb) {
+        vmx_rollback();
+    }
 }
 
 /**
@@ -816,7 +817,9 @@ void Ec::save_regs(Exc_regs *r) {
  */
 void Ec::save_state0() {
     regs_0 = regs;
-    Pe::add_pe(getPd()->get_name(), get_name(), regs.REG(ip), 0, 0, "");
+    char buff[STR_MAX_LENGTH];
+    String::print(buff, "PE %llu Pd %s Ec %s", Counter::nb_pe, getPd()->get_name(), get_name());
+    Logstore::add_log_in_buffer(buff);
     Cow_elt::place_phys0();
     Fpu::dwc_save(); // If FPU activated, save fpu state
     if (fpu)         // If fpu defined, save it 
@@ -831,8 +834,6 @@ void Ec::save_state0() {
         vmx_save_state();  
         Counter::nb_vm_pe++;
     }
-    copy_string(Pe::current_ec, current->get_name());
-    copy_string(Pe::current_pd, current->getPd()->get_name());
     Pe::c_regs[0] = regs_0;
     Pe::inState1 = false;
     Counter::nb_pe++;    
@@ -855,8 +856,6 @@ void Ec::restore_state0_data() {
 //        regs.vtlb->reserve_stack(cr0_shadow, cr3_shadow, cr4_shadow);
         vmx_save_state();        
     }
-    copy_string(Pe::current_ec, current->get_name());
-    copy_string(Pe::current_pd, current->getPd()->get_name());
     Pe::c_regs[0] = regs_0;
     Pe::inState1 = false;
 }
@@ -1153,7 +1152,7 @@ void Ec::backtrace(int depth) {
         char args[60];
         int argno = 0;
         for (; argno < 5; argno++) {
-            Console::sprint(args, "%lx ", *(ebpp + 2 + argno));
+            String::print(args, "%lx ", *(ebpp + 2 + argno));
         }
 
         Console::print("ebp %lx eip %lx args %s (ebp) %lx", ebp, eip, args, *ebpp);
@@ -1286,19 +1285,19 @@ bool Ec::single_step_finished() {
 void Ec::count_interrupt(mword vector){
     switch (vector) {
         case 0 ... VEC_GSI - 1:
-            Pe::exc[run_number][vector]++;
+            Counter::exc[vector][Pe::run_number]++;
             break;
         case VEC_GSI ... VEC_LVT - 1:
-            Pe::gsi[run_number][vector - VEC_GSI]++;
+            Counter::gsi[vector - VEC_GSI][Pe::run_number]++;
             break;
         case VEC_LVT ... VEC_MSI - 1:
-            Pe::lvt[run_number][vector - VEC_LVT]++;
+            Counter::lvt[vector - VEC_LVT][Pe::run_number]++;
             break;
         case VEC_MSI ... VEC_IPI - 1:
-            Pe::msi[run_number][vector - VEC_MSI]++;
+            Counter::msi[vector - VEC_MSI][Pe::run_number]++;
             break;
         case VEC_IPI ... VEC_MAX - 1:
-            Pe::ipi[run_number][vector - VEC_IPI]++;
+            Counter::ipi[vector - VEC_IPI][Pe::run_number]++;
             break;
     }
     Paddr p;
@@ -1306,16 +1305,16 @@ void Ec::count_interrupt(mword vector){
     if (Ec::current->getPd()->Space_mem::loc[Cpu::id].lookup(last_rip, p, a)){
         uint8 *ptr = reinterpret_cast<uint8 *> (last_rip);
         if (*ptr == 0xf3 || *ptr == 0xf2) { // rep prefix instruction
-            Pe::rep_prefix[run_number]++;
+            Counter::rep_prefix[Pe::run_number]++;
     //            exc_counter--;
         }
-        if (*ptr == 0xf4) { // halt instruction
-            Pe::hlt_instr[run_number]++;
+        if(*ptr == 0xf4) { // halt instruction
+            Counter::hlt_instr[Pe::run_number]++;
     //            exc_counter--;
         } else {
             if (Ec::current->getPd()->Space_mem::loc[Cpu::id].lookup(last_rip - 1, p, a) &&
                     *(ptr - 1) == 0xf4) {
-                Pe::hlt_instr[run_number]++;
+                Counter::hlt_instr[Pe::run_number]++;
     //                exc_counter--;
             }
         }
@@ -1327,26 +1326,27 @@ void Ec::count_interrupt(mword vector){
  */
 void Ec::check_instr_number_equals(int from){
     uint64 nb_run1, nb_run2;
-    char instr_number_comp[8] = "Inf";
+    size_t buff_length = 8;
+    char instr_number_comp[buff_length+1] = "Inf";
     if(distance_instruction <= 2) {
         if(first_run_advanced){
             nb_run1 = first_run_instr_number + nb_inst_single_step; 
             nb_run2 = second_run_instr_number;
             first_run_advanced = false;
-            copy_string(instr_number_comp, "Equ sup");
+            copy_string(instr_number_comp, "Equ sup", buff_length);
         } else{
             nb_run1 = first_run_instr_number; 
             nb_run2 = second_run_instr_number + nb_inst_single_step;
-            copy_string(instr_number_comp, "Equ inf");            
+            copy_string(instr_number_comp, "Equ inf", buff_length);            
         }
     } else if(first_run_instr_number > second_run_instr_number){
         nb_run1 = first_run_instr_number; nb_run2 = second_run_instr_number + nb_inst_single_step;
     } else {
         nb_run1 = first_run_instr_number + nb_inst_single_step; nb_run2 = second_run_instr_number;        
-        copy_string(instr_number_comp, "Sup");
+        copy_string(instr_number_comp, "Sup", buff_length);
     }
     char to_print[200];
-    Pe::counter(to_print);
+//    Log::counter(to_print);
     long nb_run_diff = nb_run1 < nb_run2 ? nb_run2 - nb_run1 : -(nb_run1 - nb_run2);
     if(nb_run_diff != 0){
         Console::print("%s %d: ec %s pd %s nb_run1 %llu nb_run2 %llu nb_run_diff %ld counter1 %llu "
@@ -1358,7 +1358,6 @@ void Ec::check_instr_number_equals(int from){
         instr_number_comp, from, current->get_name(), current->getPd()->get_name(), counter1,
                 counter2, to_print, nb_inst_single_step);
     }
-    Pe::dump();
 }
 
 void Ec::step_debug(){

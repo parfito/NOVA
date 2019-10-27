@@ -32,7 +32,9 @@
 #include "pending_int.hpp"
 #include "cow_elt.hpp"
 #include "pe_stack.hpp"
+#include "log.hpp"
 #include "pe.hpp"
+#include "log_store.hpp"
 
 void Ec::load_fpu() {
     if (!Cmdline::fpu_eager && !utcb)
@@ -158,18 +160,16 @@ bool Ec::handle_exc_gp(Exc_regs *r) {
      * The following are for debugging purpose
      */
     mword eip = r->REG(ip);
-    Console::print("eip0: %lx(%#lx)  rax_0: %lx", regs_0.REG(ip), regs_0.REG(cx), regs_0.REG(ax));
-    Console::print("eip1: %lx(%#lx)  rax_1: %lx", regs_1.REG(ip), regs_1.REG(cx), regs_1.REG(ax));
-    Console::print("eip2: %lx(%#lx)  rax_2: %lx", regs_2.REG(ip), regs_2.REG(cx), regs_2.REG(ax));
-    char buff[MAX_STR_LENGTH];
+    trace(0, "eip0: %lx(%#lx)  rax_0: %lx", regs_0.REG(ip), regs_0.REG(cx), regs_0.REG(ax));
+    trace(0, "eip1: %lx(%#lx)  rax_1: %lx", regs_1.REG(ip), regs_1.REG(cx), regs_1.REG(ax));
+    trace(0, "eip2: %lx(%#lx)  rax_2: %lx", regs_2.REG(ip), regs_2.REG(cx), regs_2.REG(ax));
+    char buff[STR_MAX_LENGTH];
     instruction_in_hex(*(reinterpret_cast<mword *> (eip)), buff);
-    Console::print("GP Here: Ec: %s  Pd: %s ip %lx(%#lx) val: %s Lapic::counter %llx user %s",
+    trace(0, "GP Here: Ec: %s  Pd: %s ip %lx(%#lx) val: %s Lapic::counter %llx user %s",
             ec->get_name(), ec->getPd()->get_name(), eip, r->ARG_IP, buff, 
             Lapic::read_instCounter(), r->user() ? "true" : "false");
     Counter::dump();
-    Pe::print_current(false);
-    Pe::dump(false);
-    Pe_state::dump_log();
+    Logstore::dump("handle_exc_gp", true);
     ec->start_debugging(Debug_type::STORE_RUN_STATE);
     return false;
 }
@@ -180,7 +180,7 @@ bool Ec::handle_exc_gp(Exc_regs *r) {
  */
 void Ec::handle_exc_db(Exc_regs *r) {
     if (get_dr6() & 0x1) { // debug register 0
-        Console::print("Debug register 0 Ec %s Pd %s eip %lx", current->get_name(), 
+        trace(0, "Debug register 0 Ec %s Pd %s eip %lx", current->get_name(), 
                 current->getPd()->get_name(), current->regs.REG(ip));
         mword *p = reinterpret_cast<mword*> (0x18028);
         Paddr physical_addr;
@@ -188,7 +188,7 @@ void Ec::handle_exc_db(Exc_regs *r) {
         size_t is_mapped = Pd::current->Space_mem::loc[Cpu::id].lookup(0x18028, physical_addr, 
                 attribut);
         if (is_mapped)
-            Console::print("Debug breakpoint at value phys %lx 18028:%lx", physical_addr, *p);
+            trace(0, "Debug breakpoint at value phys %lx 18028:%lx", physical_addr, *p);
         return;
     }
     if (r->user()) {
@@ -196,15 +196,15 @@ void Ec::handle_exc_db(Exc_regs *r) {
             case SR_MMIO:
             case SR_PIO:
             case SR_RDTSC:
-                //                        Console::print("EXC_DB step_reason: %d", step_reason);
+                //                        trace(0, "EXC_DB step_reason: %d", step_reason);
                 if (not_nul_cowlist && step_reason != SR_PIO) {
-                    Console::print("cow_list not null was noticed Pd: %s", 
+                    trace(0, "cow_list not null was noticed Pd: %s", 
                             current->getPd()->get_name());
                     not_nul_cowlist = false;
                 }
                 if (!Cow_elt::is_empty()) {
                     if (step_reason != SR_PIO)
-                        Console::print("cow_list not null, noticed! Pd: %s", 
+                        trace(0, "cow_list not null, noticed! Pd: %s", 
                                 current->getPd()->get_name());
                     else {
                         not_nul_cowlist = true;
@@ -218,12 +218,15 @@ void Ec::handle_exc_db(Exc_regs *r) {
             {
                 ++Counter::pmi_ss;
                 nb_inst_single_step++;
+                if(nb_inst_single_step > 300){
+                    Console::panic("Lost in Single stepping");
+                }
                 if (nbInstr_to_execute > 0)
                     nbInstr_to_execute--;
                 if (prev_rip == current->regs.REG(ip)) { // Rep Prefix
                     nb_inst_single_step--;
                     nbInstr_to_execute++; // Re-adjust the number of instruction                  
-                    // Console::print("EIP: %lx  prev_rip: %lx MSR_PERF_FIXED_CTR0: %lld 
+                    // trace(0, "EIP: %lx  prev_rip: %lx MSR_PERF_FIXED_CTR0: %lld 
                     // instr: %lx", current->regs.REG(ip), prev_rip, 
                     // Msr::read<uint64>(Msr::MSR_PERF_FIXED_CTR0), 
                     // *reinterpret_cast<mword *>(current->regs.REG(ip)));
@@ -259,25 +262,17 @@ void Ec::handle_exc_db(Exc_regs *r) {
                 break;
             case SR_DBG:
 //                if (nb_inst_single_step > nbInstr_to_execute) {
-//                    if (run_number == 0) {
-//                        Console::print("Relaunching for the second run");
+//                    if (Pe::run_number == 0) {
+//                        trace(0, "Relaunching for the second run");
 //                        current->restore_state();
 //                        nb_inst_single_step = 0;
-//                        run_number++;
+//                        Pe::run_number++;
 //                        check_exit();
 //                    } else {
 //                        Console::panic("SR_DBG Finish");
 //                    }
 //                } else 
                 {
-                    mword *ptr = reinterpret_cast<mword*>(0x21000);
-                    Paddr phys;
-                    mword attr;
-                    size_t size = Pd::current->Space_mem::loc[Cpu::id].lookup(0x21000, phys, attr);
-                    if(size){
-                        Pe_state::set_current_pe_sub_reason(phys);
-                        Pe_state::set_current_pe_diff_reason(*ptr);
-                    }
                     current->regs.REG(fl) |= Cpu::EFL_TF;
                     nb_inst_single_step++;
                     return;
@@ -285,13 +280,16 @@ void Ec::handle_exc_db(Exc_regs *r) {
                 break;
             case SR_EQU:
                 ++Counter::pmi_ss;
+                if(nb_inst_single_step > 300) {
+                    Console::panic("Lost in Single stepping");
+                }
                 nb_inst_single_step++;
                 if (nbInstr_to_execute > 0)
                     nbInstr_to_execute--;
                 if (prev_rip == current->regs.REG(ip)) { // Rep Prefix
                     nb_inst_single_step--;
                     nbInstr_to_execute++; // Re-adjust the number of instruction                  
-                    // Console::print("EIP: %lx  prev_rip: %lx MSR_PERF_FIXED_CTR0: %lld 
+                    // trace(0, "EIP: %lx  prev_rip: %lx MSR_PERF_FIXED_CTR0: %lld 
                     // instr: %lx", current->regs.REG(ip), prev_rip, 
                     // Msr::read<uint64>(Msr::MSR_PERF_FIXED_CTR0), 
                     // *reinterpret_cast<mword *>(current->regs.REG(ip)));
@@ -415,7 +413,7 @@ bool Ec::handle_exc_pf(Exc_regs *r) {
  * @param r : pointer to the faulty process registers and error code
  */
 void Ec::handle_exc(Exc_regs *r) {
-    Counter::exc[r->vec]++;
+    Counter::exc[r->vec][Pe::run_number]++;
 
     // Deterministic? May this exception be replayed or not
     PE_stopby check_reason = PES_DEFAULT;
@@ -483,7 +481,9 @@ void Ec::handle_exc(Exc_regs *r) {
  */
 void Ec::check_memory(PE_stopby from) {
     assert(from);
-    Pe::set_froms(run_number, from);    
+    char buff[STR_MAX_LENGTH];
+    String::print(buff, "run %u from %u", Pe::run_number, from);
+    Logstore::add_log_in_buffer(buff);    
     // Is cow_elts empty? If yes, and if we are not in recovering from stack fault or debuging our 
     // code, no memory to check
     if (Cow_elt::is_empty() && !Cow_elt::is_kernel_vm_modified() && !Pe::in_debug_mode) {
@@ -492,9 +492,10 @@ void Ec::check_memory(PE_stopby from) {
         return;
     }
     Ec *ec = current;
-    switch (run_number) {
+    switch (Pe::run_number) {
         case 0: // First run
-            Pe::set_rip1(ec->utcb? ec->regs.REG(ip) : Vmcs::read(Vmcs::GUEST_RIP));
+            String::print(buff, "rip1 %lx", ec->utcb? ec->regs.REG(ip) : Vmcs::read(Vmcs::GUEST_RIP));
+            Logstore::add_log_in_buffer(buff);    
             prev_reason = from;
             ec->restore_state0();
             counter1 = Lapic::read_instCounter();
@@ -515,9 +516,8 @@ void Ec::check_memory(PE_stopby from) {
                 if (current->utcb) {
                     uint8 *ptr = reinterpret_cast<uint8 *> (end_rip);
                     if (*ptr == 0xf3 || *ptr == 0xf2) {
-                        char buff[MAX_STR_LENGTH];
                         instruction_in_hex(*(reinterpret_cast<mword *> (end_rip)), buff);
-                        Console::print("Rep prefix in Run1 %lx: %s rcx %lx", end_rip, buff, 
+                        trace(0, "Rep prefix in Run1 %lx: %s rcx %lx", end_rip, buff, 
                                 end_rcx);
                         in_rep_instruction = true;
                         Cpu::disable_fast_string();
@@ -526,7 +526,7 @@ void Ec::check_memory(PE_stopby from) {
                     Paddr inst_phys;
                     mword inst_attr;
                     if (!current->regs.vtlb->vtlb_lookup(end_rip, inst_phys, inst_attr)) {
-                        Console::print("Instr_addr not found %lx", end_rip);
+                        trace(0, "Instr_addr not found %lx", end_rip);
                     }
                     mword inst_off = end_rip & PAGE_MASK;
                     uint8 *ptr = reinterpret_cast<uint8 *> (Hpt::remap_cow(Pd::kern.quota, inst_phys 
@@ -535,7 +535,7 @@ void Ec::check_memory(PE_stopby from) {
                     if (*inst_val == 0xf3 || *inst_val == 0xf2) {
                         char buff[MAX_STR_LENGTH];
                         instruction_in_hex(*(reinterpret_cast<mword *> (end_rip)), buff);
-                        Console::print("VMX Rep prefix in Run1 %lx: %s rcx %lx", end_rip, buff, 
+                        trace(0, "VMX Rep prefix in Run1 %lx: %s rcx %lx", end_rip, buff, 
                             end_rcx);
                         in_rep_instruction = true;
                         Cpu::disable_fast_string();
@@ -554,8 +554,11 @@ void Ec::check_memory(PE_stopby from) {
             } else {
                 Lapic::cancel_pmi();
             }
-            run_number++;
+            Pe::run_number++;
             exc_counter = 0;
+            if(step_reason == SR_DBG){
+                nb_inst_single_step = 0;
+            }
             check_exit();
             break;
         case 1: // Second run
@@ -576,9 +579,8 @@ void Ec::check_memory(PE_stopby from) {
                     if(Lapic::read_instCounter() == Lapic::perf_max_count - MAX_INSTRUCTION + 1)
                         check_exit();
                     
-                    Pe::print_current(ec->utcb ? false : true);
-                    Pe_state::dump();
-                    Console::print("Attention : from >< prevreason %d:%d counter1 %llx "
+                    Logstore::dump("check_memory 1", true);
+                    trace(0, "Attention : from >< prevreason %d:%d counter1 %llx "
                     "counter2 %llx", prev_reason, from, counter1, Lapic::read_instCounter());
                 }
                 exc_counter2 = exc_counter;
@@ -643,66 +645,80 @@ void Ec::check_memory(PE_stopby from) {
         {
             prepare_checking();    
             reg_diff = ec->compare_regs(from);
-            Pe::set_rip2(ec->utcb? ec->regs_2.REG(ip) : Vmcs::read(Vmcs::GUEST_RIP));
+            String::print(buff, "rip2 %lx", ec->utcb? ec->regs_2.REG(ip) : Vmcs::read(Vmcs::GUEST_RIP));
+            Logstore::add_log_in_buffer(buff);    
             if (Cow_elt::compare() ||reg_diff) {
-                Pd *pd = ec->getPd();
-                Pe::print_current(ec->utcb ? false : true);
-                Pe_state::dump();
-                Console::print("Checking failed : Ec %s  Pd: %s From: %d:%d launch_state: %d ", 
-                        ec->get_name(), pd->get_name(), prev_reason, from, launch_state);
-                /**
-                 * Following instructions must come in this order.
-                 * At this point, may be the failing check comes from guest stack change
-                 * First, we save PE system values
-                 */
-                uint64 nbInstr_to_execute_value = counter1 < Lapic::start_counter ? 
-                    MAX_INSTRUCTION + counter1 - exc_counter1 : counter1 - (Lapic::perf_max_count - 
-                        MAX_INSTRUCTION);
-                assert(nbInstr_to_execute < Lapic::perf_max_count);
-//                Console::debug_started = true;
-                int from_value = from;
-                int prev_reason_value = prev_reason;
-                ec->rollback();
-                ec->reset_all();
-                ec->restore_state0_data();
-//                Console::print_on = true;
-                /* Try recovering from stack change check failing.
-                 * Re-inforce this by !utcb, when we will be sure that stack Fail check is only 
-                 * related to guest OS
-                 */ 
-                if((from_value == prev_reason_value) && (!reg_diff)){
-                    debug_started_trace(0, "Rollback started %d", launch_state);  
-                    check_exit();
-                }
-                /*
-                 * If we get here, it means that we have a bug or when in production, we have an SEU
-                 * This is for debugging the rollback part of the hardening program.
-                 * Before send in production, uncomment the previous check_exit();
-                 */ 
-                // In production, we meust check_exit() to start the second redundancy round
-//                check_exit(); 
-                nbInstr_to_execute = nbInstr_to_execute_value;
-                Pe::in_debug_mode = true;
-                if(ec->utcb){
-                    ec->enable_step_debug(SR_DBG);
+                if(IN_PRODUCTION){
+                    Logstore::commit_buffer();
+                    ec->rollback();
+                    ec->reset_all();
+                    ec->restore_state0_data();
                     check_exit();
                 } else {
-                    Paddr hpa_guest_rip;
-                    mword attr;
-                    mword guest_rip = Vmcs::read(Vmcs::GUEST_RIP);
-                    Console::print("SR DBG launch in VMX nbInstr_to_execute %llx guest_rip %lx ", 
-                            nbInstr_to_execute, guest_rip);
-                    current->regs.vtlb->vtlb_lookup(guest_rip, hpa_guest_rip, attr);
-                    
-                    void *rip_ptr = reinterpret_cast<char*>(Hpt::remap_cow(Pd::kern.quota, hpa_guest_rip, PAGE_SIZE)) + 
-                            (hpa_guest_rip & PAGE_MASK);
-                    Console::print_memory(rip_ptr, 200);
-                    Paddr hpa_miss_match_addr;
-                    current->regs.vtlb->vtlb_lookup(Pe::missmatch_addr, hpa_miss_match_addr, attr);
-                    Pe::missmatch_ptr = reinterpret_cast<char*>(Hpt::remap_cow(Pd::kern.quota, hpa_miss_match_addr)) +
-                    (hpa_miss_match_addr & PAGE_MASK);
-                    
-                    vmx_enable_single_step(SR_DBG);
+                    Pd *pd = ec->getPd();
+                    trace(0, "Checking failed : Ec %s  Pd: %s From: %d:%d launch_state: %d "
+                        "nb_cow_fault %u counter1 %llx counter2 %llx Nb_pe %llu nb_vm_pe %u vm_size "
+                        "%lu is_saved %d", ec->get_name(), pd->get_name(), prev_reason, from, 
+                        launch_state, Counter::cow_fault, counter1, counter2 ? counter2 : 
+                        Lapic::read_instCounter(), Counter::nb_pe, Counter::nb_vm_pe, 
+                            ec->vm_kernel_stacks_size(), Fpu::is_saved());
+                    Logstore::dump("check_memory 2", true);
+                    counter2 = nbInstr_to_execute ? counter2 + nbInstr_to_execute : Lapic::read_instCounter();
+                    /**
+                     * Following instructions must come in this order.
+                     * At this point, may be the failing check comes from guest stack change
+                     * First, we save PE system values
+                     */
+                    uint64 nbInstr_to_execute_value = counter1 < Lapic::start_counter ? 
+                        MAX_INSTRUCTION + counter1 - exc_counter1 : counter1 - (Lapic::perf_max_count - 
+                            MAX_INSTRUCTION);
+                    assert(nbInstr_to_execute < Lapic::perf_max_count);
+    //                Console::debug_started = true;
+    //                int from_value = from;
+    //                int prev_reason_value = prev_reason;
+                    Logstore::commit_buffer();
+                    ec->debug_rollback();
+                    ec->reset_all();
+                    ec->save_state0();
+    //                Console::print_on = true;
+                    /* Try recovering from stack change check failing.
+                     * Re-inforce this by !utcb, when we will be sure that stack Fail check is only 
+                     * related to guest OS
+                     */ 
+    //                if((from_value == prev_reason_value) && (!reg_diff)){
+    //                    debug_started_trace(0, "Rollback started %d", launch_state);  
+    //                    check_exit();
+    //                }
+                    /*
+                     * If we get here, it means that we have a bug or when in production, we have an SEU
+                     * This is for debugging the rollback part of the hardening program.
+                     * Before send in production, uncomment the previous check_exit();
+                     */ 
+                    // In production, we meust check_exit() to start the second redundancy round
+    //                check_exit(); 
+                    nbInstr_to_execute = nbInstr_to_execute_value;
+                    Pe::in_debug_mode = true;
+                    Console::print_on = true;
+                    if(ec->utcb){
+                        ec->enable_step_debug(SR_DBG);
+                        check_exit();
+                    } else {
+                        mword guest_rip = Vmcs::read(Vmcs::GUEST_RIP);
+                        Paddr hpa_miss_match_addr;
+                        mword attr;
+                        current->regs.vtlb->vtlb_lookup(Pe::missmatch_addr, hpa_miss_match_addr, attr);
+                        mword offset = hpa_miss_match_addr & PAGE_MASK, mod = offset % sizeof(mword);
+                        offset = (mod == 0) ? offset : offset - mod;
+                        void *mm_ptr = reinterpret_cast<char*>(Hpt::remap_cow(Pd::kern.quota, hpa_miss_match_addr, PAGE_SIZE)) + 
+                                offset;
+                        
+                        trace(0, "SR DBG launch in VMX nbInstr_to_execute %llu guest_rip %lx "
+                        "mm %lx:%lx:%lx:%lx", 
+                                nbInstr_to_execute, guest_rip, Pe::missmatch_addr, 
+                                reinterpret_cast<mword>(mm_ptr), hpa_miss_match_addr, 
+                               *reinterpret_cast<mword*>(mm_ptr));             
+                        vmx_enable_single_step(SR_DBG);
+                    }
                 }                
             } else {
                 Cow_elt::commit();
@@ -714,12 +730,13 @@ void Ec::check_memory(PE_stopby from) {
                     Cpu::enable_fast_string();                    
                 }
                 launch_state = UNLAUNCHED;
+                Logstore::commit_buffer();
                 reset_all();
                 return;
             }
         }
         default:
-            Console::panic("run_number must be 0 or 1. Current run_number is %d", run_number);
+            Console::panic("run_number must be 0 or 1. Current run_number is %d", Pe::run_number);
     }
 }
 
@@ -753,20 +770,17 @@ void Ec::reset_counter() {
     distance_instruction = first_run_instr_number = second_run_instr_number = 0;
     Counter::cow_fault = 0;
     Counter::used_cows_in_old_cow_elts = 0;
-    Pe::reset_counter();
     Lapic::program_pmi();
 }
 /**
  * Reset state data and counters
  */
 void Ec::reset_all() {
-    run_number = 0;
+    Pe::run_number = 0;
     reset_counter();
     prev_reason = 0;
     no_further_check = false;
     Pending_int::exec_pending_interrupt();
-//    Pe_state::free_recorded_pe_state();
-//    Pe_stack::free_detected_stacks();
 }
 
 /**
@@ -778,7 +792,7 @@ void Ec::start_debugging(Debug_type dt) {
     rollback();
     //                ec->reset_all();
     //                check_exit();
-    run_number = 0;
+    Pe::run_number = 0;
     nbInstr_to_execute = first_run_instr_number;
     restore_state0_data();
     launch_state = Ec::IRET;
@@ -821,4 +835,17 @@ void Ec::prepare_checking(){
             Pe::vmcsRSP_2 = Vmcs::read(Vmcs::GUEST_RSP);   
         }
     }
+}
+
+void Ec::save_regs(Exc_regs *r) {
+    last_rip = r->REG(ip);
+    last_rcx = r->REG(cx);
+    exc_counter++;
+    count_interrupt(r->vec);
+    char buff[STR_MAX_LENGTH];
+    String::print(buff, "INTERRUPT rip %lx run_num %u vec %lu ", current->regs.REG(ip), Pe::run_number, 
+        r->vec);
+//    trace(0, "%s", buff);
+    Logstore::add_entry_in_buffer(buff);
+    return;
 }

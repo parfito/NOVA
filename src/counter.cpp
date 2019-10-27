@@ -22,16 +22,18 @@
 #include "stdio.hpp"
 #include "x86.hpp"
 
-unsigned Counter::ipi[NUM_IPI];
-unsigned Counter::lvt[NUM_LVT];
+unsigned Counter::ipi[NUM_IPI][2];
+unsigned Counter::lvt[NUM_LVT][2];
 unsigned Counter::delayed_lvt[NUM_LVT];
 uint64 Counter::lag_lvt[NUM_LVT];
-unsigned Counter::gsi[NUM_GSI];
+unsigned Counter::gsi[NUM_GSI][2];
 unsigned Counter::delayed_gsi[NUM_GSI];
 uint64 Counter::lag_gsi[NUM_GSI];
-uint64 Counter::lag_msi[NUM_GSI];
-unsigned Counter::exc[NUM_EXC];
-unsigned Counter::vmi[NUM_VMI];
+unsigned Counter::msi[NUM_MSI][2];
+uint64 Counter::delayed_msi[NUM_MSI];
+uint64 Counter::lag_msi[NUM_MSI];
+unsigned Counter::exc[NUM_EXC][2];
+unsigned Counter::vmi[NUM_VMI][2];
 unsigned Counter::vtlb_gpf;
 unsigned Counter::vtlb_hpf;
 unsigned Counter::vtlb_fill;
@@ -46,13 +48,15 @@ unsigned Counter::rep_io;
 unsigned Counter::simple_io;
 unsigned Counter::io;
 unsigned Counter::pmi_ss;
-unsigned Counter::nb_pe;
+uint64 Counter::nb_pe;
 unsigned Counter::nb_vm_pe;
 unsigned Counter::pio;
 unsigned Counter::mmio;
 unsigned Counter::vmio;
 uint64 Counter::cycles_idle;
 unsigned Counter::init;
+unsigned Counter::rep_prefix[2];
+unsigned Counter::hlt_instr[2];
 
 void Counter::dump() {
     trace(0, "TIME: %16llu", rdtsc());
@@ -72,44 +76,46 @@ void Counter::dump() {
     trace(0, "VMIO: %16u", vmio);
 //    trace(0, "T_IO: %16u", io);
 //    trace(0, "PMI_SS: %14u", pmi_ss);
-    trace(0, "NB_PE: %15u", nb_pe);
+    trace(0, "NB_PE: %15llu", nb_pe);
 
     vtlb_gpf = vtlb_hpf = vtlb_fill = vtlb_flush = vtlb_cow_fault = schedule = helping = rep_io =
     io = simple_io = pmi_ss = pio = mmio = 0;
 
-//    for (unsigned i = 0; i < sizeof (ipi) / sizeof (*ipi); i++)
-//        if (ipi[i]) {
-//            trace(0, "IPI %#4x: %12u", i, ipi[i]);
-//            ipi[i] = 0;
-//        }
-//
-//    for (unsigned i = 0; i < sizeof (lvt) / sizeof (*lvt); i++)
-//        if (lvt[i]) {
-//            uint64 mean = lag_lvt[i]/(delayed_lvt[i]?delayed_lvt[i]:lvt[i]);
-//            trace(0, "LVT %#4x: %12u %12u lag %12llu %12llu", i, lvt[i], delayed_lvt[i], lag_lvt[i], mean);
-//            lvt[i] = 0;
-//            delayed_lvt[i] = 0;
-//            lag_lvt[i] = 0;
-//        }
-//
-//    for (unsigned i = 0; i < sizeof (gsi) / sizeof (*gsi); i++)
-//        if (gsi[i]) {
-//            uint64 mean = lag_gsi[i]/(delayed_gsi[i]?delayed_gsi[i]:gsi[i]);
-//            trace(0, "GSI %#4x: %12u %12u lag %12llu %12llu", i, gsi[i], delayed_gsi[i], lag_gsi[i], mean);
-//            gsi[i] = 0;
-//            delayed_gsi[i] = 0;
-//            lag_gsi[i] = 0;            
-//        }
-//
-//    for (unsigned i = 0; i < sizeof (exc) / sizeof (*exc); i++)
-//        if (exc[i]) {
-//            trace(0, "EXC %#4x: %12u", i, exc[i]);
-//            exc[i] = 0;
-//        }
-//
-//    for (unsigned i = 0; i < sizeof (vmi) / sizeof (*vmi); i++)
-//        if (vmi[i]) {
-//            trace(0, "VMI %#4x: %12u", i, vmi[i]);
-//            vmi[i] = 0;
-//        }
+    for (unsigned i = 0; i < sizeof (ipi) / sizeof (*ipi); i++)
+        if (ipi[i][0]) {
+            trace(0, "IPI %#4x: %12u %12u", i, ipi[i][0], ipi[i][1]);
+            ipi[i][0] = ipi[i][1] = 0;
+        }
+
+    for (unsigned i = 0; i < sizeof (lvt) / sizeof (*lvt); i++)
+        if (lvt[i][0]) {
+            uint64 mean = lag_lvt[i]/(delayed_lvt[i]?delayed_lvt[i]:lvt[i][0]);
+            trace(0, "LVT %#4x: %12u %12u %12u lag %12llu %12llu", i, lvt[i][0], 
+                    lvt[i][1], delayed_lvt[i], lag_lvt[i], mean);
+            lvt[i][0] = lvt[i][1] = 0;
+            delayed_lvt[i] = 0;
+            lag_lvt[i] = 0;
+        }
+
+    for (unsigned i = 0; i < sizeof (gsi) / sizeof (*gsi); i++)
+        if (gsi[i][0]) {
+            uint64 mean = lag_gsi[i]/(delayed_gsi[i]?delayed_gsi[i]:gsi[i][0]);
+            trace(0, "GSI %#4x: %12u %12u %12u lag %12llu %12llu", i, gsi[i][0], 
+                    gsi[i][1], delayed_gsi[i], lag_gsi[i], mean);
+            gsi[i][0] = gsi[i][1] = 0;
+            delayed_gsi[i] = 0;
+            lag_gsi[i] = 0;            
+        }
+
+    for (unsigned i = 0; i < sizeof (exc) / sizeof (*exc); i++)
+        if (exc[i][0]) {
+            trace(0, "EXC %#4x: %12u %12u", i, exc[i][0], exc[i][1]);
+            exc[i][0] = exc[i][1] = 0;
+        }
+
+    for (unsigned i = 0; i < sizeof (vmi) / sizeof (*vmi); i++)
+        if (vmi[i][0]) {
+            trace(0, "VMI %#4x: %12u %12u", i, vmi[i][0], vmi[i][1]);
+            vmi[i][0] = vmi[i][1] = 0;
+        }
 }

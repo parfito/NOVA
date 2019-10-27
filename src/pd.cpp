@@ -39,7 +39,7 @@ ALIGNED(32) Pd Pd::root(&Pd::root, NUM_EXC, 0x1f);
 const char *Pd::unprotected_pd_names[] = {nullptr};//Do never forget to terminate this by nullptr
 
 Pd::Pd (Pd *own) : Kobject (PD, static_cast<Space_obj *>(own)), pt_cache (sizeof (Pt), 32), mdb_cache (sizeof (Mdb), 16), sm_cache (sizeof (Sm), 32), sc_cache (sizeof (Sc), 32), ec_cache (sizeof (Ec), 32), fpu_cache (sizeof (Fpu), 16){
-    copy_string(name, const_cast<char* const> ("kern_pd"));
+    copy_string(name, "kern_pd");
     hpt = Hptp (reinterpret_cast<mword>(&PDBR));
 
     Mtrr::init();
@@ -54,9 +54,9 @@ Pd::Pd (Pd *own) : Kobject (PD, static_cast<Space_obj *>(own)), pt_cache (sizeof
     Space_pio::addreg (own->quota, own->mdb_cache, 0, 1UL << 16, 7);
 }
 
-Pd::Pd(Pd *own, mword sel, mword a, char* const s) : Kobject (PD, static_cast<Space_obj *>(own), sel, a, free, pre_free), pt_cache (sizeof (Pt), 32) , mdb_cache (sizeof (Mdb), 16), sm_cache (sizeof (Sm), 32), sc_cache (sizeof (Sc), 32), ec_cache (sizeof (Ec), 32), fpu_cache (sizeof (Fpu), 16){
+Pd::Pd(Pd *own, mword sel, mword a, char const *s) : Kobject (PD, static_cast<Space_obj *>(own), sel, a, free, pre_free), pt_cache (sizeof (Pt), 32) , mdb_cache (sizeof (Mdb), 16), sm_cache (sizeof (Sm), 32), sc_cache (sizeof (Sc), 32), ec_cache (sizeof (Ec), 32), fpu_cache (sizeof (Fpu), 16){
     if (this == &Pd::root) {
-        copy_string(name, const_cast<char* const> ("root"));
+        copy_string(name, "root");
         bool res = Quota::init.transfer_to(quota, Quota::init.limit());
         assert(res);
     } else {

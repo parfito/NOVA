@@ -24,7 +24,8 @@
 #include "gsi.hpp"
 #include "keyb.hpp"
 #include "stdio.hpp"
-#include "pe.hpp"
+#include "log.hpp"
+#include "log_store.hpp"
 
 unsigned Keyb::gsi = ~0u;
 
@@ -63,8 +64,7 @@ void Keyb::interrupt()
                 Io::out<uint8>(0xcf9, 0x6);
                 break;
             case 0x20:              // d
-                Pe::dump(true);
-                Pe_state::dump();
+                Logstore::dump("Keyb::interrupt", true);
                 break;
             case 0x2e:              // c
                 Counter::dump();

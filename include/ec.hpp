@@ -34,10 +34,8 @@
 #include "tss.hpp"
 #include "si.hpp"
 #include "cmdline.hpp"
-
 #include "stdio.hpp"
 #include "vmx.hpp"
-#include "pe_state.hpp"
 #include "utcb.hpp"
 
 class Utcb;
@@ -73,7 +71,7 @@ private:
     *host_msr_area2, *guest_msr_area2;
     static Virtual_apic_page *virtual_apic_page0, *virtual_apic_page1, *virtual_apic_page2;
 
-    char name[MAX_STR_LENGTH];
+    char name[STR_MAX_LENGTH];
     Queue<Cow_elt> vm_kernel_stacks = {}; 
     
     unsigned const evt;
@@ -304,7 +302,7 @@ public:
     static uint64 counter1, counter2, exc_counter, exc_counter1, exc_counter2, debug_compteur, 
     count_je, nbInstr_to_execute, tsc1, tsc2, nb_inst_single_step, second_run_instr_number, 
     first_run_instr_number, distance_instruction;
-    static uint8 run_number, launch_state, step_reason, debug_nb, debug_type, 
+    static uint8 launch_state, step_reason, debug_nb, debug_type, 
     replaced_int3_instruction, replaced_int3_instruction2;
     static bool hardening_started, in_rep_instruction, not_nul_cowlist, 
     no_further_check, first_run_advanced, keep_cow;
@@ -601,14 +599,6 @@ public:
     void run2_pmi_check(int);
     void run1_ext_int_check();
 
-    bool two_run_ok() {
-        return run_number == 2;
-    }
-
-    static bool one_run_ok() {
-        return run_number == 1;
-    }
-
     static bool is_idle() {
         return launch_state == UNLAUNCHED && step_reason == SR_NIL;
     }
@@ -633,6 +623,7 @@ public:
     void restore_state0();
     void restore_state1();
     void rollback();
+    void debug_rollback();
     mword get_regsRIP();
     mword get_regsRCX();
     int compare_regs(int);
@@ -682,7 +673,7 @@ public:
     //        size_t get_cow_number() { return cow_elts.size(); }
     //        bool is_cow_elts_empty() { return !cow_elts.head(); }
     //        void dump_regs();
-    static bool is_debug_requested_from_user_space() { return Console::log_on || 
+    static bool is_debug_on() { return Logstore::log_on || 
             current->pd->is_debug() || current->debug; }
     void add_vm_kernel_stacks(Cow_elt*);
     Cow_elt* vm_kernel_stacks_head();

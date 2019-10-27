@@ -28,7 +28,7 @@
 #include "hip.hpp"
 #include "cow_elt.hpp"
 #include "pe_stack.hpp"
-#include "pe.hpp"
+#include "log.hpp"
 
 //void Hpt::print_table(Quota &quota, mword o) {
 //    for (mword v = 0; v <= o; v = v + PAGE_SIZE) {
@@ -84,10 +84,32 @@ Paddr Hpt::replace(Quota &quota, mword v, mword p) {
  * retourne un pointeur sur l'adresse virtuelle correspondant à l'addresse 
  * physique phys dans notre espace d'adressage en y mappant au passage la frame contenant
  * cette adresse physique
- */
-void *Hpt::remap(Quota &quota, Paddr phys) {
-    Hptp hpt(current());
+// */
+//void *Hpt::remap(Quota &quota, Paddr phys) {
+//    Hptp hpt(current());
+//
+//    size_t size = 1UL << (bpl() + PAGE_BITS);
+//
+//    mword offset = phys & (size - 1);
+//
+//    phys &= ~offset;
+//
+//    Paddr old; mword attr;
+//    if (hpt.lookup (SPC_LOCAL_REMAP, old, attr)) {
+//        hpt.update (quota, SPC_LOCAL_REMAP,        bpl(), 0, 0, Hpt::TYPE_DN); flush (SPC_LOCAL_REMAP);
+//        hpt.update (quota, SPC_LOCAL_REMAP + size, bpl(), 0, 0, Hpt::TYPE_DN); flush (SPC_LOCAL_REMAP + size);
+//    }
+//
+//    hpt.update (quota, SPC_LOCAL_REMAP,        bpl(), phys,        HPT_W | HPT_P);
+//    hpt.update (quota, SPC_LOCAL_REMAP + size, bpl(), phys + size, HPT_W | HPT_P);
+//
+//    return reinterpret_cast<void *>(SPC_LOCAL_REMAP + offset);
+//}
 
+void *Hpt::remap (Quota &quota, Paddr phys, bool is_cow)
+{
+    Hptp hpt (current());
+    mword page = is_cow ? COW_ADDR : SPC_LOCAL_REMAP;
     size_t size = 1UL << (bpl() + PAGE_BITS);
 
     mword offset = phys & (size - 1);
@@ -95,15 +117,15 @@ void *Hpt::remap(Quota &quota, Paddr phys) {
     phys &= ~offset;
 
     Paddr old; mword attr;
-    if (hpt.lookup (SPC_LOCAL_REMAP, old, attr)) {
-        hpt.update (quota, SPC_LOCAL_REMAP,        bpl(), 0, 0, Hpt::TYPE_DN); flush (SPC_LOCAL_REMAP);
-        hpt.update (quota, SPC_LOCAL_REMAP + size, bpl(), 0, 0, Hpt::TYPE_DN); flush (SPC_LOCAL_REMAP + size);
+    if (hpt.lookup (page, old, attr)) {
+        hpt.update (quota, page,        bpl(), 0, 0, Hpt::TYPE_DN); flush (page);
+        hpt.update (quota, page + size, bpl(), 0, 0, Hpt::TYPE_DN); flush (page + size);
     }
 
-    hpt.update (quota, SPC_LOCAL_REMAP,        bpl(), phys,        HPT_W | HPT_P);
-    hpt.update (quota, SPC_LOCAL_REMAP + size, bpl(), phys + size, HPT_W | HPT_P);
+    hpt.update (quota, page,        bpl(), phys,        HPT_W | HPT_P);
+    hpt.update (quota, page + size, bpl(), phys + size, HPT_W | HPT_P);
 
-    return reinterpret_cast<void *>(SPC_LOCAL_REMAP + offset);
+    return reinterpret_cast<void *>(page + offset);
 }
 
 void *Hpt::remap_cow(Quota &quota, Paddr phys, mword addr) {
@@ -137,8 +159,7 @@ bool Hpt::is_cow_fault(Quota &quota, mword v, mword err) {
                     if (Ec::step_reason != Ec::SR_PIO)
                         Console::print("Cow error in single stepping v: %lx  phys: %lx  Pd: %s step_reason %d",
                                 v, phys, pd->get_name(), Ec::step_reason);
-                    Pe::print_current(false);
-                    Pe_state::dump();
+                    Logstore::dump("Hpt::is_cow_fault");
                     if (ec->is_io_exc()) {
                         replace_cow(quota, v, phys, a | Hpt::HPT_W);
                         return true;
@@ -211,20 +232,4 @@ void Hpt::cow_update(Paddr phys, mword attr, mword v){
     mword new_val = phys | attr;
     do o = *e; while (o.val != new_val && !e->set (o.val, new_val));
     flush(v);    
-}
-
-void Hpt::reserve_stack(Quota &quota, mword v){
-    Pe_stack::stack = 0;
-    if(Pe::in_debug_mode || Cow_elt::would_have_been_cowed_in_place_phys0(v))
-        return;
-    v &= ~PAGE_MASK; 
-    Paddr phys;
-    mword a;
-    if(lookup(v, phys, a) && (a & Hpt::HPT_COW)){
-        Hpt *e = walk(quota, v, 0);
-        assert(e);
-        Pe_stack::stack = v;
-        Cow_elt::resolve_cow_fault(nullptr, e, v, phys, a);
-//        Pe_stack::remove_cow_for_detected_stacks(nullptr, this);
-    }
 }

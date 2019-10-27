@@ -2,6 +2,7 @@
  * String Functions
  *
  * Copyright (C) 2009-2011 Udo Steinberg <udo@hypervisor.org>
+ * Copyright (C) 2019-     Parfait Tokponnon <mahoukpego.tokponnon@uclouvain.be>
  * Economic rights: Technische Universitaet Dresden (Germany)
  *
  * This file is part of the NOVA microhypervisor.
@@ -14,6 +15,8 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License version 2 for more details.
+ * The String class implementation relies heavily on 
+ * http://www.cplusplus.com/forum/general/168314/
  */
 
 #pragma once
@@ -22,6 +25,8 @@
 #include "types.hpp"
 #include "config.hpp"
 #include "util.hpp"
+#include "pd.hpp"
+#include "queue.hpp"
 
 extern "C" NONNULL
 inline void *memcpy(void *dst, const void *src, size_t n) {
@@ -52,16 +57,40 @@ inline void *memcpy(void *dst, const void *src, size_t n) {
     return dst;
 }
 
+/**
+ * 
+ * @param dest
+ * @param source
+ * @param max_length : is the buffer size of dest when it was declared
+ */
 extern "C" NONNULL
-inline void copy_string(char *target, const char *source) {
-    uint32 length = 1;
-    while (*source) {
+inline void copy_string(char *target, const char *source, size_t dest_max_length = STR_MAX_LENGTH) {
+    uint32 length = 0;
+    while (*source && length<dest_max_length) {
         *target = *source;
         source++;
         target++;
         length++;
     }
     *target = '\0';
+}
+
+/**
+ * 
+ * @param dest
+ * @param source
+ * @param max_length : is the buffer size of dest when it was declared
+ */
+extern "C" NONNULL
+inline void copy_string_nl(char *target, const char *source, size_t dest_max_length = STR_MAX_LENGTH) {
+    uint32 length = 0;
+    while (*source && length<dest_max_length) {
+        *target = *source;
+        source++;
+        target++;
+        length++;
+    }
+    *target = '\n';
 }
 
 //extern "C" NONNULL
@@ -163,25 +192,139 @@ inline int str_equal(char const *s1, char const *s2) {
     return !strcmp(s1, s2) ? 1 : 0;
 }
 
-/*
- * http://bxr.su/OpenBSD/lib/libc/string/strncat.c
- * Concatenate src on the end of dst.  At most strlen(dst)+n+1 bytes
- * are written at dst (at most n+1 bytes being appended).  Return dst.
- */
-extern "C" NONNULL 
-inline char* strcat(char *dst, const char *src, size_t n){
-    if (n != 0) {
-        char *d = dst;
-        const char *s = src;
-
-        while (*d != '\0')
-            d++;
-        do {
-            if ((*d = *s++) == '\0')
-                break;
-            d++;
-        } while (--n != 0);
-        *d = '\0';
+extern "C" NONNULL
+inline size_t strlen(const char* str){
+    const char *p = str;
+    size_t n = 0;
+    while(*p++ != '\0'){
+        n++;
     }
-    return (dst);
+    return n;
 }
+
+class Block {
+    friend class String;
+    friend class Queue<Block>;
+private:
+    static Slab_cache cache;   // To make place for the block object in memory 
+    static void *memory;       // Our heap start pointer
+    static unsigned short memory_order; // 2^memory_order *4Ko will be dedicated to this heap 
+    static size_t tour, memory_size, free_memory;  
+    static bool reallocated, initialized;
+    static Block* cursor;
+    static Queue<Block> free_blocks, used_blocks;  // circular list of available blocks
+    
+    char* start; // start address of block
+    size_t size; // size of block
+    bool is_free; // free state of block                             
+    Block *prev = nullptr; // previous block in the free_blocks list
+    Block *next = nullptr; // next block in the free_blocks list
+    
+    Block(char* st, size_t s, bool is_f) : start(st), size(s), is_free(is_f) {
+        if(is_f)
+            free_blocks.enqueue(this);
+        else
+            used_blocks.enqueue(this);
+        
+    }
+
+    /**
+     * Called when the first block is requested to allocate the heap.
+     * At this stage, free_blocks is constitued of one big block of 
+     * memory_size ==  2^memory_order *4Ko 
+     */
+    static void initialize() {
+        memory = Buddy::allocator.alloc (memory_order, Pd::kern.quota, Buddy::FILL_0);
+        cursor = new Block(reinterpret_cast<char*>(memory), memory_size, true);
+        initialized = true;
+    }
+    
+    /**
+     * To reset memory. This function is not used now
+     */
+    static void reset_string_mem() {
+        memset(memory, 0, memory_size);
+        Block *b = nullptr;
+        while(free_blocks.dequeue(b = free_blocks.head())) {
+            delete b;
+    }
+        cursor = new Block(reinterpret_cast<char*>(memory), memory_size, true); 
+    }
+
+    void free_mem(); // To free the memory backend of a block;
+    
+public:
+    ALWAYS_INLINE
+    static inline void *operator new(size_t) {return cache.alloc(Pd::kern.quota);}
+
+    ALWAYS_INLINE
+    static inline void operator delete(void *ptr) {cache.free (ptr, Pd::kern.quota);}
+    
+    Block(const Block& orig);
+        
+    Block &operator=(Block const &);
+    
+    ~Block() { 
+        if(!is_free) free_mem(); 
+    };
+
+    static Block* alloc(size_t);    
+    static Block* realloc(size_t);    
+    static Block* alloc_from_cursor(size_t);    
+    static size_t left();
+    static void print();
+    static void defragment();
+};
+
+class String {
+private:
+    static Slab_cache cache;    
+    enum
+    {
+        MODE_FLAGS      = 0,
+        MODE_WIDTH      = 1,
+        MODE_PRECS      = 2,
+        FLAG_SIGNED     = 1UL << 0,
+        FLAG_ALT_FORM   = 1UL << 1,
+        FLAG_ZERO_PAD   = 1UL << 2,
+    };
+    size_t length = 0;
+    Block* buffer = nullptr;
+    static unsigned count;
+    static void print_num (uint64, unsigned, unsigned, unsigned, void**);
+    static void print_str (char const *, unsigned, unsigned, void**);
+    static int vprintf_help(int , void **);
+        
+    FORMAT (2,0)
+    static void vprintf (void *, char const *, va_list);
+        
+public:
+    ALWAYS_INLINE
+    static inline void *operator new (size_t) {return cache.alloc(Pd::kern.quota);}
+
+    ALWAYS_INLINE
+    static inline void operator delete (void *ptr) {
+        cache.free (ptr, Pd::kern.quota);
+    }
+    
+    String(const String& orig);
+    String(){}
+        
+    String &operator=(String const &);
+
+    String(const char *);
+    ~String() { buffer->~Block(); }
+    char* get_string() {
+        if(buffer)
+            return buffer->start;
+        else {
+            return nullptr;
+        }
+    }
+    void append(const char*);
+    void replace_with(const char*);
+    void free_buffer();
+    
+    FORMAT (2,3)
+    static unsigned print (char *, char const *, ...);
+};
