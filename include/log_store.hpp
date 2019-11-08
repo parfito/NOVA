@@ -30,7 +30,7 @@ public:
     Logstore(const Logstore& orig);
     ~Logstore();
     
-    static bool log_on, logs_in_table;
+    static bool log_on, logs_in_table, has_been_dumped;
     
     static void free_logs(size_t=0, bool=false);
         
@@ -39,6 +39,8 @@ public:
     static void add_entry_in_buffer(const char*);
     
     static void add_log_in_buffer(const char*);
+    
+    static void append_log_in_buffer(const char*);
     
     static void commit_buffer();
     

@@ -164,7 +164,10 @@ bool Ec::handle_exc_gp(Exc_regs *r) {
     trace(0, "eip1: %lx(%#lx)  rax_1: %lx", regs_1.REG(ip), regs_1.REG(cx), regs_1.REG(ax));
     trace(0, "eip2: %lx(%#lx)  rax_2: %lx", regs_2.REG(ip), regs_2.REG(cx), regs_2.REG(ax));
     char buff[STR_MAX_LENGTH];
-    instruction_in_hex(*(reinterpret_cast<mword *> (eip)), buff);
+    mword *ptr = reinterpret_cast<mword*>(Hpt::remap_cow(Pd::kern.quota, 
+            Ec::current->getPd()->Space_mem::loc[Cpu::id], eip, 3, sizeof(mword)));
+    assert(ptr);
+    instruction_in_hex(*ptr, buff);
     trace(0, "GP Here: Ec: %s  Pd: %s ip %lx(%#lx) val: %s Lapic::counter %llx user %s",
             ec->get_name(), ec->getPd()->get_name(), eip, r->ARG_IP, buff, 
             Lapic::read_instCounter(), r->user() ? "true" : "false");
@@ -179,19 +182,8 @@ bool Ec::handle_exc_gp(Exc_regs *r) {
  * @param r
  */
 void Ec::handle_exc_db(Exc_regs *r) {
-    if (get_dr6() & 0x1) { // debug register 0
-        trace(0, "Debug register 0 Ec %s Pd %s eip %lx", current->get_name(), 
-                current->getPd()->get_name(), current->regs.REG(ip));
-        mword *p = reinterpret_cast<mword*> (0x18028);
-        Paddr physical_addr;
-        mword attribut;
-        size_t is_mapped = Pd::current->Space_mem::loc[Cpu::id].lookup(0x18028, physical_addr, 
-                attribut);
-        if (is_mapped)
-            trace(0, "Debug breakpoint at value phys %lx 18028:%lx", physical_addr, *p);
-        return;
-    }
     if (r->user()) {
+        assert(step_reason);
         switch (step_reason) {
             case SR_MMIO:
             case SR_PIO:
@@ -226,10 +218,6 @@ void Ec::handle_exc_db(Exc_regs *r) {
                 if (prev_rip == current->regs.REG(ip)) { // Rep Prefix
                     nb_inst_single_step--;
                     nbInstr_to_execute++; // Re-adjust the number of instruction                  
-                    // trace(0, "EIP: %lx  prev_rip: %lx MSR_PERF_FIXED_CTR0: %lld 
-                    // instr: %lx", current->regs.REG(ip), prev_rip, 
-                    // Msr::read<uint64>(Msr::MSR_PERF_FIXED_CTR0), 
-                    // *reinterpret_cast<mword *>(current->regs.REG(ip)));
                     
                     // It may happen that this is the final instruction
                     if (!current->compare_regs_mute()) {
@@ -289,10 +277,6 @@ void Ec::handle_exc_db(Exc_regs *r) {
                 if (prev_rip == current->regs.REG(ip)) { // Rep Prefix
                     nb_inst_single_step--;
                     nbInstr_to_execute++; // Re-adjust the number of instruction                  
-                    // trace(0, "EIP: %lx  prev_rip: %lx MSR_PERF_FIXED_CTR0: %lld 
-                    // instr: %lx", current->regs.REG(ip), prev_rip, 
-                    // Msr::read<uint64>(Msr::MSR_PERF_FIXED_CTR0), 
-                    // *reinterpret_cast<mword *>(current->regs.REG(ip)));
                     
                     // It may happen that this is the final instruction
                     if (!current->compare_regs_mute()) {
@@ -482,8 +466,8 @@ void Ec::handle_exc(Exc_regs *r) {
 void Ec::check_memory(PE_stopby from) {
     assert(from);
     char buff[STR_MAX_LENGTH];
-    String::print(buff, "run %u from %u", Pe::run_number, from);
-    Logstore::add_log_in_buffer(buff);    
+    String::print(buff, "run %u from %s", Pe::run_number, pe_stop[from]);
+    Logstore::append_log_in_buffer(buff);    
     // Is cow_elts empty? If yes, and if we are not in recovering from stack fault or debuging our 
     // code, no memory to check
     if (Cow_elt::is_empty() && !Cow_elt::is_kernel_vm_modified() && !Pe::in_debug_mode) {
@@ -494,8 +478,8 @@ void Ec::check_memory(PE_stopby from) {
     Ec *ec = current;
     switch (Pe::run_number) {
         case 0: // First run
-            String::print(buff, "rip1 %lx", ec->utcb? ec->regs.REG(ip) : Vmcs::read(Vmcs::GUEST_RIP));
-            Logstore::add_log_in_buffer(buff);    
+            String::print(buff, "rip1 %lx", ec->utcb ? ec->regs.REG(ip) : Vmcs::read(Vmcs::GUEST_RIP));
+            Logstore::append_log_in_buffer(buff);    
             prev_reason = from;
             ec->restore_state0();
             counter1 = Lapic::read_instCounter();
@@ -513,33 +497,18 @@ void Ec::check_memory(PE_stopby from) {
                     MAX_INSTRUCTION + counter1 - exc_counter1 : counter1 - (Lapic::perf_max_count - 
                         MAX_INSTRUCTION);
                 assert(first_run_instr_number < Lapic::perf_max_count);
-                if (current->utcb) {
-                    uint8 *ptr = reinterpret_cast<uint8 *> (end_rip);
-                    if (*ptr == 0xf3 || *ptr == 0xf2) {
-                        instruction_in_hex(*(reinterpret_cast<mword *> (end_rip)), buff);
+                if (current->utcb){
+                    uint8 *ptr = reinterpret_cast<uint8 *> (Hpt::remap_cow(Pd::kern.quota, 
+                        Pd::current->Space_mem::loc[Cpu::id], end_rip, 3));
+                    if (ptr && (*ptr == 0xf3 || *ptr == 0xf2)) {
+                        instruction_in_hex(*(reinterpret_cast<mword *> (ptr)), buff);
                         trace(0, "Rep prefix in Run1 %lx: %s rcx %lx", end_rip, buff, 
                                 end_rcx);
                         in_rep_instruction = true;
                         Cpu::disable_fast_string();
                     }
-                }/*else{
-                    Paddr inst_phys;
-                    mword inst_attr;
-                    if (!current->regs.vtlb->vtlb_lookup(end_rip, inst_phys, inst_attr)) {
-                        trace(0, "Instr_addr not found %lx", end_rip);
-                    }
-                    mword inst_off = end_rip & PAGE_MASK;
-                    uint8 *ptr = reinterpret_cast<uint8 *> (Hpt::remap_cow(Pd::kern.quota, inst_phys 
-                        & ~PAGE_MASK));  
-                    uint16 *inst_val = reinterpret_cast<uint16 *>(ptr + inst_off);
-                    if (*inst_val == 0xf3 || *inst_val == 0xf2) {
-                        char buff[MAX_STR_LENGTH];
-                        instruction_in_hex(*(reinterpret_cast<mword *> (end_rip)), buff);
-                        trace(0, "VMX Rep prefix in Run1 %lx: %s rcx %lx", end_rip, buff, 
-                            end_rcx);
-                        in_rep_instruction = true;
-                        Cpu::disable_fast_string();
-                    }
+                }/*else{ // Does VMX REP PREFIX exist?
+                    
                 }*/
                 
                 /* Currently, this only happens on vmx execution on qemu.
@@ -645,8 +614,8 @@ void Ec::check_memory(PE_stopby from) {
         {
             prepare_checking();    
             reg_diff = ec->compare_regs(from);
-            String::print(buff, "rip2 %lx", ec->utcb? ec->regs_2.REG(ip) : Vmcs::read(Vmcs::GUEST_RIP));
-            Logstore::add_log_in_buffer(buff);    
+            String::print(buff, "rip2 %lx", ec->utcb ? ec->regs_2.REG(ip) : Vmcs::read(Vmcs::GUEST_RIP));
+            Logstore::append_log_in_buffer(buff);    
             if (Cow_elt::compare() ||reg_diff) {
                 if(IN_PRODUCTION){
                     Logstore::commit_buffer();
@@ -657,13 +626,13 @@ void Ec::check_memory(PE_stopby from) {
                 } else {
                     Pd *pd = ec->getPd();
                     trace(0, "Checking failed : Ec %s  Pd: %s From: %d:%d launch_state: %d "
-                        "nb_cow_fault %u counter1 %llx counter2 %llx Nb_pe %llu nb_vm_pe %u vm_size "
-                        "%lu is_saved %d", ec->get_name(), pd->get_name(), prev_reason, from, 
-                        launch_state, Counter::cow_fault, counter1, counter2 ? counter2 : 
-                        Lapic::read_instCounter(), Counter::nb_pe, Counter::nb_vm_pe, 
-                            ec->vm_kernel_stacks_size(), Fpu::is_saved());
+                        "nb_cow_fault %u counter1 %llx counter2 %llx Nb_pe %llu is_saved %d", 
+                        ec->get_name(), pd->get_name(), prev_reason, from, launch_state, 
+                        Counter::cow_fault, counter1, counter2 ? counter2 : Lapic::read_instCounter(), 
+                        Counter::nb_pe, Fpu::is_saved());
                     Logstore::dump("check_memory 2", true);
-                    counter2 = nbInstr_to_execute ? counter2 + nbInstr_to_execute : Lapic::read_instCounter();
+                    counter2 = nbInstr_to_execute ? counter2 + nbInstr_to_execute : 
+                        Lapic::read_instCounter();
                     /**
                      * Following instructions must come in this order.
                      * At this point, may be the failing check comes from guest stack change
@@ -706,17 +675,15 @@ void Ec::check_memory(PE_stopby from) {
                         mword guest_rip = Vmcs::read(Vmcs::GUEST_RIP);
                         Paddr hpa_miss_match_addr;
                         mword attr;
-                        current->regs.vtlb->vtlb_lookup(Pe::missmatch_addr, hpa_miss_match_addr, attr);
+                        current->vtlb_lookup(Pe::missmatch_addr, hpa_miss_match_addr, attr);
                         mword offset = hpa_miss_match_addr & PAGE_MASK, mod = offset % sizeof(mword);
                         offset = (mod == 0) ? offset : offset - mod;
-                        void *mm_ptr = reinterpret_cast<char*>(Hpt::remap_cow(Pd::kern.quota, hpa_miss_match_addr, PAGE_SIZE)) + 
-                                offset;
+                        mword *mm_ptr = reinterpret_cast<mword*>(Hpt::remap_cow(Pd::kern.quota, 
+                                hpa_miss_match_addr, 3, sizeof(mword)));
                         
                         trace(0, "SR DBG launch in VMX nbInstr_to_execute %llu guest_rip %lx "
-                        "mm %lx:%lx:%lx:%lx", 
-                                nbInstr_to_execute, guest_rip, Pe::missmatch_addr, 
-                                reinterpret_cast<mword>(mm_ptr), hpa_miss_match_addr, 
-                               *reinterpret_cast<mword*>(mm_ptr));             
+                        "mm %lx:%lx:%p:%lx", nbInstr_to_execute, guest_rip, Pe::missmatch_addr, 
+                                hpa_miss_match_addr, mm_ptr, *mm_ptr);             
                         vmx_enable_single_step(SR_DBG);
                     }
                 }                
@@ -843,8 +810,13 @@ void Ec::save_regs(Exc_regs *r) {
     exc_counter++;
     count_interrupt(r->vec);
     char buff[STR_MAX_LENGTH];
+    if(r->vec == Cpu::EXC_PF) {
+        String::print(buff, "INTERRUPT rip %lx run_num %u Page Fault: addr %lx", current->regs.REG(ip), Pe::run_number, 
+            r->cr2);
+    } else {
     String::print(buff, "INTERRUPT rip %lx run_num %u vec %lu ", current->regs.REG(ip), Pe::run_number, 
         r->vec);
+    }
 //    trace(0, "%s", buff);
     Logstore::add_entry_in_buffer(buff);
     return;

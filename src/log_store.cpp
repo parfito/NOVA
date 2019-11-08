@@ -17,7 +17,7 @@
 
 Queue<Log> Queue_logs::logs;
 Log Table_logs::logs[LOG_MAX];
-bool Logstore::log_on = false, Logstore::logs_in_table = true;
+bool Logstore::log_on = false, Logstore::logs_in_table = true, Logstore::has_been_dumped = false;
 size_t Table_logs::cursor = 0, Table_logs::start = 0, Table_logs::total_logs = 0, 
         Logstore::entry_offset = static_cast<size_t>(ENTRY_OFFSET),
         Logstore::buffer_size = (1ul<<BUFFER_ORDER)*PAGE_SIZE;
@@ -69,12 +69,15 @@ void Logstore::free_logs(size_t left, bool in_percent) {
  * all logs if this is 0
  */
 void Logstore::dump(char const *funct_name, bool from_tail, size_t log_depth){
+    if(has_been_dumped)
+        return;
     Logstore::commit_buffer();
     if(logs_in_table) {
         Table_logs::dump(funct_name, from_tail, log_depth);
     } else {
         Queue_logs::dump(funct_name, from_tail, log_depth);
     }
+    has_been_dumped = true;
 }
 
 /**
@@ -286,7 +289,11 @@ void Table_logs::dump(char const *funct_name, bool from_tail, size_t log_depth){
     }
     trace(0, "%s Log %lu %s cursor %lu start %lu depth %lu", funct_name, log_number, 
             from_tail ? "from_last" : "from_first", cursor, start, log_depth);                
-   if(from_tail){
+    if(log_number == 1) {
+        logs[cursor ? cursor - 1 : log_max].print(false);
+        return;
+    }
+    if(from_tail){
         size_t i_start = cursor ? cursor - 1 : log_max,
                 i_end = (i_start - log_depth > start ? i_start - log_depth : 
                     i_start + log_max - log_depth) % log_max,
@@ -335,17 +342,46 @@ size_t Table_logs::get_number() {
  * store new log to the logs'buffer
  * @param s
  */
-void Logstore::add_log_in_buffer(const char* s){
+void Logstore::append_log_in_buffer(const char* s){
     size_t size = strlen(s); 
     if(!log_on || !size)
         return;    
     if(log_buffer_cursor + size + 1 > log_buffer + entry_offset) {
 // We cannot store in the buffer beyond its size which is ENTRY_OFFSET,    
         commit_buffer();
+        add_log_in_buffer("Append Log (Suite)");        
     }
-    copy_string(log_buffer_cursor, s);    
-    *(log_buffer_cursor + size) = ' '; // replace the final '\0' by ' '
-    log_buffer_cursor += size + 1; 
+    if(log_buffer_cursor == log_buffer)
+        copy_string(log_buffer_cursor, s); 
+    else {
+        *(log_buffer_cursor++) = ' '; // replace the final '\0' one space
+        copy_string(log_buffer_cursor, s);  
+    }
+    log_buffer_cursor += size;     
+}
+
+/**
+ * store new log to the logs'buffer
+ * @param s
+ */
+void Logstore::add_log_in_buffer(const char* s){
+    size_t size = strlen(s); 
+    if(!log_on || !size)
+        return;    
+    if(log_buffer_cursor + size + 2 > log_buffer + entry_offset) {
+// We cannot store in the buffer beyond its size which is ENTRY_OFFSET,    
+        commit_buffer();
+        add_log_in_buffer("Log (Suite)");        
+    }
+    
+    if(log_buffer_cursor == log_buffer)
+        copy_string(log_buffer_cursor, s); 
+    else {
+        *(log_buffer_cursor++) = '\n'; // replace the final '\0' by new line
+        *(log_buffer_cursor++) = '\t'; // tabulate    
+        copy_string(log_buffer_cursor, s);  
+    }
+    log_buffer_cursor += size;     
 }
 
 /**
@@ -359,9 +395,14 @@ void Logstore::add_entry_in_buffer(const char* s){
     if(entry_buffer_cursor + size + 1 > entry_buffer + (buffer_size - entry_offset)) {
 // We cannot store in the entry buffer beyond its size which is BUFFER_SIZE - ENTRY_OFFSET,    
         commit_buffer();
-        add_log_in_buffer("Suite");
+        add_log_in_buffer("Log entry (Suite)");
     }
-    copy_string_nl(entry_buffer_cursor, s, size);    
+    if(entry_buffer_cursor == entry_buffer)
+        copy_string(entry_buffer_cursor, s, size);
+    else {
+        *(entry_buffer_cursor++) = '\n'; // replace the final '\0' by new line
+        copy_string(entry_buffer_cursor, s, size);        
+    }
     entry_buffer_cursor += size; 
 }
 

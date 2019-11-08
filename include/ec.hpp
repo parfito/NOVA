@@ -307,7 +307,8 @@ public:
     static bool hardening_started, in_rep_instruction, not_nul_cowlist, 
     no_further_check, first_run_advanced, keep_cow;
     static int prev_reason, previous_ret, nb_try, reg_diff;
-    static const char* regs_name_table[];
+    static const char* reg_names[19];
+    static const char* pe_stop[27];
 
     Ec(Pd *, void (*)(), unsigned, char const *nm = "Unknown");
     Ec(Pd *, mword, Pd *, void (*)(), unsigned, unsigned, mword, mword, Pt *, 
@@ -669,7 +670,7 @@ public:
     static void debug_record_info();
     static void step_debug();
     static void prepare_checking();
-    size_t vtlb_lookup(mword, Paddr &, mword&);
+    size_t vtlb_lookup(uint64, Paddr&, mword&);
     //        size_t get_cow_number() { return cow_elts.size(); }
     //        bool is_cow_elts_empty() { return !cow_elts.head(); }
     //        void dump_regs();

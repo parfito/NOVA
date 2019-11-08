@@ -28,6 +28,7 @@
 #include "ec.hpp"
 #include "pe_stack.hpp"
 #include "log.hpp"
+#include "pe.hpp"
 
 size_t Vtlb::gwalk (Exc_regs *regs, mword gla, mword &gpa, mword &attr, mword &error)
 {
@@ -259,7 +260,7 @@ bool Vtlb::is_cow(mword virt, mword gpa, mword error){
         
         if(tlb->attr() & TLB_COW){
             mword hpa, ept_attr;
-            size_t size = Pd::current->ept.lookup (gpa, hpa, ept_attr);
+            size_t size = Pd::current->Space_mem::ept.lookup (gpa, hpa, ept_attr);
             debug_started_trace(0, "is_cow v: %lx tlb->addr: %lx attr %lx gpa %lx hpa %lx size %lx", 
                 virt, tlb->addr(), tlb->attr(), gpa, hpa, size);
 
@@ -287,25 +288,29 @@ void Vtlb::cow_update(Paddr phys, mword attr){
     val = phys | attr;
 }
 
-size_t Vtlb::vtlb_lookup(mword v, Paddr &p, mword &a) {
-    unsigned l = max();
-    unsigned b = bpl();
-    unsigned shift = --l * b + PAGE_BITS;
-    Vtlb *tlb = static_cast<Vtlb *> (this) ;
-    tlb += v >> shift & ((1UL << b) - 1);
+size_t Vtlb::lookup(uint64 v, Paddr &p, mword &a) {
+    unsigned long l = max();
+    unsigned long B = bpl();
 
-    for (;; tlb = static_cast<Vtlb *> (Buddy::phys_to_ptr(tlb->addr())) + (v >> (--l * b + PAGE_BITS) & ((1UL << b) - 1))) {
-        if (EXPECT_FALSE(!tlb->val))
+    for(Vtlb *e = static_cast<Vtlb *> (this);; e = static_cast<Vtlb *> (Buddy::phys_to_ptr(e->addr())) + (v >> (--l * B + PAGE_BITS) & ((1UL << B) - 1))) {
+//        char buff[STR_MAX_LENGTH];
+//        String::print(buff, "lookup v: %llx tlb->addr: %lx attr %lx", v, e ? e->addr() : 0, e ? e->attr() : 0);
+//        Logstore::append_log_in_buffer(buff);
+
+        if(!e)
             return 0;
 
-        if (EXPECT_FALSE(l && !tlb->super()))
+        if(EXPECT_FALSE(!e->val))
+            return 0;
+
+        if(EXPECT_FALSE(l && !e->super()))
                 continue; 
         
-        size_t s = 1UL << (l * b + tlb->order());
+        size_t s = 1UL << (l * B + e->order());
 
-        p = static_cast<Paddr> (tlb->addr() | (v & (s - 1)));
+        p = static_cast<Paddr> (e->addr() | (v & (s - 1)));
 
-        a = tlb->attr();
+        a = e->attr();
 
         return s;
     }

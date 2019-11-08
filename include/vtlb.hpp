@@ -89,7 +89,7 @@ class Vtlb : public Pte<Vtlb, uint64, 3,  9, false>
         static Reason miss (Exc_regs *, mword, mword &);
         bool is_cow(mword, mword, mword);
         void cow_update(Paddr, mword);
-        size_t vtlb_lookup(mword, Paddr&, mword&);
+        size_t lookup(uint64, Paddr&, mword&);
         static size_t gla_to_gpa(mword, mword, mword, mword, mword&);
         void reserve_stack(mword, mword, mword);
         

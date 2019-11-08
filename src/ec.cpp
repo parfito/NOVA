@@ -55,8 +55,14 @@ uint8 Ec::launch_state = 0, Ec::step_reason = 0, Ec::debug_nb = 0,
         Ec::debug_type = 0, Ec::replaced_int3_instruction, Ec::replaced_int3_instruction2;
 uint64 Ec::tsc1 = 0, Ec::tsc2 = 0;
 int Ec::prev_reason = 0, Ec::previous_ret = 0, Ec::nb_try = 0, Ec::reg_diff = 0;
-const char* Ec::regs_name_table[19] = {"N/A", "RAX", "RDX", "RCX", "RBX", "RBP", "RSI", "RDI", "R8", 
+const char* Ec::reg_names[19] = {"N/A", "RAX", "RDX", "RCX", "RBX", "RBP", "RSI", "RDI", "R8", 
 "R9", "R10", "R11", "R12", "R13", "R14", "R15", "RIP", "RFLAG", "RSP"};
+const char* Ec::pe_stop[27] = {"NUL", "PMI", "PAGE_FAULT", "SYS_ENTER", "VMX_EXIT", 
+"INVALID_TSS", "GP_FAULT", "DEV_NOT_AVAIL", "SEND_MSG", "MMIO", "SINGLE_STEP", 
+"VMX_SEND_MSG", "VMX_EXT_INT", "GSI", "MSI", "LVT", "ALIGNEMENT_CHECK", 
+"MACHINE_CHECK", "VMX_INVLPG", "VMX_PAGE_FAULT", "VMX_EPT_VIOL", "VMX_CR", "VMX_EXC",
+"VMX_RDTSC", "VMX_RDTSCP", "VMX_IO", "COW_IN_STACK"};
+
 Ec *Ec::current, *Ec::fpowner;
 // Constructors
 
@@ -598,7 +604,7 @@ void Ec::die(char const *reason, Exc_regs *r) {
         trace(0, "Killed EC:%s SC:%p V:%#lx CR0:%#lx CR3:%#lx CR4:%#lx (%s) Pd: %s Ec: %s",
             current->name, Sc::current, r->vec, r->cr0_shadow, r->cr3_shadow, r->cr4_shadow, reason, 
                 Pd::current->get_name(), Ec::current->get_name());
-
+    Logstore::dump("die");
     Ec *ec = current->rcap;
 
     if (ec)
@@ -635,13 +641,15 @@ void Ec::idl_handler() {
 }
 
 bool Ec::is_temporal_exc() {
-    mword v = regs.REG(ip);
-    uint16 *ptr = reinterpret_cast<uint16 *> (v);
-    if (*ptr == 0x310f) {// rdtsc 0f 31
+    uint16 *ptr = reinterpret_cast<uint16*>(Hpt::remap_cow(Pd::kern.quota, 
+            Ec::current->getPd()->Space_mem::loc[Cpu::id], regs.REG(ip), 3, 2));
+    if(!ptr)
+        return false;
+    if (*ptr == 0x310f) // rdtsc 0f 31
         return true;
-    } else if (*ptr == 0xf901) {// rdtscp 0F 01 F9
+    else if (*ptr == 0xf901) // rdtscp 0F 01 F9
         return true;
-    } else
+    else
         return false;
 }
 
@@ -653,7 +661,10 @@ bool Ec::is_io_exc(mword eip) {
      * 6df3 e4f3 ...
      */
     mword v = eip ? eip : regs.REG(ip);
-    uint8 *ptr = reinterpret_cast<uint8 *> (v);
+    uint8 *ptr = reinterpret_cast<uint8*>(Hpt::remap_cow(Pd::kern.quota,
+            Ec::current->getPd()->Space_mem::loc[Cpu::id], v, 3));
+    if(!ptr)
+        return false;
     switch (*ptr) {
         case 0xe4: // IN AL, imm8
         case 0xe5: // IN AX, imm8 || IN EAX, imm8
@@ -704,8 +715,9 @@ void Ec::enable_step_debug(Step_reason reason, mword fault_addr, Paddr fault_phy
         case SR_PMI:
         case SR_EQU:
         {
-            uint8 *ptr = reinterpret_cast<uint8 *> (end_rip);
-            if (*ptr == 0xf3 || *ptr == 0xf2) {
+            uint8 *ptr = reinterpret_cast<uint8 *> (Hpt::remap_cow(Pd::kern.quota, 
+                    Ec::current->getPd()->Space_mem::loc[Cpu::id], end_rip, 3));
+            if (ptr && (*ptr == 0xf3 || *ptr == 0xf2)) {
                 Console::print("Rep prefix detected: Step reason %d addr %lx rcx %lx", reason, 
                         fault_addr, current->regs.REG(cx));
                 in_rep_instruction = true;
@@ -1147,7 +1159,9 @@ void Ec::backtrace(int depth) {
     Console::print("Stack backtrace:");
     int tour = 0;
     while (ebp && (tour < depth)) {//if ebp is 0, we are back at the first caller
-        ebpp = reinterpret_cast<mword*> (ebp);
+        ebpp = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, 
+                Ec::current->getPd()->Space_mem::loc[Cpu::id], ebp, 3, sizeof(mword)));
+        assert(ebpp);
         eip = *(ebpp + 1);
         char args[60];
         int argno = 0;
@@ -1156,7 +1170,6 @@ void Ec::backtrace(int depth) {
         }
 
         Console::print("ebp %lx eip %lx args %s (ebp) %lx", ebp, eip, args, *ebpp);
-
         ebp = *ebpp;
         tour++;
     }
@@ -1300,10 +1313,12 @@ void Ec::count_interrupt(mword vector){
             Counter::ipi[vector - VEC_IPI][Pe::run_number]++;
             break;
     }
-    Paddr p;
-    mword a;
-    if (Ec::current->getPd()->Space_mem::loc[Cpu::id].lookup(last_rip, p, a)){
-        uint8 *ptr = reinterpret_cast<uint8 *> (last_rip);
+    uint8 *ptr = reinterpret_cast<uint8 *> (Hpt::remap_cow(Pd::kern.quota, 
+            Ec::current->getPd()->Space_mem::loc[Cpu::id], last_rip-1, 3, 2));
+    if(!ptr)
+        return;
+    ptr += 1;
+// last_rip-1 : + 1 
         if (*ptr == 0xf3 || *ptr == 0xf2) { // rep prefix instruction
             Counter::rep_prefix[Pe::run_number]++;
     //            exc_counter--;
@@ -1311,13 +1326,9 @@ void Ec::count_interrupt(mword vector){
         if(*ptr == 0xf4) { // halt instruction
             Counter::hlt_instr[Pe::run_number]++;
     //            exc_counter--;
-        } else {
-            if (Ec::current->getPd()->Space_mem::loc[Cpu::id].lookup(last_rip - 1, p, a) &&
-                    *(ptr - 1) == 0xf4) {
-                Counter::hlt_instr[Pe::run_number]++;
-    //                exc_counter--;
-            }
-        }
+    } else if(*(ptr - 1) == 0xf4) {
+        Counter::hlt_instr[Pe::run_number]++;
+//                exc_counter--;
     }
 }
 /**
@@ -1365,8 +1376,8 @@ void Ec::step_debug(){
     current->regs.REG(fl) |= Cpu::EFL_TF;
 }
 
-size_t Ec::vtlb_lookup(mword v, Paddr &p, mword &a){
-    return regs.vtlb->vtlb_lookup(v, p, a);    
+size_t Ec::vtlb_lookup(uint64 v, Paddr &p, mword &a){
+    return regs.vtlb->lookup(v, p, a);    
 }
 
 void Ec::add_vm_kernel_stacks(Cow_elt* c){

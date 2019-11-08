@@ -23,6 +23,8 @@
 #pragma once
 
 #include "qpd.hpp"
+#include "hpt.hpp"
+#include "pd.hpp"
 
 class Sys_call : public Sys_regs
 {

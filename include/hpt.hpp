@@ -133,8 +133,10 @@ public:
     static bool dest_loc(Paddr, mword v, unsigned l) { return v >= USER_ADDR && l >= 3;}
     static bool iter_loc_lev(unsigned l, mword) { return l > 3; }
 
-    static void *remap_cow(Quota &quota, Paddr, mword addr = 0);
+    static void *remap_cow(Quota &quota, Hpt, mword, uint8 = 0, uint8 = 1);
     
+    static void *remap_cow(Quota &quota, Paddr, uint8 = 0, uint8 = 1);
+
     bool is_cow_fault(Quota &quota, mword, mword);
     
     void print_table(Quota &quota, mword); 

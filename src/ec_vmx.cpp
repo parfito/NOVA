@@ -207,15 +207,15 @@ void Ec::handle_vmx()
     Counter::vmi[reason][Pe::run_number]++;
 
     char buff[STR_MAX_LENGTH];
-    String::print(buff, "VMEXIT guest rip %lx rsp %lx flags %lx reason %lx run_num %u ", 
+    String::print(buff, "VMEXIT guest rip %lx rsp %lx flags %lx reason %s run_num %u ", 
             Vmcs::read(Vmcs::GUEST_RIP), Vmcs::read(Vmcs::GUEST_RSP), Vmcs::read(Vmcs::GUEST_RFLAGS), 
-            reason, Pe::run_number);
+            Vmcs::reason[reason], Pe::run_number);
     Logstore::add_entry_in_buffer(buff);
 
     if(reason == Vmcs::VMX_EXTINT){
         unsigned vector = Vmcs::read (Vmcs::EXI_INTR_INFO) & 0xff;
-        debug_started_trace(TRACE_VMX, "VMExit reason %ld:%d Guest rip %lx run %d counter %llx:%llx"
-                " rsp %lx", reason, vector, Vmcs::read (Vmcs::GUEST_RIP), Pe::run_number, 
+        debug_started_trace(TRACE_VMX, "VMExit reason %s:%d Guest rip %lx run %d counter %llx:%llx"
+                " rsp %lx", Vmcs::reason[reason], vector, Vmcs::read (Vmcs::GUEST_RIP), Pe::run_number, 
                 Lapic::read_instCounter(), Lapic::counter_read_value, Vmcs::read (Vmcs::GUEST_RSP));
     } 
     else if (reason == Vmcs::VMX_EXC_NMI){
@@ -223,19 +223,19 @@ void Ec::handle_vmx()
         if((intr_info & 0x7ff) == 0x30e) {       // #PF
             mword err = Vmcs::read (Vmcs::EXI_INTR_ERROR);
             mword cr2 = Vmcs::read (Vmcs::EXI_QUALIFICATION);
-            debug_started_trace(TRACE_VMX, "VMExit reason %ld:%lx:%lx Guest rip %lx run %d counter "
-                    "%llx rsp %lx", reason, cr2, err, Vmcs::read (Vmcs::GUEST_RIP), Pe::run_number, 
+            debug_started_trace(TRACE_VMX, "VMExit reason %s:%lx:%lx Guest rip %lx run %d counter "
+                    "%llx rsp %lx", Vmcs::reason[reason], cr2, err, Vmcs::read (Vmcs::GUEST_RIP), Pe::run_number, 
                     Lapic::read_instCounter(), Vmcs::read (Vmcs::GUEST_RSP));    
         } 
     } else if (reason == Vmcs::VMX_MTF) {
         
     } else
-        debug_started_trace(TRACE_VMX, "VMExit reason %ld Guest rip %lx run %d counter %llx:%llx "
-                "rsp %lx", reason, Vmcs::read (Vmcs::GUEST_RIP), Pe::run_number, 
+        debug_started_trace(TRACE_VMX, "VMExit reason %s Guest rip %lx run %d counter %llx:%llx "
+                "rsp %lx", Vmcs::reason[reason], Vmcs::read (Vmcs::GUEST_RIP), Pe::run_number, 
                 Lapic::read_instCounter(), Lapic::counter_read_value, Vmcs::read (Vmcs::GUEST_RSP));
     
 //    if(reason == Vmcs::VMX_INTR_WINDOW){
-//        trace(0, "VMExit reason %ld Guest rip %lx counter %llx run %d", reason, 
+//        trace(0, "VMExit reason %s Guest rip %lx counter %llx run %d", Vmcs::reason[reason], 
 //                Vmcs::read (Vmcs::GUEST_RIP), Lapic::read_instCounter(), Pe::run_number);
 //    }
 
@@ -427,18 +427,18 @@ void Ec::vmx_enable_single_step(Step_reason reason) {
     if(reason == SR_DBG){
         Paddr hpa_guest_rip;
         mword guest_rip = Vmcs::read(Vmcs::GUEST_RIP), attr;
-        current->regs.vtlb->vtlb_lookup(guest_rip, hpa_guest_rip, attr);
-        void *rip_ptr = reinterpret_cast<char*>(Hpt::remap_cow(Pd::kern.quota, hpa_guest_rip)) + 
+        current->vtlb_lookup(guest_rip, hpa_guest_rip, attr);
+        void *rip_ptr = reinterpret_cast<char*>(Hpt::remap_cow(Pd::kern.quota, hpa_guest_rip, 3)) + 
             (hpa_guest_rip & PAGE_MASK);
         char instr_buff[STR_MIN_LENGTH];
         instruction_in_hex(*reinterpret_cast<mword*>(rip_ptr), instr_buff);
         
         Paddr hpa_miss_match_addr;
-        current->regs.vtlb->vtlb_lookup(Pe::missmatch_addr, hpa_miss_match_addr, attr);
+        current->vtlb_lookup(Pe::missmatch_addr, hpa_miss_match_addr, attr);
         mword offset = hpa_miss_match_addr & PAGE_MASK, mod = offset % sizeof(mword);
         offset = (mod == 0) ? offset : offset - mod;
         void *mm_ptr = reinterpret_cast<char*>(Hpt::remap_cow(Pd::kern.quota, hpa_miss_match_addr, 
-                PAGE_SIZE)) + offset;
+                4)) + offset;
         Console::print("nb_inst_single_step %llu rip %lx hpa_guest_rip %lx %s hpa_miss %lx:%lx:%lx", 
                 nb_inst_single_step, guest_rip, hpa_guest_rip, instr_buff, 
                 Pe::missmatch_addr, hpa_miss_match_addr, *reinterpret_cast<mword*>(mm_ptr));
@@ -457,7 +457,7 @@ void Ec::vmx_emulate_rdtsc(bool is_rdtscp) {
         uint64 entry = 0;
         Paddr physic;
         mword attrib;
-        if (!current->regs.vtlb->vtlb_lookup(inst_addr, physic, attrib)) {
+        if (!current->vtlb_lookup(inst_addr, physic, attrib)) {
             Console::print("Instr_addr not found %lx", inst_addr);
         }
         uint8 *ptr = reinterpret_cast<uint8 *> (Hpt::remap_cow(Pd::current->quota, entry & ~PAGE_MASK));  

@@ -36,7 +36,7 @@ INIT_PRIORITY(PRIO_BUDDY)
 ALIGNED(32) Pd Pd::kern(&Pd::kern);
 ALIGNED(32) Pd Pd::root(&Pd::root, NUM_EXC, 0x1f);
 
-const char *Pd::unprotected_pd_names[] = {nullptr};//Do never forget to terminate this by nullptr
+const char *Pd::unprotected_pd_names[1] = {"nullptr"};//Never forget to terminate this by nullptr
 
 Pd::Pd (Pd *own) : Kobject (PD, static_cast<Space_obj *>(own)), pt_cache (sizeof (Pt), 32), mdb_cache (sizeof (Mdb), 16), sm_cache (sizeof (Sm), 32), sc_cache (sizeof (Sc), 32), ec_cache (sizeof (Ec), 32), fpu_cache (sizeof (Fpu), 16){
     copy_string(name, "kern_pd");
@@ -430,7 +430,7 @@ void Pd::assign_rid(uint16 const r)
 
 void Pd::set_to_be_cowed(){   
     int i = 0; 
-    while(unprotected_pd_names[i] != nullptr){
+    while(!str_equal(unprotected_pd_names[i], "nullptr")){
         if(str_equal(name, unprotected_pd_names[i])){
             to_be_cowed = false;
             return;

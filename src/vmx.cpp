@@ -49,6 +49,15 @@ Vmcs *              Vmcs::vmcs0 = reinterpret_cast<Vmcs*> (Buddy::allocator.allo
      *              Vmcs::vmcs1 = reinterpret_cast<Vmcs*> (Buddy::allocator.alloc (0, Pd::kern.quota, Buddy::FILL_0)), 
      *              Vmcs::vmcs2 = reinterpret_cast<Vmcs*> (Buddy::allocator.alloc (0, Pd::kern.quota, Buddy::FILL_0)); 
 
+const char* Vmcs::reason[57] = {"EXC_NMI", "EXTINT", "TRIPLE_FAULT", "INIT",
+"SIPI", "SMI_IO", "SMI_OTHER", "INTR_WINDOW", "NMI_WINDOW", "TASK_SWITCH", 
+"CPUID", "GETSEC", "HLT", "INVD", "INVLPG", "RDPMC", "RDTSC", "RSM", "VMCALL", 
+"VMCLEAR", "VMLAUNCH", "VMPTRLD", "VMPTRST", "VMREAD", "VMRESUME", "VMWRITE",
+"VMXOFF", "VMXON", "CR", "DR", "IO", "RDMSR", "WRMSR", "FAIL_STATE", "FAIL_MSR", 
+"MWAIT", "MTF", "MONITOR", "PAUSE", "FAIL_MCHECK", "TPR_THRESHOLD", "APIC_ACCESS", 
+"GDTR_IDTR", "LDTR_TR", "EPT_VIOLATION", "EPT_MISCONFIG", "INVEPT", "RDTSCP",
+"PREEMPT", "INVVPID", "WBINVD", "XSETBV"};
+        
 Vmcs::Vmcs (mword esp, mword bmp, mword cr3, uint64 eptp) : rev (basic.revision)
 {
     make_current();

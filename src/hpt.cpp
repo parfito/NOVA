@@ -29,6 +29,7 @@
 #include "cow_elt.hpp"
 #include "pe_stack.hpp"
 #include "log.hpp"
+#include "pe.hpp"
 
 //void Hpt::print_table(Quota &quota, mword o) {
 //    for (mword v = 0; v <= o; v = v + PAGE_SIZE) {
@@ -128,12 +129,23 @@ void *Hpt::remap (Quota &quota, Paddr phys, bool is_cow)
     return reinterpret_cast<void *>(page + offset);
 }
 
-void *Hpt::remap_cow(Quota &quota, Paddr phys, mword addr) {
+void *Hpt::remap_cow(Quota &quota, Hpt proc_hpt, mword addr, uint8 offset, uint8 span) {
+    Paddr phys;
+    mword a;
+    if(!proc_hpt.lookup(addr, phys, a))
+        return nullptr;
+    return remap_cow(quota, phys, offset, span);
+}
+
+void *Hpt::remap_cow(Quota &quota, Paddr phys, uint8 offset, uint8 span) {
+    assert(span < PAGE_SIZE);
+    mword new_addr = COW_ADDR + PAGE_SIZE * offset, addr_offset = phys & PAGE_MASK;
     Hptp hpt(current());
-    addr += COW_ADDR;
-    hpt.replace_cow(quota, addr, phys, Hpt::HPT_W | Hpt::HPT_P);
-//    Hpt::cow_flush(addr);
-    return reinterpret_cast<void *> (addr);
+    hpt.replace_cow(quota, new_addr, phys, Hpt::HPT_W | Hpt::HPT_P);
+    if(addr_offset > static_cast<mword>(PAGE_SIZE - span))
+        hpt.replace_cow(quota, new_addr + PAGE_SIZE, phys + PAGE_SIZE, 
+                Hpt::HPT_W | Hpt::HPT_P);
+    return reinterpret_cast<void *> (new_addr + addr_offset);
 }
 
 bool Hpt::is_cow_fault(Quota &quota, mword v, mword err) {
@@ -189,7 +201,7 @@ Paddr Hpt::replace_cow(Quota &quota, mword v, Paddr p, mword a) {
     a &= ~HPT_NX;
     assert((a & ~PAGE_MASK) == 0);
     Hpt o, *e = walk(quota, v, 0);
-    if(!e) return 0;
+    assert(e);
     p |= a;
     do o = *e; while (o.val != p && !e->set(o.val, p));
 

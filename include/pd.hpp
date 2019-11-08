@@ -35,7 +35,7 @@ private:
     char name[STR_MAX_LENGTH];
     bool to_be_cowed = false, debug = false;
     static Slab_cache cache;
-    static const char *unprotected_pd_names[];
+    static const char *unprotected_pd_names[1];
     Queue<Cow_elt> cow_elts = {};
 
     WARN_UNUSED_RESULT
