@@ -211,7 +211,9 @@ void Ec::handle_exc_db(Exc_regs *r) {
                 ++Counter::pmi_ss;
                 nb_inst_single_step++;
                 if(nb_inst_single_step > 300){
-                    Console::panic("Lost in Single stepping");
+                    Console::panic("SR_PMI Lost in Single stepping nb_inst_single_step %llu "
+                    "nbInstr_to_execute %llu first_run_instr_number %llu second_run_instr_number %llu", nb_inst_single_step, nbInstr_to_execute, 
+                            first_run_instr_number, second_run_instr_number);
                 }
                 if (nbInstr_to_execute > 0)
                     nbInstr_to_execute--;
@@ -269,7 +271,9 @@ void Ec::handle_exc_db(Exc_regs *r) {
             case SR_EQU:
                 ++Counter::pmi_ss;
                 if(nb_inst_single_step > 300) {
-                    Console::panic("Lost in Single stepping");
+                    Console::panic("SR_EQU Lost in Single stepping nb_inst_single_step %llu "
+                    "nbInstr_to_execute %llu first_run_instr_number %llu second_run_instr_number %llu", nb_inst_single_step, nbInstr_to_execute, 
+                            first_run_instr_number, second_run_instr_number);
                 }
                 nb_inst_single_step++;
                 if (nbInstr_to_execute > 0)
