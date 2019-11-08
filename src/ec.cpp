@@ -49,7 +49,8 @@ bool Ec::hardening_started = false, Ec::in_rep_instruction = false, Ec::not_nul_
 uint64 Ec::exc_counter = 0, Ec::exc_counter1 = 0, Ec::exc_counter2 = 0, Ec::counter1 = 0, 
         Ec::counter2 = 0, Ec::debug_compteur = 0, Ec::count_je = 0, Ec::nbInstr_to_execute = 0,
         Ec::nb_inst_single_step = 0, Ec::second_run_instr_number = 0, 
-        Ec::first_run_instr_number = 0, Ec::distance_instruction = 0;
+        Ec::first_run_instr_number = 0, Ec::distance_instruction = 0,
+        Ec::max_instruction = 0;
        
 uint8 Ec::launch_state = 0, Ec::step_reason = 0, Ec::debug_nb = 0, 
         Ec::debug_type = 0, Ec::replaced_int3_instruction, Ec::replaced_int3_instruction2;

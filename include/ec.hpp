@@ -301,7 +301,7 @@ public:
     tscp_rcx1, tscp_rcx2;
     static uint64 counter1, counter2, exc_counter, exc_counter1, exc_counter2, debug_compteur, 
     count_je, nbInstr_to_execute, tsc1, tsc2, nb_inst_single_step, second_run_instr_number, 
-    first_run_instr_number, distance_instruction;
+    first_run_instr_number, distance_instruction, max_instruction;
     static uint8 launch_state, step_reason, debug_nb, debug_type, 
     replaced_int3_instruction, replaced_int3_instruction2;
     static bool hardening_started, in_rep_instruction, not_nul_cowlist, 

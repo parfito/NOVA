@@ -518,12 +518,16 @@ void Ec::check_memory(PE_stopby from) {
                 /* Currently, this only happens on vmx execution on qemu.
                  * must be dug deeper
                  */
-                if(first_run_instr_number > (MAX_INSTRUCTION + 300)){
-                    Console::panic("PMI not served early counter1 %llx \nMust be dug deeper", 
+                if((first_run_instr_number > MAX_INSTRUCTION + 300) || 
+                        (first_run_instr_number < MAX_INSTRUCTION - 300)){
+                    trace(0, "PMI served too early or too late counter2 %llx \nMust be dug deeper", 
                             counter1);
-                    Lapic::program_pmi2(first_run_instr_number);
-                } 
-                Lapic::program_pmi();
+                    max_instruction = first_run_instr_number;
+                    Lapic::program_pmi(first_run_instr_number);                                        
+                } else {
+                    max_instruction = MAX_INSTRUCTION;
+                    Lapic::program_pmi();                    
+                }
             } else {
                 Lapic::cancel_pmi();
             }
@@ -549,7 +553,7 @@ void Ec::check_memory(PE_stopby from) {
                     
                     // If simulatneous PMI and exception, Lapic::read_instCounter() must be 
                     // 0xFFFFFFF00001
-                    if(Lapic::read_instCounter() == Lapic::perf_max_count - MAX_INSTRUCTION + 1)
+                    if(Lapic::read_instCounter() == Lapic::perf_max_count - max_instruction + 1)
                         check_exit();
                     
                     Logstore::dump("check_memory 1", true);
@@ -565,11 +569,12 @@ void Ec::check_memory(PE_stopby from) {
                  * NEVER be > Lapic::start_counter.
                  */
                 second_run_instr_number = counter2 < Lapic::start_counter ? 
-                    MAX_INSTRUCTION + counter2 - exc_counter2 : counter2 - (Lapic::perf_max_count - 
-                        MAX_INSTRUCTION);
+                    max_instruction + counter2 - exc_counter2 : 
+                    counter2 - (Lapic::perf_max_count - max_instruction);
                 assert(second_run_instr_number < Lapic::perf_max_count);
-                if(second_run_instr_number > (MAX_INSTRUCTION + 300)){
-                    Console::panic("PMI not served early counter2 %llx \nMust be dug deeper", 
+                if((second_run_instr_number > max_instruction + 300) || 
+                        (second_run_instr_number < max_instruction - 300)){
+                    trace(0, "PMI served too early or too late counter2 %llx \nMust be dug deeper", 
                             counter2);
                 } 
                 distance_instruction = distance(first_run_instr_number, second_run_instr_number);
