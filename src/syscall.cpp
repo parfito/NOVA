@@ -363,7 +363,7 @@ void Ec::sys_create_pd()
         sys_finish<Sys_regs::QUO_OOM>();
     }
 
-    Pd *pd = new (Pd::current->quota) Pd (Pd::current, r->sel(), cap.prm(), r->name() ? r->name() : "Unknown");
+    Pd *pd = new (Pd::current->quota) Pd (Pd::current, r->sel(), cap.prm(), r->name());
 
     if (!pd->quota.set_limit(r->limit_lower(), r->limit_upper(), pd_src->quota)) {
         trace (0, "Insufficient kernel memory for creating new PD");
@@ -422,7 +422,7 @@ void Ec::sys_create_ec()
     Capability cap_pt = Space_obj::lookup (r->sel() + 1);
     Pt *pt = cap_pt.obj()->type() == Kobject::PT ? static_cast<Pt *>(cap_pt.obj()) : nullptr;
 
-    Ec *ec = new (*pd) Ec (Pd::current, r->sel(), pd, r->flags() & 1 ? static_cast<void (*)()>(send_msg<ret_user_iret>) : nullptr, r->cpu(), r->evt(), r->utcb(), r->esp(), pt, r->name() ? r->name() : "Unknown");
+    Ec *ec = new (*pd) Ec (Pd::current, r->sel(), pd, r->flags() & 1 ? static_cast<void (*)()>(send_msg<ret_user_iret>) : nullptr, r->cpu(), r->evt(), r->utcb(), r->esp(), pt, r->name());
 
     if (!Space_obj::insert_root (pd->quota, ec)) {
         trace (TRACE_ERROR, "%s: Non-NULL CAP (%#lx)", __func__, r->sel());
