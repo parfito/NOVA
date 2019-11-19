@@ -64,7 +64,7 @@ void Keyb::interrupt()
                 Io::out<uint8>(0xcf9, 0x6);
                 break;
             case 0x20:              // d
-                Logstore::dump("Keyb::interrupt", true);
+                Logstore::dump("Keyb::interrupt", true, 5, true);
                 break;
             case 0x2e:              // c
                 Counter::dump();

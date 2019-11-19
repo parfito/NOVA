@@ -36,7 +36,8 @@ INIT_PRIORITY(PRIO_BUDDY)
 ALIGNED(32) Pd Pd::kern(&Pd::kern);
 ALIGNED(32) Pd Pd::root(&Pd::root, NUM_EXC, 0x1f);
 
-const char *Pd::unprotected_pd_names[1] = {"nullptr"};//Never forget to terminate this by nullptr
+const char *Pd::unprotected_pd_names[UNPROTECTED_PD_NUM] = {"init", "init -> platform_drv", "init -> nic_drv", 
+"init -> fb_drv", "init -> platform_drv -> fb_drv -> ", "init -> platform_drv -> nic_drv -> "};//Never forget to terminate this by nullptr
 
 Pd::Pd (Pd *own) : Kobject (PD, static_cast<Space_obj *>(own)), pt_cache (sizeof (Pt), 32), mdb_cache (sizeof (Mdb), 16), sm_cache (sizeof (Sm), 32), sc_cache (sizeof (Sc), 32), ec_cache (sizeof (Ec), 32), fpu_cache (sizeof (Fpu), 16){
     copy_string(name, "kern_pd");
@@ -63,6 +64,7 @@ Pd::Pd(Pd *own, mword sel, mword a, char const *s) : Kobject (PD, static_cast<Sp
         copy_string(name, s);
     }
     set_to_be_cowed();
+    trace(0, "PD Creation %s %s", name, to_be_cowed ? "will be cowed" : "won't be cowed");
 }
 
 template <typename S>
@@ -429,13 +431,11 @@ void Pd::assign_rid(uint16 const r)
 
 
 void Pd::set_to_be_cowed(){   
-    int i = 0; 
-    while(!str_equal(unprotected_pd_names[i], "nullptr")){
+    for(unsigned i = 0; i < UNPROTECTED_PD_NUM; i++){
         if(str_equal(name, unprotected_pd_names[i])){
             to_be_cowed = false;
             return;
         }
-        i++;
     }
     to_be_cowed = true; 
 }

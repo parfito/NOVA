@@ -95,9 +95,12 @@ public:
     static void commit_vm_stack();
     static void commit_vm_stack_ce(Cow_elt*, uint32, void*);
     static void restore_state1();
+    static void restore_state2();
     static void restore_vm_stack_state1();
+    static void restore_vm_stack_state2();
     static void rollback();
     static void debug_rollback();
+    static void debug_rollback_vm_stack();
     static void rollback_vm_stack();
     static void place_phys0();
     static bool is_kernel_vm_modified();

@@ -43,7 +43,7 @@
 
 #define DEBUG           1
 #define MAX_INSTRUCTION 0x100000
-#define STR_MAX_LENGTH  80
+#define STR_MAX_LENGTH  120
 #define STR_MIN_LENGTH  20
 
 #define DEBUG_CMD_SHIFT          0
@@ -66,9 +66,9 @@
 #define DEBUG_STATE_MASK         ((1 << DEBUG_STATE_BITS) - 1)
 
 #define IN_PRODUCTION            0
-#define LOG_MAX                 10000
+#define LOG_MAX                 30000
 #define LOG_PERCENT_TO_BE_LEFT  10
-#define LOG_ENTRY_MAX           20*LOG_MAX
+#define LOG_ENTRY_MAX           1*LOG_MAX
 
 #define ENTRY_OFFSET    PAGE_SIZE
 #define BUFFER_ORDER    2

@@ -113,6 +113,7 @@ Vtlb::Reason Vtlb::miss (Exc_regs *regs, mword virt, mword &error)
 {
     mword phys, attr = TLB_U | TLB_W | TLB_P;
     Paddr host;
+   char buff[STR_MAX_LENGTH];
 
     error &= ERR_U | ERR_W;
 
@@ -120,6 +121,9 @@ Vtlb::Reason Vtlb::miss (Exc_regs *regs, mword virt, mword &error)
 
     if (EXPECT_FALSE (!gsize)) {
         Counter::vtlb_gpf++;
+        String::print(buff, "VTLB GLA_GPA Pe %llu virt %lx gpa %lx attr %lx err %lx", 
+            Counter::nb_pe, virt, phys, attr, error);
+        Logstore::add_entry_in_buffer(buff);
         return GLA_GPA;
     }
 
@@ -129,6 +133,9 @@ Vtlb::Reason Vtlb::miss (Exc_regs *regs, mword virt, mword &error)
         regs->nst_fault = phys;
         regs->nst_error = error;
         Counter::vtlb_hpf++;
+        String::print(buff, "VTLB GPA_HPA Pe %llu virt %lx gpa %lx hpa %lx attr %lx err %lx", 
+            Counter::nb_pe, virt, phys, host, attr, error);
+        Logstore::add_entry_in_buffer(buff);
         return GPA_HPA;
     }
 
@@ -187,6 +194,9 @@ Vtlb::Reason Vtlb::miss (Exc_regs *regs, mword virt, mword &error)
 //        size_e = Pd::current->ept.lookup (phys, hpa, ept_attr);
 //        trace(0, "COW_FAULT v: %lx tlb->addr: %lx attr %lx r_phys %lx r_attr %lx size_h %lx gpa %lx hpa %lx ept_attr %lx CR3:%#010lx size_e %lx ", 
 //                virt, tlb->addr(), tlb->attr(), r_phys, r_attr, size_h, phys, hpa, ept_attr, size_e, regs->cr3_shadow);
+        String::print(buff, "VTLB SUCCESS Pe %llu virt %lx gpa %lx hpa %lx tlb->val %llx attr %lx err %lx", 
+            Counter::nb_pe, virt, phys, host, tlb->val, attr, error);
+        Logstore::add_entry_in_buffer(buff);
         return SUCCESS;
     }
 }
@@ -242,16 +252,16 @@ void Vtlb::flush (bool full)
 bool Vtlb::is_cow(mword virt, mword gpa, mword error){
     if(!(error & ERR_W))
         return false;
-    unsigned l = max();
-    unsigned b = bpl();
-    unsigned shift = --l * b + PAGE_BITS;
-    Vtlb *tlb = static_cast<Vtlb *> (this) ;
-    tlb += virt >> shift & ((1UL << b) - 1);
+    unsigned long l = max();
+    unsigned long b = bpl();
 
-    for (;; tlb = static_cast<Vtlb *> (Buddy::phys_to_ptr(tlb->addr())) + (virt >> (--l * b + PAGE_BITS) & ((1UL << b) - 1))) {
+    for(Vtlb *tlb = static_cast<Vtlb *> (this);; tlb = static_cast<Vtlb *> (Buddy::phys_to_ptr(tlb->addr())) + (virt >> (--l * b + PAGE_BITS) & ((1UL << b) - 1))) {
 
 //        asm volatile ("" :: "m" (tlb)); // to avoid gdb "optimized out"
 //        asm volatile ("" :: "m" (l)); // to avoid gdb "optimized out"
+        if (!tlb)
+            return false;
+        
         if (EXPECT_FALSE(!tlb->val))
             return false;
 
@@ -261,10 +271,14 @@ bool Vtlb::is_cow(mword virt, mword gpa, mword error){
         if(tlb->attr() & TLB_COW){
             mword hpa, ept_attr;
             size_t size = Pd::current->Space_mem::ept.lookup (gpa, hpa, ept_attr);
-            debug_started_trace(0, "is_cow v: %lx tlb->addr: %lx attr %lx gpa %lx hpa %lx size %lx", 
-                virt, tlb->addr(), tlb->attr(), gpa, hpa, size);
+            debug_started_trace(0, "is_cow Pe %llu v: %lx tlb->addr: %lx attr %lx gpa %lx hpa %lx size %lx", 
+                Counter::nb_pe, virt, tlb->addr(), tlb->attr(), gpa, hpa, size);
 
-            if(size && (tlb->addr() == (hpa & ~PAGE_MASK))){ 
+            char buff[STR_MAX_LENGTH];
+            String::print(buff, "is_cow Pe %llu v: %lx tlb->addr: %lx attr %lx gpa %lx hpa %lx size %lx", 
+                Counter::nb_pe, virt, tlb->addr(), tlb->attr(), gpa, hpa, size);
+            Logstore::add_entry_in_buffer(buff);
+            if (size && (tlb->addr() == (hpa & ~PAGE_MASK))) { 
                 Counter::vtlb_cow_fault++;   
                 assert(virt != Pe_stack::stack); 
                 Cow_elt::resolve_cow_fault(tlb, nullptr, virt, tlb->addr(), tlb->attr());
@@ -299,13 +313,13 @@ size_t Vtlb::lookup(uint64 v, Paddr &p, mword &a) {
 
         if(!e)
             return 0;
-
+        
         if(EXPECT_FALSE(!e->val))
             return 0;
 
         if(EXPECT_FALSE(l && !e->super()))
-                continue; 
-        
+            continue;
+
         size_t s = 1UL << (l * B + e->order());
 
         p = static_cast<Paddr> (e->addr() | (v & (s - 1)));

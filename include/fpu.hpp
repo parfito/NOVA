@@ -104,6 +104,17 @@ class Fpu
             load_state(statedata_1);
         }
         
+        static void dwc_restore2(){
+            if(get_cr0() & (Cpu::CR0_TS | Cpu::CR0_EM))
+                return;
+            if(!saved)
+                Console::panic("TCHA HO HO: Cpu::CR0_TS || Cpu::CR0_EM = 0 but is_saved is false - dwc_restore1");// TS ou EM ont été désactivé en cours de route  
+            fpu_1->save();
+            save_state(statedata_1);
+            fpu_2->load();
+            load_state(statedata_2);
+        }        
+        
         static mword dwc_check(){
             if(get_cr0() & (Cpu::CR0_TS | Cpu::CR0_EM))
                 return 0;
@@ -132,7 +143,7 @@ class Fpu
                             d2, statedata_1+state_index, statedata_2+state_index, vals1, vals2);
                 }
                 
-         }else
+            }else
                 saved = false;                
             return ret;
         }
@@ -157,6 +168,11 @@ class Fpu
         void restore_data1(){
             memcpy(data_2, data, data_size);
             memcpy(data, data_1, data_size);
+        }
+        
+        void restore_data2(){
+            memcpy(data_1, data, data_size);
+            memcpy(data, data_2, data_size);
         }
         
         void roll_back(){

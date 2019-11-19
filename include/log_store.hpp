@@ -34,7 +34,7 @@ public:
     
     static void free_logs(size_t=0, bool=false);
         
-    static void dump(char const*, bool = true, size_t = 5);
+    static void dump(char const*, bool = true, size_t = 5, bool = false);
             
     static void add_entry_in_buffer(const char*);
     

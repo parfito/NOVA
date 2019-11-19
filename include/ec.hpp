@@ -291,6 +291,33 @@ public:
         PES_VMX_IO = 25,
         PES_COW_IN_STACK = 26,
     };
+    
+    enum Register {
+        NOREG       = 0,
+        RAX         = 1,
+        RBX         = 2,
+        RCX         = 3,
+        RDX         = 4,
+        RBP         = 5,
+        RDI         = 6,
+        RSI         = 7,
+        R8          = 8,
+        R9          = 9,
+        R10         = 10,
+        R11         = 11,
+        R12         = 12,
+        R13         = 13,
+        R14         = 14,
+        R15         = 15,
+        RIP         = 16,
+        RSP         = 17,
+        RFLAG       = 18,
+        GUEST_RIP   = 19,
+        GUEST_RSP   = 20,
+        GUEST_RFLAG = 21,
+        FPU_DATA    = 22,
+        FPU_STATE   = 23,
+    };
 
     enum Debug_type {
         DT_NULL = 0,
@@ -301,15 +328,14 @@ public:
     tscp_rcx1, tscp_rcx2;
     static uint64 counter1, counter2, exc_counter, exc_counter1, exc_counter2, debug_compteur, 
     count_je, nbInstr_to_execute, tsc1, tsc2, nb_inst_single_step, second_run_instr_number, 
-    first_run_instr_number, distance_instruction, max_instruction;
+    first_run_instr_number, distance_instruction, second_max_instructions;
     static uint8 launch_state, step_reason, debug_nb, debug_type, 
     replaced_int3_instruction, replaced_int3_instruction2;
     static bool hardening_started, in_rep_instruction, not_nul_cowlist, 
-    no_further_check, first_run_advanced, keep_cow;
-    static int prev_reason, previous_ret, nb_try, reg_diff;
-    static const char* reg_names[19];
-    static const char* pe_stop[27];
-
+    no_further_check, run_switched, keep_cow, reset_pmi;
+    static int run1_reason, previous_ret, nb_try;
+    static const char* reg_names[24], *launches[6], *pe_stop[27];
+    
     Ec(Pd *, void (*)(), unsigned, char const *nm = "Unknown");
     Ec(Pd *, mword, Pd *, void (*)(), unsigned, unsigned, mword, mword, Pt *, 
     char const *nm = "Unknown");
@@ -595,6 +621,7 @@ public:
     void vmx_save_state();
     void vmx_restore_state();
     void vmx_restore_state1();
+    void vmx_restore_state2();
     void vmx_rollback();
 
     void run2_pmi_check(int);
@@ -623,11 +650,11 @@ public:
 
     void restore_state0();
     void restore_state1();
+    void restore_state2();
     void rollback();
     void debug_rollback();
     mword get_regsRIP();
     mword get_regsRCX();
-    int compare_regs(int);
     void save_stack();
     void save_vm_stack();
 
@@ -661,9 +688,8 @@ public:
     bool is_virutalcpu() {
         return !utcb;
     }
-    mword get_reg(int);
-    int compare_regs_mute();
-    bool single_step_finished();
+    mword get_reg(Register, int = 3);
+    Register compare_regs(PE_stopby = PES_DEFAULT);
     static void count_interrupt(mword);
     static void check_instr_number_equals(int);
     void start_debugging(Debug_type);

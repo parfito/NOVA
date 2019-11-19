@@ -68,8 +68,8 @@ void Logstore::free_logs(size_t left, bool in_percent) {
  * @param log_depth : the number of log to be printed; default is 5; we will print
  * all logs if this is 0
  */
-void Logstore::dump(char const *funct_name, bool from_tail, size_t log_depth){
-    if(has_been_dumped)
+void Logstore::dump(char const *funct_name, bool from_tail, size_t log_depth, bool force){
+    if(has_been_dumped && !force)
         return;
     Logstore::commit_buffer();
     if(logs_in_table) {
@@ -284,7 +284,7 @@ void Table_logs::dump(char const *funct_name, bool from_tail, size_t log_depth){
     size_t log_max = static_cast<size_t>(LOG_MAX), 
             log_number = total_logs < log_max ? cursor - start : 
             cursor > start ? cursor - start : cursor + log_max - start;
-     if(log_depth == 0 || log_depth > log_number) {
+    if(log_depth == 0 || log_depth > log_number) {
         log_depth = log_number;
     }
     trace(0, "%s Log %lu %s cursor %lu start %lu depth %lu", funct_name, log_number, 
@@ -352,11 +352,8 @@ void Logstore::append_log_in_buffer(const char* s){
         add_log_in_buffer("Append Log (Suite)");        
     }
     if(log_buffer_cursor == log_buffer)
-        copy_string(log_buffer_cursor, s); 
-    else {
         *(log_buffer_cursor++) = ' '; // replace the final '\0' one space
-        copy_string(log_buffer_cursor, s);  
-    }
+    copy_string(log_buffer_cursor, s, size + 1);  
     log_buffer_cursor += size;     
 }
 
@@ -374,13 +371,9 @@ void Logstore::add_log_in_buffer(const char* s){
         add_log_in_buffer("Log (Suite)");        
     }
     
-    if(log_buffer_cursor == log_buffer)
-        copy_string(log_buffer_cursor, s); 
-    else {
+    if(log_buffer_cursor != log_buffer)
         *(log_buffer_cursor++) = '\n'; // replace the final '\0' by new line
-        *(log_buffer_cursor++) = '\t'; // tabulate    
-        copy_string(log_buffer_cursor, s);  
-    }
+    copy_string(log_buffer_cursor, s, size + 1);  
     log_buffer_cursor += size;     
 }
 
@@ -389,20 +382,20 @@ void Logstore::add_log_in_buffer(const char* s){
  * @param s
  */
 void Logstore::add_entry_in_buffer(const char* s){
-    size_t size = strlen(s)+1; // +1 for the final \n
+    size_t size = strlen(s); 
     if(!log_on || !size)
         return;    
     if(entry_buffer_cursor + size + 1 > entry_buffer + (buffer_size - entry_offset)) {
-// We cannot store in the entry buffer beyond its size which is BUFFER_SIZE - ENTRY_OFFSET,    
+// We cannot store in the entry buffer beyond its size which is BUFFER_SIZE - ENTRY_OFFSET, 
+        char buff[STR_MAX_LENGTH];
+        size_t n = copy_string(buff, "Entry (Suite) for log ");
+        copy_string(buff + n, log_buffer, STR_MAX_LENGTH - n);
         commit_buffer();
-        add_log_in_buffer("Log entry (Suite)");
+        add_log_in_buffer(buff);
     }
-    if(entry_buffer_cursor == entry_buffer)
-        copy_string(entry_buffer_cursor, s, size);
-    else {
-        *(entry_buffer_cursor++) = '\n'; // replace the final '\0' by new line
-        copy_string(entry_buffer_cursor, s, size);        
-    }
+    if(entry_buffer_cursor != entry_buffer)
+        *entry_buffer_cursor++ = '\n'; // replace the final '\0' by new line
+    copy_string(entry_buffer_cursor, s, size + 1);        
     entry_buffer_cursor += size; 
 }
 
@@ -413,7 +406,7 @@ void Logstore::commit_buffer(){
     if(!log_on)
         return;    
     size_t log_length = strlen(log_buffer), log_entry_length = strlen(entry_buffer);
-    if(!log_length)
+    if(!log_length && !log_entry_length)
         return;
     *log_buffer_cursor = '\n';
     if(log_entry_length) {

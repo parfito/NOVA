@@ -36,7 +36,6 @@ unsigned    Lapic::freq_tsc;
 unsigned    Lapic::freq_bus;
 uint64 Lapic::counter = 0, Lapic::prev_counter, Lapic::max_tsc = 0, Lapic::start_counter, 
         Lapic::perf_max_count, Lapic::counter_read_value; 
-bool Lapic::timeout_to_check = false, Lapic::timeout_expired = false;
 uint32 Lapic::tour = 0, Lapic::tour1 = 0;
 const uint32 Lapic::max_info = 100000;
 uint64 Lapic::perf_compteur[max_info][2];
@@ -254,7 +253,7 @@ uint64 Lapic::read_instCounter() {
  */
 void Lapic::program_pmi(uint64 number) {
     start_counter = number ? perf_max_count - number : perf_max_count - MAX_INSTRUCTION;
-    set_lvt(LAPIC_LVT_PERFM, DLV_FIXED, VEC_LVT_PERFM);
+//    set_lvt(LAPIC_LVT_PERFM, DLV_FIXED, VEC_LVT_PERFM);
     Msr::write(Msr::MSR_PERF_FIXED_CTR0, start_counter);
     //Qemu oddities : MSR_PERF_FIXED_CTRL must be the last PMU instruction to be 
     //executed and be updated with a dummy value
@@ -271,7 +270,7 @@ void Lapic::program_pmi(uint64 number) {
  */
 void Lapic::program_pmi2(uint64 number) {
     start_counter = perf_max_count - number;    
-    set_lvt(LAPIC_LVT_PERFM, DLV_FIXED, VEC_LVT_PERFM);
+//    set_lvt(LAPIC_LVT_PERFM, DLV_FIXED, VEC_LVT_PERFM);
     Msr::write(Msr::MSR_PERF_FIXED_CTR0, start_counter);
     Msr::write(Msr::MSR_PERF_FIXED_CTRL, 0x0);    
     Msr::write(Msr::MSR_PERF_FIXED_CTRL, 0xa);
@@ -283,20 +282,13 @@ void Lapic::program_pmi2(uint64 number) {
  * We change it to program normal PMI. 
  * De toute facon, il ne risque pas d'arriver avant le prochain check_memory
  */
-void Lapic::cancel_pmi(){
+void Lapic::cancel_pmi() {
     start_counter = perf_max_count - MAX_INSTRUCTION;
-    set_lvt(LAPIC_LVT_PERFM, DLV_FIXED, VEC_LVT_PERFM);
+//    set_lvt(LAPIC_LVT_PERFM, DLV_FIXED, VEC_LVT_PERFM);
     Msr::write(Msr::MSR_PERF_FIXED_CTR0, start_counter);
     Msr::write(Msr::MSR_PERF_FIXED_CTRL, 0x0);    
     Msr::write(Msr::MSR_PERF_FIXED_CTRL, 0xa);
     prev_counter = start_counter;
-}
-
-void Lapic::timeout_check() {
-    if (timeout_to_check) {
-        timer_handler();
-        timeout_to_check = false;
-    }
 }
 
 void Lapic::print_compteur(){

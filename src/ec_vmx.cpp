@@ -297,7 +297,7 @@ void Ec::vmx_disable_single_step() {
                 // Console::print("EIP: %lx  prev_rip: %lx MSR_PERF_FIXED_CTR0: %lld instr: %lx", 
                 // current->regs.REG(ip), prev_rip, Msr::read<uint64>(Msr::MSR_PERF_FIXED_CTR0), *reinterpret_cast<mword *>(current->regs.REG(ip)));
                 // It may happen that this is the final instruction
-                if (!current->compare_regs_mute()) {
+                if (!current->compare_regs()) {
                     //                                check_instr_number_equals(1);
                     disable_mtf();
                     check_memory(PES_SINGLE_STEP);
@@ -309,7 +309,7 @@ void Ec::vmx_disable_single_step() {
                 vmx_enable_single_step(SR_PMI);
                 ret_user_vmresume();
             }
-            if (!current->compare_regs_mute()) {
+            if (!current->compare_regs()) {
                 //                            check_instr_number_equals(2);
                 disable_mtf();
                 check_memory(PES_SINGLE_STEP);
@@ -359,14 +359,14 @@ void Ec::vmx_disable_single_step() {
                 // current->regs.REG(ip), prev_rip, Msr::read<uint64>(Msr::MSR_PERF_FIXED_CTR0), 
                 // *reinterpret_cast<mword *>(current->regs.REG(ip)));
                 // It may happen that this is the final instruction
-                if (!current->compare_regs_mute()) {
+                if (!current->compare_regs()) {
                     //                                check_instr_number_equals(3);
                     disable_mtf();
                     check_memory(PES_SINGLE_STEP);
                 }
             }
             //here, single stepping 2nd run should be ok
-            if (!current->compare_regs_mute()) {// if ok?
+            if (!current->compare_regs()) {// if ok?
                 //                            check_instr_number_equals(4);
                 disable_mtf();
                 check_memory(PES_SINGLE_STEP);
@@ -375,7 +375,7 @@ void Ec::vmx_disable_single_step() {
                     current->restore_state1();
                     nbInstr_to_execute = distance_instruction + nb_inst_single_step + 1;
                     nb_inst_single_step = 0;
-                    first_run_advanced = true;
+                    run_switched = true;
                     vmx_enable_single_step(SR_EQU);
                     ret_user_vmresume();
                 } else { // relaunch the first run without restoring the second execution state

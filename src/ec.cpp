@@ -45,24 +45,27 @@
 mword Ec::prev_rip = 0, Ec::last_rip = 0, Ec::last_rcx = 0, Ec::end_rip, Ec::end_rcx,
         Ec::tscp_rcx1 = 0, Ec::tscp_rcx2 = 0;
 bool Ec::hardening_started = false, Ec::in_rep_instruction = false, Ec::not_nul_cowlist = false, 
-        Ec::no_further_check = false, Ec::first_run_advanced = false, Ec::keep_cow = false;
+        Ec::no_further_check = false, Ec::run_switched = false, Ec::keep_cow = false,
+        Ec::reset_pmi = true;
 uint64 Ec::exc_counter = 0, Ec::exc_counter1 = 0, Ec::exc_counter2 = 0, Ec::counter1 = 0, 
         Ec::counter2 = 0, Ec::debug_compteur = 0, Ec::count_je = 0, Ec::nbInstr_to_execute = 0,
         Ec::nb_inst_single_step = 0, Ec::second_run_instr_number = 0, 
         Ec::first_run_instr_number = 0, Ec::distance_instruction = 0,
-        Ec::max_instruction = 0;
+        Ec::second_max_instructions = 0;
        
 uint8 Ec::launch_state = 0, Ec::step_reason = 0, Ec::debug_nb = 0, 
         Ec::debug_type = 0, Ec::replaced_int3_instruction, Ec::replaced_int3_instruction2;
 uint64 Ec::tsc1 = 0, Ec::tsc2 = 0;
-int Ec::prev_reason = 0, Ec::previous_ret = 0, Ec::nb_try = 0, Ec::reg_diff = 0;
-const char* Ec::reg_names[19] = {"N/A", "RAX", "RDX", "RCX", "RBX", "RBP", "RSI", "RDI", "R8", 
-"R9", "R10", "R11", "R12", "R13", "R14", "R15", "RIP", "RFLAG", "RSP"};
+int Ec::run1_reason = 0, Ec::previous_ret = 0, Ec::nb_try = 0;
+const char* Ec::reg_names[24] = {"N/A", "RAX", "RDX", "RCX", "RBX", "RBP", "RSI", "RDI", "R8", 
+"R9", "R10", "R11", "R12", "R13", "R14", "R15", "RIP", "RSP", "RFLAG", "GUEST_RIP", "GUEST_RSP", 
+"GUEST_RIP", "FPU_DATA", "FPU_STATE"};
 const char* Ec::pe_stop[27] = {"NUL", "PMI", "PAGE_FAULT", "SYS_ENTER", "VMX_EXIT", 
 "INVALID_TSS", "GP_FAULT", "DEV_NOT_AVAIL", "SEND_MSG", "MMIO", "SINGLE_STEP", 
 "VMX_SEND_MSG", "VMX_EXT_INT", "GSI", "MSI", "LVT", "ALIGNEMENT_CHECK", 
 "MACHINE_CHECK", "VMX_INVLPG", "VMX_PAGE_FAULT", "VMX_EPT_VIOL", "VMX_CR", "VMX_EXC",
 "VMX_RDTSC", "VMX_RDTSCP", "VMX_IO", "COW_IN_STACK"};
+const char* Ec::launches[6] = {"UNLAUNCHED", "SYSEXIT", "IRET", "VMRESUME", "VMRUN", "EXT_INT"};
 
 Ec *Ec::current, *Ec::fpowner;
 // Constructors
@@ -342,9 +345,16 @@ void Ec::ret_user_sysexit() {
 
         current->save_state0();
         launch_state = Ec::SYSEXIT;
+    } else if(Pe::run_number == 1 && step_reason == SR_NIL && reset_pmi) {
+        // This is necessary on Qemu with (linux kernel > 5.0.0.29) because due to unknow reason, 
+        // the MSR_PERF_FIXED_CTR0 does not get reset in check_memory. 
+        Lapic::program_pmi(second_max_instructions);   
     }
-
-//    debug_started_trace(0, "Sysreting");
+    char buff[STR_MAX_LENGTH];
+//    String::print_page(buff, current->regs.REG(sp));
+    String::print(buff, "Sysreting : Run %d Ec %s Rip %lx Counter %llx", Pe::run_number, 
+    current->get_name(), current->get_reg(RIP), Lapic::read_instCounter());
+    Logstore::add_entry_in_buffer(buff);
     if (step_reason == SR_NIL) {
         asm volatile ("lea %0," EXPAND(PREG(sp); LOAD_GPR RET_USER_HYP) : : "m" (current->regs) : 
                     "memory");
@@ -365,8 +375,19 @@ void Ec::ret_user_iret() {
 
         current->save_state0();
         launch_state = Ec::IRET;
+    } else if(Pe::run_number == 1 && step_reason == SR_NIL && reset_pmi) {
+        // This is necessary on Qemu with (linux kernel > 5.0.0.29) because due to unknow reason, 
+        // the MSR_PERF_FIXED_CTR0 does not get reset in check_memory. 
+        Lapic::program_pmi(second_max_instructions);              
     }
-//    debug_started_trace(0, "Ireting");
+    if(!reset_pmi)
+        reset_pmi = true;
+    char buff[STR_MAX_LENGTH];
+//    String::print_page(buff, current->regs.REG(sp));
+    String::print(buff, "Ireting : Run %d Ec %s Rip %lx Counter %llx", Pe::run_number, 
+    current->get_name(), current->get_reg(RIP), Lapic::read_instCounter());
+    Logstore::add_entry_in_buffer(buff);
+//  //    debug_started_trace(0, "Ireting");
     asm volatile ("lea %0," EXPAND(PREG(sp); LOAD_GPR LOAD_SEG RET_USER_EXC) : : "m" (current->regs)
     : "memory");
 
@@ -408,6 +429,11 @@ void Ec::ret_user_vmresume() {
 
     if (EXPECT_FALSE(get_cr2() != current->regs.cr2))
         set_cr2(current->regs.cr2);
+    char buff[STR_MAX_LENGTH];
+//    String::print_page(buff, current->regs.REG(sp));
+    String::print(buff, "VMResume : Run %d Ec %s Rip %lx Counter %llx", Pe::run_number, 
+    current->get_name(), current->get_reg(RIP), Lapic::read_instCounter());
+    Logstore::add_entry_in_buffer(buff);
     if(step_reason == SR_DBG)
         enable_mtf();
     asm volatile ("mov %2," EXPAND(PREG(sp);)
@@ -786,6 +812,7 @@ void Ec::restore_state0() {
 
 void Ec::restore_state1() {
     Pe::inState1 = true;
+    Pe::run_number = 0;
     regs_2 = regs;
     regs = regs_1;
     Cow_elt::restore_state1();
@@ -794,6 +821,20 @@ void Ec::restore_state1() {
         fpu->restore_data1();
     if(!utcb){
         vmx_restore_state1();
+    }
+}
+
+void Ec::restore_state2() {
+    Pe::inState1 = false;
+    Pe::run_number = 1;
+    regs_1 = regs;
+    regs = regs_2;
+    Cow_elt::restore_state2();
+    Fpu::dwc_restore2();
+    if (fpu)
+        fpu->restore_data2();
+    if(!utcb){
+        vmx_restore_state2();
     }
 }
 
@@ -831,7 +872,8 @@ void Ec::debug_rollback() {
 void Ec::save_state0() {
     regs_0 = regs;
     char buff[STR_MAX_LENGTH];
-    String::print(buff, "PE %llu Pd %s Ec %s", Counter::nb_pe, getPd()->get_name(), get_name());
+    String::print(buff, "PE %llu Pd %s Ec %s Rip0 %lx", Counter::nb_pe, 
+            getPd()->get_name(), get_name(), regs.REG(ip));
     Logstore::add_log_in_buffer(buff);
     Cow_elt::place_phys0();
     Fpu::dwc_save(); // If FPU activated, save fpu state
@@ -847,8 +889,10 @@ void Ec::save_state0() {
         vmx_save_state();  
         Counter::nb_vm_pe++;
     }
+    Lapic::program_pmi();
     Pe::c_regs[0] = regs_0;
     Pe::inState1 = false;
+    Pe::run_number = 0;
     Counter::nb_pe++;    
 }
 
@@ -871,6 +915,7 @@ void Ec::restore_state0_data() {
     }
     Pe::c_regs[0] = regs_0;
     Pe::inState1 = false;
+    Pe::run_number = 0;
 }
 
 void Ec::vmx_save_state() {
@@ -963,6 +1008,34 @@ void Ec::vmx_restore_state1() {
     memcpy(cur_virtual_apic_page, virtual_apic_page1, PAGE_SIZE);
 }
 
+void Ec::vmx_restore_state2() {
+    Pe::vmcsRIP_1 = Vmcs::read(Vmcs::GUEST_RIP);        
+    Pe::vmcsRSP_1 = Vmcs::read(Vmcs::GUEST_RSP);  
+    Pe::vmcsRIP[2] = Pe::vmcsRIP_1;
+    Pe::vmcsRSP[2] = Pe::vmcsRSP_1;
+    regs.vmcs->clear();
+    memcpy(Vmcs::vmcs1, regs.vmcs, Vmcs::basic.size);
+    memcpy(regs.vmcs, Vmcs::vmcs2, Vmcs::basic.size);
+    regs.vmcs->make_current();
+
+    mword host_msr_area_phys = Vmcs::read(Vmcs::EXI_MSR_LD_ADDR);
+    Msr_area *cur_host_msr_area = 
+            reinterpret_cast<Msr_area*> (Buddy::phys_to_ptr(host_msr_area_phys));
+    memcpy(host_msr_area1, cur_host_msr_area, PAGE_SIZE);
+    memcpy(cur_host_msr_area, host_msr_area2, PAGE_SIZE);
+
+    mword guest_msr_area_phys = Vmcs::read(Vmcs::EXI_MSR_ST_ADDR);
+    Msr_area *cur_guest_msr_area = 
+            reinterpret_cast<Msr_area*> (Buddy::phys_to_ptr(guest_msr_area_phys));
+    memcpy(guest_msr_area1, cur_guest_msr_area, PAGE_SIZE);
+    memcpy(cur_guest_msr_area, guest_msr_area2, PAGE_SIZE);
+
+    mword virtual_apic_page_phys = Vmcs::read(Vmcs::APIC_VIRT_ADDR);
+    Virtual_apic_page *cur_virtual_apic_page =
+            reinterpret_cast<Virtual_apic_page*> (Buddy::phys_to_ptr(virtual_apic_page_phys));
+    memcpy(virtual_apic_page1, cur_virtual_apic_page, PAGE_SIZE);
+    memcpy(cur_virtual_apic_page, virtual_apic_page2, PAGE_SIZE);
+}
 
 void Ec::vmx_rollback() {
     regs.vmcs->clear();
@@ -991,115 +1064,6 @@ mword Ec::get_regsRIP() {
 
 mword Ec::get_regsRCX() {
     return regs.REG(cx);
-}
-
-void regs_missmatch_print(char const *reg_name, mword reg_0, mword reg_1, mword reg) {
-    Console::print("REGS does not match %s : reg_0 %lx reg_1 %lx reg %lx", reg_name, reg_0, reg_1, 
-            reg);
-}
-
-int Ec::compare_regs(int reason) {
-    if (regs_2.r15 != regs_1.r15) {
-        regs_missmatch_print("R15", regs_0.r15, regs_1.r15, regs_2.r15);
-        return 15;
-    }
-    if (regs_2.r14 != regs_1.r14) {
-        regs_missmatch_print("R14", regs_0.r14, regs_1.r14, regs_2.r14);
-        return 14;
-    }
-    if (regs_2.r13 != regs_1.r13) {
-        regs_missmatch_print("R13", regs_0.r13, regs_1.r13, regs_2.r13);
-        return 13;
-    }
-    if (regs_2.r12 != regs_1.r12) {
-        regs_missmatch_print("R12", regs_0.r12, regs_1.r12, regs_2.r12);
-        return 12;
-    }
-    if (regs_2.r11 != regs_1.r11) {
-        // resume flag  or trap flag may be set if reason is step-mode
-        // but it is unclear why. Must be fixed later
-        if (((regs_2.r11 | 1u << 16) == regs_1.r11) || (regs_2.r11 == (regs_1.r11 | 1u << 8))){
-            // Nothing to do, just continue;
-        }
-        else {
-            regs_missmatch_print("R11", regs_0.r11, regs_1.r11, regs_2.r11);
-            return 11;
-        }
-    }
-    if (regs_2.r10 != regs_1.r10) {
-        regs_missmatch_print("R10", regs_0.r10, regs_1.r10, regs_2.r10);
-        return 10;
-    }
-    if (regs_2.r9 != regs_1.r9) {
-        regs_missmatch_print("R9", regs_0.r9, regs_1.r9, regs_2.r9);
-        return 9;
-    }
-    if (regs_2.r8 != regs_1.r8) {
-        regs_missmatch_print("R8", regs_0.r8, regs_1.r8, regs_2.r8);
-        return 8;
-    }
-    if (regs_2.REG(di) != regs_1.REG(di)) {
-        regs_missmatch_print("RDI", regs_0.REG(di), regs_1.REG(di), regs_2.REG(di));
-        return 7;
-    }
-    if (regs_2.REG(si) != regs_1.REG(si)) {
-        regs_missmatch_print("RSI", regs_0.REG(si), regs_1.REG(si), regs_2.REG(si));
-        return 6;
-    }
-    if (regs_2.REG(bp) != regs_1.REG(bp)) {
-        regs_missmatch_print("RBP", regs_0.REG(bp), regs_1.REG(bp), regs_2.REG(bp));
-        return 5;
-    }
-    if (regs_2.REG(bx) != regs_1.REG(bx)) {
-        regs_missmatch_print("RBX", regs_0.REG(bx), regs_1.REG(bx), regs_2.REG(bx));
-        return 4;
-    }
-    if (regs_2.REG(cx) != regs_1.REG(cx)) {
-        regs_missmatch_print("RCX", regs_0.REG(cx), regs_1.REG(cx), regs_2.REG(cx));
-        return 3;
-    }
-    if (regs_2.REG(dx) != regs_1.REG(dx)) {
-        regs_missmatch_print("RDX", regs_0.REG(dx), regs_1.REG(dx), regs_2.REG(dx));
-        return 2;
-    }
-    if (regs_2.REG(ax) != regs_1.REG(ax)) {
-        regs_missmatch_print("RAX", regs_0.REG(ax), regs_1.REG(ax), regs_2.REG(ax));
-        return 1;
-    }
-    if (fpu && fpu->data_check())
-        return 16;
-    if (Fpu::dwc_check())
-        return 17;
-    // following checks are not valid if reason is Sysenter or current is vCPU
-    if (reason == PES_SYS_ENTER || !utcb) 
-        return 0;
-    if ((regs_2.REG(ip) != regs_1.REG(ip))) {
-        regs_missmatch_print("RIP", regs_0.REG(ip), regs_1.REG(ip), regs_2.REG(ip));
-        return 18;
-    }
-//    if ((regs_2.REG(fl) != regs_1.REG(fl)) && ((regs_2.REG(fl) | (1u << 16)) != regs_1.REG(fl))) {
-//        regs_missmatch_print("RFLAGS", regs_0.REG(fl), regs_1.REG(fl), regs_2.REG(fl));
-//        resume flag may be set if reason is step-mode but it is curious why this flag is set in
-//        regs_1 and not in regs_2. The contrary would be understandable. Must be fixed later
-//        return 19;
-//    }
-    if (regs_2.REG(sp) != regs_1.REG(sp)) {
-        regs_missmatch_print("RSP", regs_0.REG(sp), regs_1.REG(sp), regs_2.REG(sp));
-        return 20;
-    }
-    if (!utcb){
-//        if(memcmp(regs.vmcs, Pe::inState1 ? Vmcs::vmcs2 : Vmcs::vmcs1, Vmcs::basic.size))
-        if(Vmcs::read(Vmcs::GUEST_RIP) != (Pe::inState1 ? Pe::vmcsRIP_2 : Pe::vmcsRIP_1)){
-            regs_missmatch_print("GUEST_RIP", Pe::vmcsRIP[0], Pe::vmcsRIP_2, Pe::vmcsRIP_1);
-            return 21;
-        }
-        if(Vmcs::read(Vmcs::GUEST_RSP) != (Pe::inState1 ? Pe::vmcsRSP_2 : Pe::vmcsRSP_1)){
-            regs_missmatch_print("GUEST_RIP", Pe::vmcsRSP[0], Pe::vmcsRSP_2, Pe::vmcsRSP_1);
-            return 22;
-        }
-    }
-    
-    return 0;
 }
 
 void Ec::Setx86DebugReg(mword addr, int dr) {
@@ -1176,124 +1140,169 @@ void Ec::backtrace(int depth) {
     }
     return;
 }
-
-mword Ec::get_reg(int reg_number) {
-    switch (reg_number) {
+/**
+ * 
+ * @param reg_number
+ * @param state
+ * @return 
+ */
+mword Ec::get_reg(Register reg, int state) {
+    //TODO :: Handle state0, state1 and state2 cases for VCPU
+    Cpu_regs r;
+    switch (state) {
+        case 0:
+            r = regs_0;
+            break;
         case 1:
-            return regs.REG(ax);
+            r = regs_1;
+            break;
         case 2:
-            return regs.REG(dx);
+            r = regs_2;
+            break;
         case 3:
-            return regs.REG(cx);
-        case 4:
-            return regs.REG(bx);
-        case 5:
-            return regs.REG(bp);
-        case 6:
-            return regs.REG(si);
-        case 7:
-            return regs.REG(di);
-        case 8:
-            return regs.r8;
-        case 9:
-            return regs.r9;
-        case 10:
-            return regs.r10;
-        case 11:
-            return regs.r11;
-        case 12:
-            return regs.r12;
-        case 13:
-            return regs.r13;
-        case 14:
-            return regs.r14;
-        case 15:
-            return regs.r15;
-        case 16:
-            return 0; //FPU to be dealt with later
-        case 17:
-            return 0; //FPU to be dealt with later
-        case 18:
-            return utcb ? regs.REG(ip) : Vmcs::read(Vmcs::GUEST_RIP);
-        case 19:
-            return utcb ? regs.REG(sp) : Vmcs::read(Vmcs::GUEST_RSP);
-        case 20:
-            return utcb ? regs.REG(fl) : Vmcs::read(Vmcs::GUEST_RFLAGS);
+            r = regs;
+            break;
+        default:
+            Console::panic("INVALID STATE");
     }
-    return 0;
+    switch (reg) {
+        case NOREG:
+            Console::panic("INVALID REGISTRY %d", reg);
+        case RAX:
+            return r.REG(ax);
+        case RBX:
+            return r.REG(bx);
+        case RCX:
+            return r.REG(cx);
+        case RDX:
+            return r.REG(dx);
+        case RBP:
+            return r.REG(bp);
+        case RDI:
+            return r.REG(di);
+        case RSI:
+            return r.REG(si);
+        case R8:
+            return r.r8;
+        case R9:
+            return r.r9;
+        case R10:
+            return r.r10;
+        case R11:
+            return r.r11;
+        case R12:
+            return r.r12;
+        case R13:
+            return r.r13;
+        case R14:
+            return r.r14;
+        case R15:
+            return r.r15;
+        case RIP:
+            return utcb ? r.REG(ip) : 0;
+        case RSP:
+            return utcb ? r.REG(sp) : 0;
+        case RFLAG:
+            return utcb ? r.REG(fl) : 0;
+        case GUEST_RIP:
+            return utcb ? 0 : Vmcs::read(Vmcs::GUEST_RIP); 
+        case GUEST_RSP:
+            return utcb ? 0 : Vmcs::read(Vmcs::GUEST_RSP);
+        case GUEST_RFLAG:
+            return utcb ? 0 : Vmcs::read(Vmcs::GUEST_RFLAGS);
+        case FPU_DATA:
+            return FPU_DATA;
+        case FPU_STATE:
+            return FPU_STATE;
+        default:
+            Console::panic("INVALID REGISTRY %d", reg);
+    }
 }
 
-int Ec::compare_regs_mute() {
+Ec::Register Ec::compare_regs(PE_stopby reason) {
     if (regs.r15 != (Pe::inState1 ? regs_2.r15 : regs_1.r15)) {
-        return 15;
+        return R15;
     }
     if (regs.r14 != (Pe::inState1 ? regs_2.r14 : regs_1.r14)) {
-        return 14;
+        return R14;
     }
     if (regs.r13 != (Pe::inState1 ? regs_2.r13 : regs_1.r13)) {
-        return 13;
+        return R13;
     }
     if (regs.r12 != (Pe::inState1 ? regs_2.r12 : regs_1.r12)) {
-        return 12;
+        return R12;
     }
     if (regs.r11 != (Pe::inState1 ? regs_2.r11 : regs_1.r11)) {
         // resume flag  or trap flag may be set if reason is step-mode
         // but it is unclear why. Must be fixed later
         if (((regs.r11 | 1u << 16) == (Pe::inState1 ? regs_2.r11 : regs_1.r11)) || 
-                (regs.r11 == ((Pe::inState1 ? regs_2.r11 : regs_1.r11) | 1u << 8)))
-            return 0;
-        else {
-            return 11;
+                (regs.r11 == ((Pe::inState1 ? regs_2.r11 : regs_1.r11) | 1u << 8))) {
+            // it's ok, just continue;
+        } else {
+            return R11;
         }
     }
     if (regs.r10 != (Pe::inState1 ? regs_2.r10 : regs_1.r10)) {
-        return 10;
+        return R10;
     }
     if (regs.r9 != (Pe::inState1 ? regs_2.r9 : regs_1.r9)) {
-        return 9;
+        return R9;
     }
     if (regs.r8 != (Pe::inState1 ? regs_2.r8 : regs_1.r8)) {
-        return 8;
-    }
-    if (regs.REG(di) != (Pe::inState1 ? regs_2.REG(di) : regs_1.REG(di))) {
-        return 7;
+        return R8;
     }
     if (regs.REG(si) != (Pe::inState1 ? regs_2.REG(si) : regs_1.REG(si))) {
-        return 6;
+        return RSI;
+    }
+    if (regs.REG(di) != (Pe::inState1 ? regs_2.REG(di) : regs_1.REG(di))) {
+        return RDI;
     }
     if (regs.REG(bp) != (Pe::inState1 ? regs_2.REG(bp) : regs_1.REG(bp))) {
-        return 5;
-    }
-    if (regs.REG(bx) != (Pe::inState1 ? regs_2.REG(bx) : regs_1.REG(bx))) {
-        return 4;
-    }
-    if (regs.REG(cx) != (Pe::inState1 ? regs_2.REG(cx) : regs_1.REG(cx))) {
-        return 3;
+        return RBP;
     }
     if (regs.REG(dx) != (Pe::inState1 ? regs_2.REG(dx) : regs_1.REG(dx))) {
-        return 2;
+        return RDX;
+    }
+    if (regs.REG(cx) != (Pe::inState1 ? regs_2.REG(cx) : regs_1.REG(cx))) {
+        return RCX;
+    }
+    if (regs.REG(bx) != (Pe::inState1 ? regs_2.REG(bx) : regs_1.REG(bx))) {
+        return RBX;
     }
     if (regs.REG(ax) != (Pe::inState1 ? regs_2.REG(ax) : regs_1.REG(ax))) {
-        return 1;
+        return RAX;
     }
-    if (regs.REG(ip) != (Pe::inState1 ? regs_2.REG(ip) : regs_1.REG(ip))) {
-        return 18;
+    if(reason) {
+        if (fpu && fpu->data_check())
+            return FPU_DATA;
+        if (Fpu::dwc_check())
+            return FPU_STATE;
     }
-    if (regs.REG(sp) != (Pe::inState1 ? regs_2.REG(sp) : regs_1.REG(sp))) {
-        return 20;
-    }
-    if (!utcb){
+    // following checks are not valid if reason is Sysenter
+    if (reason == PES_SYS_ENTER) 
+        return NOREG;
+    if(utcb){
+        if (regs.REG(ip) != (Pe::inState1 ? regs_2.REG(ip) : regs_1.REG(ip))) {
+            return RIP;
+        }
+        if (regs.REG(sp) != (Pe::inState1 ? regs_2.REG(sp) : regs_1.REG(sp))) {
+            return RSP;
+        }
+//        if ((regs_2.REG(fl) != regs_1.REG(fl)) && ((regs_2.REG(fl) | (1u << 16)) != regs_1.REG(fl))) {
+//            resume flag may be set if reason is step-mode but it is curious why this flag is set in
+//            regs_1 and not in regs_2. The contrary would be understandable. Must be fixed later
+//            return 18;
+//        }        
+    } else {
 //        if(memcmp(regs.vmcs, Pe::inState1 ? Vmcs::vmcs2 : Vmcs::vmcs1, Vmcs::basic.size))
         if(Vmcs::read(Vmcs::GUEST_RIP) != (Pe::inState1 ? Pe::vmcsRIP_2 : Pe::vmcsRIP_1))
-            return 21;
+            return GUEST_RIP;
         if(Vmcs::read(Vmcs::GUEST_RSP) != (Pe::inState1 ? Pe::vmcsRSP_2 : Pe::vmcsRSP_1))
-            return 22;
+            return GUEST_RSP;
+//        if(Vmcs::read(Vmcs::GUEST_RFLAGS) != (Pe::inState1 ? Pe::vmcsRFLAG_2 : Pe::vmcsRFLG_1))
+//            return GUEST_RFLAG;
     }
-    return 0;
-}
-
-bool Ec::single_step_finished() {
-    return !(compare_regs_mute() || pd->compare_memory_mute());
+    return NOREG;
 }
 
 void Ec::count_interrupt(mword vector){
@@ -1320,13 +1329,13 @@ void Ec::count_interrupt(mword vector){
         return;
     ptr += 1;
 // last_rip-1 : + 1 
-        if (*ptr == 0xf3 || *ptr == 0xf2) { // rep prefix instruction
-            Counter::rep_prefix[Pe::run_number]++;
-    //            exc_counter--;
-        }
-        if(*ptr == 0xf4) { // halt instruction
-            Counter::hlt_instr[Pe::run_number]++;
-    //            exc_counter--;
+    if (*ptr == 0xf3 || *ptr == 0xf2) { // rep prefix instruction
+        Counter::rep_prefix[Pe::run_number]++;
+//            exc_counter--;
+    }
+    if(*ptr == 0xf4) { // halt instruction
+        Counter::hlt_instr[Pe::run_number]++;
+//            exc_counter--;
     } else if(*(ptr - 1) == 0xf4) {
         Counter::hlt_instr[Pe::run_number]++;
 //                exc_counter--;
@@ -1341,10 +1350,10 @@ void Ec::check_instr_number_equals(int from){
     size_t buff_length = 8;
     char instr_number_comp[buff_length+1] = "Inf";
     if(distance_instruction <= 2) {
-        if(first_run_advanced){
+        if(run_switched){
             nb_run1 = first_run_instr_number + nb_inst_single_step; 
             nb_run2 = second_run_instr_number;
-            first_run_advanced = false;
+            run_switched = false;
             copy_string(instr_number_comp, "Equ sup", buff_length);
         } else{
             nb_run1 = first_run_instr_number; 

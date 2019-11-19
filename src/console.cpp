@@ -302,32 +302,4 @@ void Console::panic (char const *format, ...)
     shutdown();
 }
 
-void Console::print_page(void* page_addr){
-    uint32* uint32_page_addr = reinterpret_cast<uint32*>(page_addr);
-    for(int i = 0; i< 0x100; i++){
-        print("%p: %08x %08x %08x %08x", uint32_page_addr, *uint32_page_addr, *(uint32_page_addr+1), *(uint32_page_addr+2), *(uint32_page_addr+3));
-        uint32_page_addr+=4;
-    }
-    print("=====================================================");
-}
-
-void Console::print_memory(void* start_addr, int length = 32){
-    uint8* uint8_addr = reinterpret_cast<uint8*>(start_addr);
-    int line = length / 32;
-    print("*p: %p", uint8_addr);
-    for(int i = 0; i < line; i++){
-        for(int j = 0; j < 32; j++){
-            print_no_newline("%02x", *uint8_addr);
-            uint8_addr++;
-        }
-        print(" ");
-    }
-    for(int j = 0; j < length - 32*line; j++){
-        print_no_newline("%02x", *uint8_addr);
-        uint8_addr++;
-    }
-    print(" ");
-    print("=====================================================");
-}
-
 extern "C" NORETURN void __cxa_pure_virtual() { UNREACHED; }

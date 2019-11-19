@@ -64,8 +64,8 @@ inline void *memcpy(void *dst, const void *src, size_t n) {
  * @param max_length : is the buffer size of dest when it was declared
  */
 extern "C" NONNULL
-inline void copy_string(char *target, const char *source, size_t dest_max_length = STR_MAX_LENGTH) {
-    uint32 length = 0;
+inline size_t copy_string(char *target, const char *source, size_t dest_max_length = STR_MAX_LENGTH) {
+    size_t length = 0;
     while (*source && length<dest_max_length) {
         *target = *source;
         source++;
@@ -73,24 +73,7 @@ inline void copy_string(char *target, const char *source, size_t dest_max_length
         length++;
     }
     *target = '\0';
-}
-
-/**
- * 
- * @param dest
- * @param source
- * @param max_length : is the buffer size of dest when it was declared
- */
-extern "C" NONNULL
-inline void copy_string_nl(char *target, const char *source, size_t dest_max_length = STR_MAX_LENGTH) {
-    uint32 length = 0;
-    while (*source && length<dest_max_length) {
-        *target = *source;
-        source++;
-        target++;
-        length++;
-    }
-    *target = '\n';
+    return length;
 }
 
 //extern "C" NONNULL
@@ -313,6 +296,7 @@ public:
     String &operator=(String const &);
 
     String(const char *);
+    String(size_t);
     ~String() { buffer->~Block(); }
     char* get_string() {
         if(buffer)
@@ -327,4 +311,6 @@ public:
     
     FORMAT (2,3)
     static unsigned print (char *, char const *, ...);
+    static void print_page(char *, void *);
+    static void print_memory(char *, void*, int);
 };

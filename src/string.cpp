@@ -26,7 +26,7 @@
 unsigned String::count;
 Slab_cache String::cache(sizeof (String), 32), Block::cache(sizeof(Block), 32);
 void* Block::memory;
-unsigned short Block::memory_order = 12;
+unsigned short Block::memory_order = 15;
 size_t Block::tour, Block::memory_size = (1ul << memory_order) * PAGE_SIZE, 
         Block::free_memory = Block::memory_size;
 bool Block::reallocated, Block::initialized;
@@ -41,6 +41,13 @@ Queue<Block> Block::free_blocks, Block::used_blocks;
 String::String(const char *p) : length(strlen(p)){
     buffer = Block::alloc(length+1); // +1 is for the \0 string null character at the end     
     copy_string(buffer->start, p, length);
+}
+/**
+ * Create a new string and allocate a new buffer for it
+ * @param p
+ */
+String::String(size_t u) : length(u){
+    buffer = Block::alloc(length+1); // +1 is for the \0 string null character at the end     
 }
 
 int String::vprintf_help(int c, void **ptr) {
@@ -210,6 +217,32 @@ unsigned String::print(char *buffer, const char *fmt, ...) {
     unsigned n = count;
     count = 0;
     return n;
+}
+
+void String::print_page(char *buffer, void* page_addr){
+    uint32* uint32_page_addr = reinterpret_cast<uint32*>(page_addr);
+    print(buffer, "%p ========================================", page_addr);
+    for(int i = 0; i< 0x100; i++){
+        print(buffer, "%p: %08x %08x %08x %08x", uint32_page_addr, *uint32_page_addr, *(uint32_page_addr+1), *(uint32_page_addr+2), *(uint32_page_addr+3));
+        uint32_page_addr+=4;
+    }
+}
+void String::print_memory(char *buffer, void* start_addr, int length = 32){
+    uint8* uint8_addr = reinterpret_cast<uint8*>(start_addr);
+    int line = length / 32;
+    print(buffer, "*p: %p", uint8_addr);
+    for(int i = 0; i < line; i++){
+        for(int j = 0; j < 32; j++){
+            print(buffer, "%02x", *uint8_addr);
+            uint8_addr++;
+        }
+        *buffer++ =' ';
+    }
+    for(int j = 0; j < length - 32*line; j++){
+        print(buffer, "%02x", *uint8_addr);
+        uint8_addr++;
+    }
+    print(buffer, "\n");
 }
 
 /**

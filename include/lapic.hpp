@@ -189,7 +189,6 @@ class Lapic
         static void program_pmi(uint64 number = 0);
         static void program_pmi2(uint64);
         static void cancel_pmi();
-        static void timeout_check();
         static void print_compteur();
         static void write_perf(mword);
         static void compute_expected_info(uint32, int);

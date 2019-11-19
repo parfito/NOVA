@@ -68,13 +68,13 @@ type(t), page_addr(addr), attr(a), prev(nullptr), next(nullptr) {
         crc = Crc::compute(0, reinterpret_cast<void*>(COW_ADDR), PAGE_SIZE); // phys should have been mapped on COW_ADDR by copy_frames()
     }
     // update page table entry with the newly allocated frame1
-    update_pte(PHYS1, RW);
+    update_pte(Pe::run_number == 0 ? PHYS1 : PHYS2, RW);
     number++;
     // For debugging purpose =====================================================
     m_fault_addr = f_addr;
-    ec_rip = Ec::current->get_reg(18);
-    ec_rcx = Ec::current->get_regsRCX();
-    ec_rsp = Ec::current->get_reg(19);
+    ec_rcx = Ec::current->get_reg(Ec::RCX);
+    ec_rip = Ec::current->get_reg(Ec::RIP);
+    ec_rsp = Ec::current->get_reg(Ec::RSP);
     if (Ec::current->is_virutalcpu()) {
         Paddr hpa_rcx_rip;
         mword attrib;
@@ -83,7 +83,7 @@ type(t), page_addr(addr), attr(a), prev(nullptr), next(nullptr) {
                 hpa_rcx_rip, 3, sizeof(mword)));
         assert(rsp_ptr);
         ec_rsp_content = *rsp_ptr + 0x10;
-        }
+    }
     //=============================================================================
 }
 
@@ -125,7 +125,7 @@ void Cow_elt::resolve_cow_fault(Vtlb* tlb, Hpt *hpt, mword virt, Paddr phys, mwo
     phys &= ~PAGE_MASK;
     virt &= ~PAGE_MASK;
     Counter::cow_fault++;
-    
+
     Cow_elt *c = new Cow_elt(virt, phys, attr, hpt, tlb, Cow_elt::NORMAL, fault_addr);
 
     cow_elts->enqueue(c);
@@ -387,19 +387,19 @@ void Cow_elt::commit() {
     size_t count = 0;
     while (c) {
         //        Console::print("c %p", c);
-        asm volatile ("" ::"m" (c)); // to avoid gdb "optimized out" 
+        asm volatile ("" ::"m" (c)); // to avoid gdb "optimized out"                        
         Cow_elt *ce = c->v_is_mapped_elsewhere;
         if (c->linear_add) { 
             int diff = (c->crc != c->crc1);
             if (diff) {
                 void *ptr0 = Hpt::remap_cow(Pd::kern.quota, c->phys_addr[0], 0), 
                         *ptr1 = Hpt::remap_cow(Pd::kern.quota, c->phys_addr[1], 1);
-                memcpy(ptr0, ptr1, PAGE_SIZE);
+                memcpy(ptr0, ptr1, PAGE_SIZE); 
                 c->crc = c->crc1;
             }
             if (!c->age || (c->age && diff) || Ec::keep_cow) {
                 c->age++;
-            } else {
+            } else { 
                 c->age = -1; // to be destroyed;
             }
         } else {
@@ -430,7 +430,7 @@ void Cow_elt::restore_vm_stack_state1() {
     assert(Ec::current->is_virutalcpu());
     Cow_elt *c = Ec::current->vm_kernel_stacks_head(), *head = c,  *n = nullptr;    
     while (c) {
-        c->pte.vtlb->cow_update(c->phys_addr[1], c->attr);
+        c->update_pte(PHYS1, RW);
         n = c->next;
         c = (n == head) ? nullptr : n;
     }
@@ -451,12 +451,37 @@ void Cow_elt::restore_state1() {
     }
 }
 
+void Cow_elt::restore_vm_stack_state2() {
+    assert(Ec::current->is_virutalcpu());
+    Cow_elt *c = Ec::current->vm_kernel_stacks_head(), *head = c,  *n = nullptr;    
+    while (c) {
+        c->update_pte(PHYS2, RW);
+        n = c->next;
+        c = (n == head) ? nullptr : n;
+    }
+}
+
+/**
+ * Restore state1's frames by updating page table entries with the allocated frame2, in order to 
+ * make the first run catch up the second run
+ */
+void Cow_elt::restore_state2() {
+    if(Ec::current->is_virutalcpu())
+        restore_vm_stack_state2();
+    Cow_elt *c = cow_elts->head(), *n = nullptr, *h = c;
+    while (c) {
+        c->update_pte(PHYS2, RW);
+        n = c->next;
+        c = (n == h) ? nullptr : n;
+    }
+}
+
 void Cow_elt::rollback_vm_stack() {
     assert(Ec::current->is_virutalcpu());
     Cow_elt *c = Ec::current->vm_kernel_stacks_head(), *head = c, *n = nullptr;    
     while (c) {
         copy_frames(c->phys_addr[1], c->phys_addr[2], c->phys_addr[0]);
-        c->pte.vtlb->cow_update(c->phys_addr[1], c->attr);
+        c->update_pte(PHYS1, RW);
         n = c->next;
         c = (n == head) ? nullptr : n;
     }
@@ -482,9 +507,20 @@ void Cow_elt::rollback() {
  * upadate hpt or vtlb with phys_addr[0] value and attr
  * called when we have to re-execute the entire double execution
  */
+void Cow_elt::debug_rollback_vm_stack() {
+    Cow_elt *c = nullptr;
+    while (cow_elts->dequeue(c = cow_elts->head())) {
+        free(c);
+    }
+}
+
+/*
+ * upadate hpt or vtlb with phys_addr[0] value and attr
+ * called when we have to re-execute the entire double execution
+ */
 void Cow_elt::debug_rollback() {
     if(Ec::current->is_virutalcpu())
-        rollback_vm_stack();
+        debug_rollback_vm_stack();
     Cow_elt *c = nullptr;
     while (cow_elts->dequeue(c = cow_elts->head())) {
         free(c);
@@ -637,8 +673,8 @@ static inline void Cow_elt::operator delete (void *ptr) {
 
 void Cow_elt::to_log(const char* reason){
     char buff[2*STR_MAX_LENGTH];
-    String::print(buff, "%s d %lx %lx %lx %lx %d de %lx next %lx ", reason, page_addr, 
+    String::print(buff, "%s d %lx %lx %lx %lx %d de %lx next %lx %s", reason, page_addr, 
         phys_addr[0], phys_addr[1], phys_addr[2], age, v_is_mapped_elsewhere ? 
-        page_addr : 0, next ? next->page_addr:0);
+        page_addr : 0, next ? next->page_addr:0, pte.is_hpt ? "Hpt" : "VTLB");
     Logstore::add_entry_in_buffer(buff);    
 }

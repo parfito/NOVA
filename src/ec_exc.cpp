@@ -208,42 +208,60 @@ void Ec::handle_exc_db(Exc_regs *r) {
                 return;
             case SR_PMI:
             {
+                char buff[STR_MAX_LENGTH];
                 ++Counter::pmi_ss;
                 nb_inst_single_step++;
-                if(nb_inst_single_step > 300){
-                    Console::panic("SR_PMI Lost in Single stepping nb_inst_single_step %llu "
-                    "nbInstr_to_execute %llu first_run_instr_number %llu second_run_instr_number %llu", nb_inst_single_step, nbInstr_to_execute, 
-                            first_run_instr_number, second_run_instr_number);
+                if(nb_inst_single_step > nbInstr_to_execute + 5) {
+                    Console::panic("SR_PMI Run %d Lost in Single stepping nb_inst_single_step %llu "
+                    "nbInstr_to_execute %llu first_run_instr_number %llu second_run_instr_number %llu Pd %s Ec %s", Pe::run_number, nb_inst_single_step, 
+                    nbInstr_to_execute, first_run_instr_number, second_run_instr_number, Pd::current->get_name(), Ec::current->get_name());
                 }
-                if (nbInstr_to_execute > 0)
-                    nbInstr_to_execute--;
+//                if (nbInstr_to_execute > 0)
+//                    nbInstr_to_execute--;
                 if (prev_rip == current->regs.REG(ip)) { // Rep Prefix
                     nb_inst_single_step--;
-                    nbInstr_to_execute++; // Re-adjust the number of instruction                  
+//                    nbInstr_to_execute++; // Re-adjust the number of instruction                  
                     
                     // It may happen that this is the final instruction
-                    if (!current->compare_regs_mute()) {
+                    Register cmp = current->compare_regs();
+                    if (cmp) {
+                        String::print(buff, "SR_PMI Run %d REP_PREF %s is different %lx:%lx:%lx:%lx nbSS %llu nbInstToExec %llu", Pe::run_number, 
+                        reg_names[cmp], current->get_reg(cmp, 0), current->get_reg(cmp, 1), current->get_reg(cmp, 2), current->get_reg(cmp), 
+                        nb_inst_single_step, nbInstr_to_execute);
+                        Logstore::add_entry_in_buffer(buff);
+                    } else {
                         // check_instr_number_equals(1);
                         current->disable_step_debug();
+                        if(Pe::inState1) {
+                            current->restore_state2();
+                        }
                         check_memory(PES_SINGLE_STEP);
                         return;
                     }
                 }
                 prev_rip = current->regs.REG(ip);
                 // No need to compare if nbInstr_to_execute > 3 
-                if (nbInstr_to_execute > 3) {
+                if (nb_inst_single_step < nbInstr_to_execute - 2) {
                     current->regs.REG(fl) |= Cpu::EFL_TF;
-                    return;
-                }
-                if (!current->compare_regs_mute()) {
-                    //                            check_instr_number_equals(2);
-                    current->disable_step_debug();
-                    check_memory(PES_SINGLE_STEP);
                     return;
                 } else {
-                    current->regs.REG(fl) |= Cpu::EFL_TF;
-                    nbInstr_to_execute = 1;
-                    return;
+                    Register cmp = current->compare_regs();
+                    if (cmp) {
+                        String::print(buff, "SR_PMI Run %d : %s is different %lx:%lx:%lx:%lx nbSS %llu nbInstToExec %llu", Pe::run_number, 
+                        reg_names[cmp], current->get_reg(cmp, 0), current->get_reg(cmp, 1), current->get_reg(cmp, 2), current->get_reg(cmp), nb_inst_single_step, nbInstr_to_execute);
+                        Logstore::add_entry_in_buffer(buff);
+                        current->regs.REG(fl) |= Cpu::EFL_TF;
+    //                    nbInstr_to_execute = 1;
+                        return;
+                    } else {
+    //                    check_instr_number_equals(2);
+                        current->disable_step_debug();
+                        if(Pe::inState1) {
+                            current->restore_state2();
+                        }
+                        check_memory(PES_SINGLE_STEP);
+                        return;
+                    }
                 }
                 break;
             }
@@ -269,48 +287,81 @@ void Ec::handle_exc_db(Exc_regs *r) {
                 }
                 break;
             case SR_EQU:
+            {
+                char buff[STR_MAX_LENGTH];
                 ++Counter::pmi_ss;
-                if(nb_inst_single_step > 300) {
-                    Console::panic("SR_EQU Lost in Single stepping nb_inst_single_step %llu "
-                    "nbInstr_to_execute %llu first_run_instr_number %llu second_run_instr_number %llu", nb_inst_single_step, nbInstr_to_execute, 
+                if(nb_inst_single_step > nbInstr_to_execute){
+                    Console::panic("SR_EQU Run %d Lost in Single stepping nb_inst_single_step %llu nbInstr_to_execute %llu "
+                    "first_run_instr_number %llu second_run_instr_number %llu", Pe::run_number, nb_inst_single_step, nbInstr_to_execute, 
                             first_run_instr_number, second_run_instr_number);
                 }
                 nb_inst_single_step++;
-                if (nbInstr_to_execute > 0)
-                    nbInstr_to_execute--;
+//                if (nbInstr_to_execute > 0)
+//                    nbInstr_to_execute--;
                 if (prev_rip == current->regs.REG(ip)) { // Rep Prefix
                     nb_inst_single_step--;
-                    nbInstr_to_execute++; // Re-adjust the number of instruction                  
+//                    nbInstr_to_execute++; // Re-adjust the number of instruction                  
                     
                     // It may happen that this is the final instruction
-                    if (!current->compare_regs_mute()) {
+                    Register cmp = current->compare_regs();
+                    if (cmp) {
+                        String::print(buff, "SR_EQU && REP_PREF Run %d %s is different %lx:%lx:%lx:%lx nbSS %llu nbInstToExec %llu", 
+                            Pe::run_number, reg_names[cmp], current->get_reg(cmp, 0), current->get_reg(cmp, 1), current->get_reg(cmp, 2), 
+                            current->get_reg(cmp), nb_inst_single_step, nbInstr_to_execute);
+                        Logstore::add_entry_in_buffer(buff);
+                    } else {
                         // check_instr_number_equals(3);
                         current->disable_step_debug();
+                        if(Pe::inState1) {
+                            current->restore_state2();
+                        }
                         check_memory(PES_SINGLE_STEP);
                         return;
                     }
                 }
                 //here, single stepping 2nd run should be ok
-                if (!current->compare_regs_mute()) {// if ok?
-                    // check_instr_number_equals(4);
-                    current->disable_step_debug();
-                    check_memory(PES_SINGLE_STEP);
-                    return;
-                } else {
+                Register cmp = current->compare_regs();
+                if (cmp) {
+                    String::print(buff, "SR_EQU Run %d %s is different %lx:%lx:%lx:%lx nbSS %llu nbInstToExec %llu", 
+                        Pe::run_number, reg_names[cmp], current->get_reg(cmp, 0), current->get_reg(cmp, 1), 
+                        current->get_reg(cmp, 2), current->get_reg(cmp), nb_inst_single_step, nbInstr_to_execute);
+                    Logstore::add_entry_in_buffer(buff);
                     // single stepping the first run with 2 credits instructions
-                    if (nbInstr_to_execute == 0) { 
-                        current->restore_state1();
-                        nbInstr_to_execute = distance_instruction + nb_inst_single_step + 1;
-                        nb_inst_single_step = 0;
-                        first_run_advanced = true;
-                        current->regs.REG(fl) |= Cpu::EFL_TF;
+                    if (nb_inst_single_step == nbInstr_to_execute) { 
+                        if(!run_switched) {
+                            if(Pe::inState1)
+                                current->restore_state2();
+                            else 
+                                current->restore_state1();   
+                            nbInstr_to_execute *= 2;
+                            nb_inst_single_step = 0;
+    //                        nbInstr_to_execute = distance_instruction + nb_inst_single_step + 1;
+    //                        nb_inst_single_step = 0;
+                            run_switched = true;
+                            current->regs.REG(fl) |= Cpu::EFL_TF;
+                        } else {
+                            Console::panic("SR_EQU Run %d run_switched but %s is different %lx:%lx:%lx:%lx nb_inst_single_step %llu "
+                                "nbInstr_to_execute %llu first_run_instr_number %llu second_run_instr_number %llu Pd %s Ec %s", 
+                                Pe::run_number, reg_names[cmp], current->get_reg(cmp, 0), current->get_reg(cmp, 1), current->get_reg(cmp, 1),
+                                current->get_reg(cmp), nb_inst_single_step, nbInstr_to_execute, first_run_instr_number, second_run_instr_number, 
+                                Pd::current->get_name(), Ec::current->get_name());                            
+                        }
                         return;
                     } else { // relaunch the first run without restoring the second execution state
                         current->regs.REG(fl) |= Cpu::EFL_TF;
                         return;
                     }
+                } else {
+                    // check_instr_number_equals(4);
+                    current->disable_step_debug();
+                    if(Pe::inState1) {
+                        current->restore_state2();
+                    }
+                    check_memory(PES_SINGLE_STEP);
+                    return;
                 }
                 break;
+            }
             default:
                 Console::panic("No step Reason");
         }
@@ -402,6 +453,12 @@ bool Ec::handle_exc_pf(Exc_regs *r) {
  */
 void Ec::handle_exc(Exc_regs *r) {
     Counter::exc[r->vec][Pe::run_number]++;
+    if(Pe::run_number == 1 && step_reason == SR_NIL && run1_reason == PES_PMI) {
+// What are your doing here? Actually, it means 2nd run exceeds 1st run and trigger exception
+// In this case, PMI must be pending and should be served just after IRET
+        reset_pmi = false;
+        return;
+    }
 
     // Deterministic? May this exception be replayed or not
     PE_stopby check_reason = PES_DEFAULT;
@@ -484,7 +541,7 @@ void Ec::check_memory(PE_stopby from) {
         case 0: // First run
             String::print(buff, "rip1 %lx", ec->utcb ? ec->regs.REG(ip) : Vmcs::read(Vmcs::GUEST_RIP));
             Logstore::append_log_in_buffer(buff);    
-            prev_reason = from;
+            run1_reason = from;
             ec->restore_state0();
             counter1 = Lapic::read_instCounter();
             if (from == PES_PMI) {
@@ -501,13 +558,13 @@ void Ec::check_memory(PE_stopby from) {
                     MAX_INSTRUCTION + counter1 - exc_counter1 : counter1 - (Lapic::perf_max_count - 
                         MAX_INSTRUCTION);
                 assert(first_run_instr_number < Lapic::perf_max_count);
-                if (current->utcb){
+                if (current->utcb) {
                     uint8 *ptr = reinterpret_cast<uint8 *> (Hpt::remap_cow(Pd::kern.quota, 
                         Pd::current->Space_mem::loc[Cpu::id], end_rip, 3));
                     if (ptr && (*ptr == 0xf3 || *ptr == 0xf2)) {
                         instruction_in_hex(*(reinterpret_cast<mword *> (ptr)), buff);
                         trace(0, "Rep prefix in Run1 %lx: %s rcx %lx", end_rip, buff, 
-                                end_rcx);
+                            end_rcx);
                         in_rep_instruction = true;
                         Cpu::disable_fast_string();
                     }
@@ -520,16 +577,19 @@ void Ec::check_memory(PE_stopby from) {
                  */
                 if((first_run_instr_number > MAX_INSTRUCTION + 300) || 
                         (first_run_instr_number < MAX_INSTRUCTION - 300)){
-                    trace(0, "PMI served too early or too late counter2 %llx \nMust be dug deeper", 
+                    trace(0, "PMI served too early or too late counter1 %llx \nMust be dug deeper", 
                             counter1);
-                    max_instruction = first_run_instr_number;
+                    second_max_instructions = first_run_instr_number;
                     Lapic::program_pmi(first_run_instr_number);                                        
                 } else {
-                    max_instruction = MAX_INSTRUCTION;
+                    second_max_instructions = MAX_INSTRUCTION;
                     Lapic::program_pmi();                    
                 }
             } else {
+                second_max_instructions = MAX_INSTRUCTION;
                 Lapic::cancel_pmi();
+                String::print(buff, "After cancel %llx", Lapic::read_instCounter());
+                Logstore::add_entry_in_buffer(buff);
             }
             Pe::run_number++;
             exc_counter = 0;
@@ -545,20 +605,20 @@ void Ec::check_memory(PE_stopby from) {
              * single step the first run to catch up the second.
              * 
              */
-            if (from == PES_PMI || (prev_reason == PES_PMI && from != PES_SINGLE_STEP)) {
-                if (prev_reason != PES_PMI) {
+            if (from == PES_PMI || (run1_reason == PES_PMI && from != PES_SINGLE_STEP)) {
+                if (run1_reason != PES_PMI) {
                     /* This means that the second run lasts more than the first. It may also result 
                      * from a simultaneous PMI with another exception which was prioritized
                      * In this case, current pmi does not matter. Just go on with the second run.*/
                     
                     // If simulatneous PMI and exception, Lapic::read_instCounter() must be 
                     // 0xFFFFFFF00001
-                    if(Lapic::read_instCounter() == Lapic::perf_max_count - max_instruction + 1)
+                    if(Lapic::read_instCounter() == Lapic::perf_max_count - second_max_instructions + 1)
                         check_exit();
                     
                     Logstore::dump("check_memory 1", true);
                     trace(0, "Attention : from >< prevreason %d:%d counter1 %llx "
-                    "counter2 %llx", prev_reason, from, counter1, Lapic::read_instCounter());
+                    "counter2 %llx", run1_reason, from, counter1, Lapic::read_instCounter());
                 }
                 exc_counter2 = exc_counter;
                 counter2 = Lapic::read_instCounter();
@@ -569,11 +629,11 @@ void Ec::check_memory(PE_stopby from) {
                  * NEVER be > Lapic::start_counter.
                  */
                 second_run_instr_number = counter2 < Lapic::start_counter ? 
-                    max_instruction + counter2 - exc_counter2 : 
-                    counter2 - (Lapic::perf_max_count - max_instruction);
+                    second_max_instructions + counter2 - exc_counter2 : 
+                    counter2 - (Lapic::perf_max_count - second_max_instructions);
                 assert(second_run_instr_number < Lapic::perf_max_count);
-                if((second_run_instr_number > max_instruction + 300) || 
-                        (second_run_instr_number < max_instruction - 300)){
+                if ((second_run_instr_number > second_max_instructions + 300) || 
+                        (second_run_instr_number < second_max_instructions - 300)){
                     trace(0, "PMI served too early or too late counter2 %llx \nMust be dug deeper", 
                             counter2);
                 } 
@@ -584,20 +644,45 @@ void Ec::check_memory(PE_stopby from) {
 //                      second_run_instr_number ? 2 : 1, first_run_instr_number, 
 //                      second_run_instr_number, Lapic::read_instCounter());
                 if (distance_instruction <= 2) {
-                    if (ec->compare_regs_mute()) {
+                    Register cmp = ec->compare_regs();
+                    if (cmp) {
+                        String::print(buff, "distance_instruction %llu %s is different %lx:%lx:%lx:%lx 1stRunInstr %llu 2ndRunInstr %llu", 
+                            distance_instruction, reg_names[cmp], current->get_reg(cmp, 0), current->get_reg(cmp, 1), current->get_reg(cmp, 2), 
+                            current->get_reg(cmp), first_run_instr_number, second_run_instr_number);
+                        Logstore::add_entry_in_buffer(buff);                    
                         nbInstr_to_execute = distance_instruction + 1;
-                        if(ec->utcb){
-                            prev_rip = current->regs.REG(ip);
-                            ec->enable_step_debug(SR_EQU);
-                            ret_user_iret();
+                        if (first_run_instr_number > second_run_instr_number) {
+                            if(ec->utcb) {
+                                prev_rip = current->regs.REG(ip);
+                                ec->enable_step_debug(SR_EQU);
+                                ret_user_iret();
+                            } else {
+                                prev_rip = Vmcs::read(Vmcs::GUEST_RIP);
+                                vmx_enable_single_step(SR_EQU);
+                            }
+                        } else if (first_run_instr_number < second_run_instr_number) {
+                            ec->restore_state1();
+                            if(ec->utcb) {
+                                prev_rip = current->regs.REG(ip);
+                                ec->enable_step_debug(SR_EQU);
+                                ret_user_iret();
+                            } else {
+                                prev_rip = Vmcs::read(Vmcs::GUEST_RIP);
+                                vmx_enable_single_step(SR_EQU);
+                            }
                         } else {
-                            prev_rip = Vmcs::read(Vmcs::GUEST_RIP);
-                            vmx_enable_single_step(SR_EQU);
+                            Console::panic("1stInstnb = 2Instnb but %s is different %lx:%lx:%lx "
+                            "first_run_instr_number %llu second_run_instr_number %llu", 
+                            reg_names[cmp], current->get_reg(cmp, 0), current->get_reg(cmp, 1), 
+                            current->get_reg(cmp), first_run_instr_number, second_run_instr_number);
                         }
                     } else {
                         //                        check_instr_number_equals(5);                        
                     }
                 } else if (first_run_instr_number > second_run_instr_number) {
+                    String::print(buff, "Single stepping required 1stRunInstr %llu 2ndRunInstr %llu", 
+                        first_run_instr_number, second_run_instr_number);
+                    Logstore::add_entry_in_buffer(buff);                    
                     nbInstr_to_execute = first_run_instr_number - second_run_instr_number;
                     if(ec->utcb){
                         prev_rip = current->regs.REG(ip);
@@ -608,6 +693,9 @@ void Ec::check_memory(PE_stopby from) {
                         vmx_enable_single_step(SR_PMI);
                     }
                 } else if (first_run_instr_number < second_run_instr_number) {
+                    String::print(buff, "Single stepping required 1stRunInstr %llu 2ndRunInstr %llu", 
+                        first_run_instr_number, second_run_instr_number);
+                    Logstore::add_entry_in_buffer(buff);                    
                     ec->restore_state1();
                     nbInstr_to_execute = second_run_instr_number - first_run_instr_number;
                     if(ec->utcb){
@@ -622,10 +710,10 @@ void Ec::check_memory(PE_stopby from) {
             }
         {
             prepare_checking();    
-            reg_diff = ec->compare_regs(from);
+            int reg_diff = ec->compare_regs(from);
             String::print(buff, "rip2 %lx", ec->utcb ? ec->regs_2.REG(ip) : Vmcs::read(Vmcs::GUEST_RIP));
             Logstore::append_log_in_buffer(buff);    
-            if (Cow_elt::compare() ||reg_diff) {
+            if (Cow_elt::compare() || reg_diff) {
                 if(IN_PRODUCTION){
                     Logstore::commit_buffer();
                     ec->rollback();
@@ -634,14 +722,18 @@ void Ec::check_memory(PE_stopby from) {
                     check_exit();
                 } else {
                     Pd *pd = ec->getPd();
-                    trace(0, "Checking failed : Ec %s  Pd: %s From: %d:%d launch_state: %d "
-                        "nb_cow_fault %u counter1 %llx counter2 %llx Nb_pe %llu is_saved %d", 
-                        ec->get_name(), pd->get_name(), prev_reason, from, launch_state, 
-                        Counter::cow_fault, counter1, counter2 ? counter2 : Lapic::read_instCounter(), 
-                        Counter::nb_pe, Fpu::is_saved());
+                    String *s = new String(2*STR_MAX_LENGTH);
+                    String::print(s->get_string(), "Checking failed by %s : Ec %s  Pd: %s From: %s:%s launch_state: %s "
+                        "nb_cow_fault %u counter1 %llx counter2 %llx Nb_pe %llu is_saved %d", reg_diff ? 
+                        reg_names[reg_diff] : "memory", ec->get_name(), pd->get_name(), pe_stop[run1_reason], 
+                        pe_stop[from], launches[launch_state], Counter::cow_fault, counter1, counter2 ? counter2 : 
+                        Lapic::read_instCounter(),  Counter::nb_pe, Fpu::is_saved());
+                    Logstore::add_entry_in_buffer(s->get_string());
+                    trace(0, "%s", s->get_string());
+                    delete s;
                     Logstore::dump("check_memory 2", true);
                     counter2 = nbInstr_to_execute ? counter2 + nbInstr_to_execute : 
-                        Lapic::read_instCounter();
+                    Lapic::read_instCounter();
                     /**
                      * Following instructions must come in this order.
                      * At this point, may be the failing check comes from guest stack change
@@ -664,7 +756,7 @@ void Ec::check_memory(PE_stopby from) {
                      * related to guest OS
                      */ 
     //                if((from_value == prev_reason_value) && (!reg_diff)){
-    //                    debug_started_trace(0, "Rollback started %d", launch_state);  
+    //                    debug_started_trace(0, "Rollback started %s", launches[launch_state]);  
     //                    check_exit();
     //                }
                     /*
@@ -734,7 +826,7 @@ void Ec::check_exit() {
             ret_user_vmrun();
             break;
         case UNLAUNCHED:
-            Console::panic("Bad Run launch_state %u", launch_state);
+            Console::panic("Bad Run launch_state %s", launches[launch_state]);
     }
 }
 
@@ -743,7 +835,7 @@ void Ec::check_exit() {
  */ 
 void Ec::reset_counter() {
     exc_counter = counter1 = counter2 = exc_counter1 = exc_counter2 = nb_inst_single_step = 0;
-    distance_instruction = first_run_instr_number = second_run_instr_number = 0;
+    distance_instruction = first_run_instr_number = second_run_instr_number = second_max_instructions = 0;
     Counter::cow_fault = 0;
     Counter::used_cows_in_old_cow_elts = 0;
     Lapic::program_pmi();
@@ -754,8 +846,9 @@ void Ec::reset_counter() {
 void Ec::reset_all() {
     Pe::run_number = 0;
     reset_counter();
-    prev_reason = 0;
+    run1_reason = 0;
     no_further_check = false;
+    run_switched = false;
     Pending_int::exec_pending_interrupt();
 }
 
@@ -820,11 +913,11 @@ void Ec::save_regs(Exc_regs *r) {
     count_interrupt(r->vec);
     char buff[STR_MAX_LENGTH];
     if(r->vec == Cpu::EXC_PF) {
-        String::print(buff, "INTERRUPT rip %lx run_num %u Page Fault: addr %lx", current->regs.REG(ip), Pe::run_number, 
-            r->cr2);
+        String::print(buff, "PAGE FAULT rip %lx run_num %u addr %lx Counter %llx", 
+        current->regs.REG(ip), Pe::run_number, r->cr2, Lapic::read_instCounter());
     } else {
-    String::print(buff, "INTERRUPT rip %lx run_num %u vec %lu ", current->regs.REG(ip), Pe::run_number, 
-        r->vec);
+        String::print(buff, "INTERRUPT rip %lx run_num %u vec %lu Counter %llx", current->regs.REG(ip), 
+        Pe::run_number, r->vec, Lapic::read_instCounter());
     }
 //    trace(0, "%s", buff);
     Logstore::add_entry_in_buffer(buff);
