@@ -7,6 +7,7 @@
  * Copyright (C) 2012-2013 Udo Steinberg, Intel Corporation.
  * Copyright (C) 2014 Udo Steinberg, FireEye, Inc.
  * Copyright (C) 2012-2018 Alexander Boettcher, Genode Labs GmbH.
+ * Copyright (C) 2016-2019 Parfait Tokponnon, UCLouvain.
  *
  * This file is part of the NOVA microhypervisor.
  *
@@ -31,24 +32,67 @@
 #include "vtlb.hpp"
 #include "sm.hpp"
 #include "pt.hpp"
+#include "msr.hpp"
+#include "lapic.hpp"
+#include "string.hpp"
+#include "vectors.hpp"
+#include "log.hpp"
 #include "pe.hpp"
 #include "lapic.hpp"
+#include "log_store.hpp"
+
+bool Ec::hardening_started = false, Ec::in_rep_instruction = false, Ec::not_nul_cowlist = false, 
+        Ec::no_further_check = false, Ec::run_switched = false, Ec::keep_cow = false,
+        Ec::reset_pmi = true;
+uint64 Ec::exc_counter = 0, Ec::exc_counter1 = 0, Ec::exc_counter2 = 0, Ec::counter1 = 0, 
+        Ec::counter2 = 0, Ec::debug_compteur = 0, Ec::count_je = 0, Ec::nbInstr_to_execute = 0,
+        Ec::nb_inst_single_step = 0, Ec::second_run_instr_number = 0, 
+        Ec::first_run_instr_number = 0, Ec::distance_instruction = 0,
+        Ec::second_max_instructions = 0;
+       
+uint8 Ec::launch_state = 0, Ec::step_reason = 0, Ec::debug_nb = 0, 
+        Ec::debug_type = 0, Ec::replaced_int3_instruction, Ec::replaced_int3_instruction2;
+int Ec::run1_reason = 0, Ec::previous_ret = 0, Ec::nb_try = 0;
+const char* Ec::reg_names[24] = {"N/A", "RAX", "RDX", "RCX", "RBX", "RBP", "RSI", "RDI", "R8", 
+"R9", "R10", "R11", "R12", "R13", "R14", "R15", "RIP", "RSP", "RFLAG", "GUEST_RIP", "GUEST_RSP", 
+"GUEST_RIP", "FPU_DATA", "FPU_STATE"};
+const char* Ec::pe_stop[27] = {"NUL", "PMI", "PAGE_FAULT", "SYS_ENTER", "VMX_EXIT", 
+"INVALID_TSS", "GP_FAULT", "DEV_NOT_AVAIL", "SEND_MSG", "MMIO", "SINGLE_STEP", 
+"VMX_SEND_MSG", "VMX_EXT_INT", "GSI", "MSI", "LVT", "ALIGNEMENT_CHECK", 
+"MACHINE_CHECK", "VMX_INVLPG", "VMX_PAGE_FAULT", "VMX_EPT_VIOL", "VMX_CR", "VMX_EXC",
+"VMX_RDTSC", "VMX_RDTSCP", "VMX_IO", "COW_IN_STACK"};
+const char* Ec::launches[6] = {"UNLAUNCHED", "SYSEXIT", "IRET", "VMRESUME", "VMRUN", "EXT_INT"};
 
 Ec *Ec::current, *Ec::fpowner;
-bool Ec::inVMX = false;
 // Constructors
-Ec::Ec (Pd *own, void (*f)(), unsigned c, char const *nm) : Kobject (EC, static_cast<Space_obj *>(own)), cont (f), pd (own), partner (nullptr), prev (nullptr), next (nullptr), fpu (nullptr), cpu (static_cast<uint16>(c)), glb (true), evt (0), timeout (this), user_utcb (0), xcpu_sm (nullptr), pt_oom(nullptr)
-{
-    trace (TRACE_SYSCALL, "EC:%p created (PD:%p Kernel)", this, own);
-    copy_string(name, nm);
 
+Ec::Ec(Pd *own, void (*f)(), unsigned c, char const *nm) : 
+Kobject(EC, static_cast<Space_obj *> (own)), cont(f), pd(own), partner(nullptr), prev(nullptr), 
+        next(nullptr), fpu(nullptr), cpu(static_cast<uint16> (c)), glb(true), evt(0), timeout(this), 
+        user_utcb(0), xcpu_sm(nullptr), pt_oom(nullptr) {
+    trace(TRACE_SYSCALL, "EC:%p created (PD:%p Kernel)", this, own);
+    copy_string(name, nm);
     regs.vtlb = nullptr;
     regs.vmcs = nullptr;
     regs.vmcb = nullptr;
 }
 
-Ec::Ec (Pd *own, mword sel, Pd *p, void (*f)(), unsigned c, unsigned e, mword u, mword s, Pt *oom, char const *nm) : Kobject (EC, static_cast<Space_obj *>(own), sel, 0xd, free, pre_free), cont (f), pd (p), partner (nullptr), prev (nullptr), next (nullptr), fpu (nullptr), cpu (static_cast<uint16>(c)), glb (!!f), evt (e), timeout (this), user_utcb (u), xcpu_sm (nullptr), pt_oom (oom)
-{
+/**
+ * create en execution context 
+ * @param own
+ * @param sel : selector for the execution context
+ * @param p : protection domain which the execution context will be bound to
+ * @param f : pointer to the routine to be executed
+ * @param c : cpu
+ * @param e : event selector for this execution context
+ * @param u : user thread control block
+ * @param s : stack pointer
+ */
+Ec::Ec(Pd *own, mword sel, Pd *p, void (*f)(), unsigned c, unsigned e, mword u, mword s, Pt *oom, 
+        char const *nm) : Kobject(EC, static_cast<Space_obj *> (own), sel, 0xd, free, pre_free), 
+        cont(f), pd(p), partner(nullptr), prev(nullptr), next(nullptr), fpu(nullptr), 
+        cpu(static_cast<uint16> (c)), glb(!!f), evt(e), timeout(this), user_utcb(u), 
+        xcpu_sm(nullptr), pt_oom(oom) {
     // Make sure we have a PTAB for this CPU in the PD
     pd->Space_mem::init (pd->quota, c);
     copy_string(name, nm);
@@ -132,8 +176,11 @@ Ec::Ec (Pd *own, mword sel, Pd *p, void (*f)(), unsigned c, unsigned e, mword u,
     }
 }
 
-Ec::Ec (Pd *own, Pd *p, void (*f)(), unsigned c, Ec *clone, char const *nm) : Kobject (EC, static_cast<Space_obj *>(own), 0, 0xd, free, pre_free), cont (f), regs (clone->regs), rcap (clone), utcb (clone->utcb), pd (p), partner (nullptr), prev (nullptr), next (nullptr), fpu (clone->fpu), cpu (static_cast<uint16>(c)), glb (!!f), evt (clone->evt), timeout (this), user_utcb (0), xcpu_sm (clone->xcpu_sm), pt_oom(clone->pt_oom)
-{
+Ec::Ec(Pd *own, Pd *p, void (*f)(), unsigned c, Ec *clone, char const *nm) : 
+    Kobject(EC, static_cast<Space_obj *> (own), 0, 0xd, free, pre_free), cont(f), regs(clone->regs), 
+        rcap(clone), utcb(clone->utcb), pd(p), partner(nullptr), prev(nullptr), next(nullptr), 
+        fpu(clone->fpu), cpu(static_cast<uint16> (c)), glb(!!f), evt(clone->evt), timeout(this), 
+        user_utcb(0), xcpu_sm(clone->xcpu_sm), pt_oom(clone->pt_oom) {
     // Make sure we have a PTAB for this CPU in the PD
     pd->Space_mem::init (pd->quota, c);
     copy_string(name, nm);
@@ -318,12 +365,15 @@ void Ec::ret_user_vmresume()
             current->regs.vtlb->flush (true);
     }
 
-    if (EXPECT_FALSE (get_cr2() != current->regs.cr2))
-        set_cr2 (current->regs.cr2);
-
-//    trace(0, "VMResume  GuestRip %lx", Vmcs::read(Vmcs::GUEST_RIP));   
-    Lapic::cancel_pmi();
-    inVMX = true;
+    if (EXPECT_FALSE(get_cr2() != current->regs.cr2))
+        set_cr2(current->regs.cr2);
+    char buff[STR_MAX_LENGTH];
+//    String::print_page(buff, current->regs.REG(sp));
+    String::print(buff, "VMResume : Run %d Ec %s Rip %lx Counter %llx", Pe::run_number, 
+    current->get_name(), Vmcs::read(Vmcs::GUEST_RIP), Lapic::read_instCounter());
+    Logstore::add_entry_in_buffer(buff);
+    if(step_reason == SR_DBG)
+        enable_mtf();
     asm volatile ("mov %2," EXPAND(PREG(sp);)
             EXPAND(SAVE_GPR)
             "movb $0x0, %0;"

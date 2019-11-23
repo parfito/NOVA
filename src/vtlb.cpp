@@ -24,7 +24,6 @@
 #include "stdio.hpp"
 #include "vtlb.hpp"
 #include "vmx.hpp"
-#include "cow_elt.hpp"
 
 size_t Vtlb::gwalk (Exc_regs *regs, mword gla, mword &gpa, mword &attr, mword &error)
 {
@@ -167,10 +166,10 @@ Vtlb::Reason Vtlb::miss (Exc_regs *regs, mword virt, mword &error)
             attr |= TLB_S;
         }
         
-        if(attr & TLB_W){
-            attr &= ~TLB_W;
-            attr |= TLB_COW;
-        }
+//        if(attr & TLB_W) {
+//            attr &= ~TLB_W;
+//            attr |= TLB_COW;
+//        }
         tlb->val = static_cast<typeof tlb->val>((host & ~((1UL << shift) - 1)) | attr | TLB_D | TLB_A);
 //        trace (TRACE_VTLB, "VTLB Miss SUCCESS CR3:%#010lx A:%#010lx P:%#010lx A:%#lx E:%#lx TLB:%#016llx GuestIP %#lx", 
 //                regs->cr3_shadow, virt, phys, attr, error, tlb->val, Vmcs::read(Vmcs::GUEST_RIP));
@@ -224,72 +223,4 @@ void Vtlb::flush (bool full)
     flush_ptab (full);
 
     Counter::print<1,16> (++Counter::vtlb_flush, Console_vga::COLOR_LIGHT_RED, SPN_VFL);
-}
-
-bool Vtlb::is_cow(mword virt, mword error){
-    if(!(error & ERR_W))
-        return false;
-    unsigned l = max();
-    unsigned b = bpl();
-    unsigned shift = --l * b + PAGE_BITS;
-    Vtlb *tlb = static_cast<Vtlb *> (this) ;
-    tlb += virt >> shift & ((1UL << b) - 1);
-
-    for (;; tlb = static_cast<Vtlb *> (Buddy::phys_to_ptr(tlb->addr())) + (virt >> (--l * b + PAGE_BITS) & ((1UL << b) - 1))) {
-
-//        asm volatile ("" :: "m" (tlb)); // to avoid gdb "optimized out"
-//        asm volatile ("" :: "m" (l)); // to avoid gdb "optimized out"
-        if (EXPECT_FALSE(!tlb->val))
-            return false;
-
-        if (EXPECT_FALSE(l && !tlb->super()))
-                continue;            
-        
-        if(tlb->attr() & TLB_COW){
-//            trace (TRACE_VTLB, "Cow fault A:%#010lx E:%#lx TLB:%#016llx GuestIP %#lx",             
-//                virt, error, tlb->val, Vmcs::read(Vmcs::GUEST_RIP));
-            Counter::vtlb_cow++;   
-//            mword attr = tlb->attr();
-//            Paddr new_phys = Cow_elt::resolve_cow_fault(virt, tlb->addr(), tlb->attr());
-//            tlb->val = new_phys | attr| TLB_W;
-            tlb->val |= TLB_W;
-            tlb->val &= ~TLB_COW;
-//            Paddr r_phys;
-//            mword r_attr;
-//            Pd::current->Space_mem::loc[Cpu::id].lookup(virt, r_phys, r_attr);
-//            Console::print("Cow error  v: %lx  phys: %lx attr %lx r_phys %lx r_attr %lx", virt, tlb->addr(), tlb->attr(), r_phys, r_attr);        
-            return true;
-        } else {
-            return false;
-        }
-    }
-}
-
-void Vtlb::cow_update(Paddr phys, mword attr){
-    val = phys | attr| TLB_W;
-    val &= ~TLB_COW;
-}
-
-size_t Vtlb::vtlb_lookup(mword v, Paddr &p, mword &a) {
-    unsigned l = max();
-    unsigned b = bpl();
-    unsigned shift = --l * b + PAGE_BITS;
-    Vtlb *tlb = static_cast<Vtlb *> (this) ;
-    tlb += v >> shift & ((1UL << b) - 1);
-
-    for (;; tlb = static_cast<Vtlb *> (Buddy::phys_to_ptr(tlb->addr())) + (v >> (--l * b + PAGE_BITS) & ((1UL << b) - 1))) {
-        if (EXPECT_FALSE(!tlb->val))
-            return 0;
-
-        if (EXPECT_FALSE(l && !tlb->super()))
-                continue; 
-        
-        size_t s = 1UL << (l * b + tlb->order());
-
-        p = static_cast<Paddr> (tlb->addr() | (v & (s - 1)));
-
-        a = tlb->attr();
-
-        return s;
-    }
 }

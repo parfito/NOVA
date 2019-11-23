@@ -115,10 +115,8 @@ class Hpt : public Pte<Hpt, mword, PTE_LEV, PTE_BPL, false>
 
         Paddr replace (Quota &quota, mword, mword);
 
-        static void *remap (Quota &quota, Paddr);
-        static void *remap_cow(Quota &quota, Paddr, mword addr = 0);
-        Paddr replace_cow(Quota &quota, mword, mword);
-        void replace_cow_n(Quota &quota, mword, int, mword);
+//    static void *remap(Quota &quota, Paddr);
+    static void *remap (Quota &quota, Paddr, bool = false);
 
         static bool dest_hpt (Paddr p, mword, unsigned) { return (p != reinterpret_cast<Paddr>(&FRAME_0) && p != reinterpret_cast<Paddr>(&FRAME_1)); }
         static bool iter_hpt_lev(unsigned l, mword v)
@@ -127,14 +125,24 @@ class Hpt : public Pte<Hpt, mword, PTE_LEV, PTE_BPL, false>
             if (sizeof(v) > 4 && (v & (1ULL << 47)))
                 v |= ~((1ULL << 48) - 1);
 #endif
-
             return l >= 2 || (l == 1 && v >= SPC_LOCAL_OBJ);
         }
 
         static bool dest_loc (Paddr, mword v, unsigned l) { return v >= USER_ADDR && l >= 3; }
         static bool iter_loc_lev(unsigned l, mword) { return l > 3; }
-        void cow_update(Paddr, mword);
 
+    static void *remap_cow(Quota &quota, Hpt, mword, uint8 = 0, uint8 = 1);
+    
+    static void *remap_cow(Quota &quota, Paddr, uint8 = 0, uint8 = 1);
+
+    bool is_cow_fault(Quota &quota, mword, mword);
+            
+    void print_table(Quota &quota, mword); 
+        
+    Paddr replace_cow(Quota &quota, mword, mword, mword);
+    void replace_cow_n(Quota &quota, mword, int, mword, mword);
+    void cow_update(Paddr, mword, mword);
+    
 };
 
 class Hptp : public Hpt

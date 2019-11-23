@@ -26,9 +26,9 @@
 #include "config.hpp"
 #include "types.hpp"
 #include "assert.hpp"
+#include "msr.hpp"
 
-class Cpu
-{
+class Cpu {
     private:
         static char const * const vendor_string[];
 
@@ -63,6 +63,7 @@ class Cpu
             FEAT_PCID           = 49,
             FEAT_TSC_DEADLINE   = 56,
             FEAT_SMEP           = 103,
+        FEAT_FAST_STRING    = 105,
             FEAT_SMAP           = 116,
             FEAT_1GB_PAGES      = 154,
             FEAT_CMP_LEGACY     = 161,
@@ -73,6 +74,7 @@ class Cpu
         {
             EXC_DB          = 1,
             EXC_NMI         = 2,
+        EXC_BP          = 3,
             EXC_NM          = 7,
             EXC_TS          = 10,
             EXC_GP          = 13,
@@ -98,6 +100,7 @@ class Cpu
 
         enum
         {
+        CR4_TSD         = 1UL << 2,         // 0x4
             CR4_DE          = 1UL << 3,         // 0x8
             CR4_PSE         = 1UL << 4,         // 0x10
             CR4_PAE         = 1UL << 5,         // 0x20

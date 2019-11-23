@@ -6,6 +6,7 @@
  *
  * Copyright (C) 2012 Udo Steinberg, Intel Corporation.
  * Copyright (C) 2015 Alexander Boettcher, Genode Labs GmbH
+ * Copyright (C) 2016-2019 Parfait Tokponnon, UCLouvain.
  *
  * This file is part of the NOVA microhypervisor.
  *
@@ -27,12 +28,15 @@
 #include "space_obj.hpp"
 #include "space_pio.hpp"
 
+#define UNPROTECTED_PD_NUM              1
+
 class Pd : public Kobject, public Refcount, public Space_mem, public Space_pio, public Space_obj
 {
     private:
-    char name[MAX_STR_LENGTH];
+    char name[STR_MAX_LENGTH];
+    bool to_be_cowed = false, debug = false;
     static Slab_cache cache;
-    static const char *names[];
+    static const char *unprotected_pd_names[UNPROTECTED_PD_NUM];
 
         WARN_UNUSED_RESULT
         mword clamp (mword,   mword &, mword, mword);
@@ -94,7 +98,6 @@ class Pd : public Kobject, public Refcount, public Space_mem, public Space_pio, 
     public:
         static Pd *current CPULOCAL_HOT;
         static Pd kern, root;
-
         Quota quota { };
 
         Slab_cache pt_cache;
@@ -108,7 +111,10 @@ class Pd : public Kobject, public Refcount, public Space_mem, public Space_pio, 
         Pd (Pd *);
         ~Pd();
 
-    Pd(Pd *own, mword sel, mword a, char* const s = const_cast<char* const> ("Unknown"));
+    Pd(const Pd&);
+    Pd &operator=(Pd const &);
+
+    Pd(Pd *own, mword sel, mword a, char const *s = "Unknown");
 
         ALWAYS_INLINE HOT
         inline void make_current()
@@ -183,7 +189,8 @@ class Pd : public Kobject, public Refcount, public Space_mem, public Space_pio, 
 
             cache.free (ptr, pd_to->quota);
         }
-    
     char *get_name() {return name;}  
     
+    bool is_debug() { return debug;}  
+    void set_debug(bool db) { debug = db;}
 };

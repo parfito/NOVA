@@ -95,7 +95,7 @@ LFLAGS		:= --defsym=GIT_VER=0x$(call gitrv) --gc-sections --warn-common -static 
 %-$(ARCH).o:	%.ld $(MAKEFILE_LIST)
 		$(call message,PRE,$@)
 		# 4M static memory in BSS for kernel memory
-		$(CC) $(SFLAGS) -xc -E -P -MT $@ $< -o $@ -DCONFIG_MEMORY_BOOT=4M
+		$(CC) $(SFLAGS) -xc -E -P -MT $@ $< -o $@ -DCONFIG_MEMORY_BOOT=960M
 
 %-$(ARCH).o:	%.S $(MAKEFILE_LIST)
 		$(call message,ASM,$@)

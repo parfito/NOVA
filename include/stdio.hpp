@@ -36,6 +36,26 @@ do {                                                                \
     }                                                               \
 } while (0)
 
+#define debug_started_trace(T,format,...)                                         \
+do {                                                                \
+    if (EXPECT_FALSE ((trace_mask & (T)) == (T)) && Console::print_on) {                 \
+        mword __esp;                                                \
+        Console::print ("[%2ld] " format,                           \
+                static_cast<long>(((reinterpret_cast<mword>(&__esp) - 1) & ~PAGE_MASK) ==     \
+                CPU_LOCAL_STCK ? Cpu::id : ~0UL), ## __VA_ARGS__);  \
+    }                                                               \
+} while (0)
+
+#define trace_no_newline(T,format,...)                                         \
+do {                                                                \
+    if (EXPECT_FALSE ((trace_mask & (T)) == (T))) {                 \
+        mword __esp;                                                \
+        Console::print_no_newline ("[%2ld] " format,                           \
+                static_cast<long>(((reinterpret_cast<mword>(&__esp) - 1) & ~PAGE_MASK) ==     \
+                CPU_LOCAL_STCK ? Cpu::id : ~0UL), ## __VA_ARGS__);  \
+    }                                                               \
+} while (0)
+
 /*
  * Definition of trace events
  */
@@ -46,10 +66,12 @@ enum {
     TRACE_KEYB      = 1UL << 3,
     TRACE_VMX       = 1UL << 4,
     TRACE_SVM       = 1UL << 5,
+    TRACE_HARDEN    = 1UL << 6,
+    NO_TRACE        = 1UL << 7,
     TRACE_ACPI      = 1UL << 8,
     TRACE_EPT       = 1UL << 9,
     COW_FAULT       = 1UL << 10,
-    TRACE_PE        = 1UL << 11,
+    TRACE_PE       = 1UL << 10,
     TRACE_MEMORY    = 1UL << 13,
     TRACE_PCI       = 1UL << 14,
     TRACE_SCHEDULE  = 1UL << 16,
@@ -72,9 +94,10 @@ unsigned const trace_mask =
 #ifdef DEBUG
 //                            TRACE_OOM       |
 //                            TRACE_APIC      |
-//                            TRACE_KEYB      |
+                            TRACE_KEYB      |
                             TRACE_VMX       |
                             TRACE_SVM       |
+                            TRACE_HARDEN    |
 //                            TRACE_ACPI      |
                             TRACE_EPT       |
                             COW_FAULT       |
@@ -82,7 +105,7 @@ unsigned const trace_mask =
 //                            TRACE_MEMORY    |
 //                            TRACE_PCI       |
 //                            TRACE_SCHEDULE  |
-                            TRACE_VTLB      |
+//                            TRACE_VTLB      |
 //                            TRACE_DEL       |
 //                            TRACE_REV       |
 //                            TRACE_RCU       |

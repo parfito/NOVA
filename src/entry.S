@@ -58,23 +58,7 @@ handlers:
                         mov     %REG(ax), %es
 1:
 .endm
-        
-.macro                  SAVE_FLAGS
-#ifdef __i386__
-                        pushfl;
-#else                        
-                        pushfq;
-#endif
-.endm        
-                        
-.macro                  LOAD_FLAGS
-#ifdef __i386__
-                        popfl;
-#else                        
-                        popfq;
-#endif
-.endm
-        
+
 .macro                  EXCEPTION VEC, DPL
 INTRGATE                \DPL
 #ifdef __i386__
@@ -97,7 +81,35 @@ INTRGATE                \DPL
 #endif
                         jmp     entry_exc_error
 .endm
-
+        
+.macro                  SAVE_REGS
+                        testb   $3, OFS_CS (%REG(bx))
+                        jz 2f
+                        SAVE_FLAGS
+                        SAVE_GPR
+                        mov     %REG(bx), %ARG_1
+                        call save_regs
+                        LOAD_GPR
+                        LOAD_FLAGS
+2:
+.endm
+   
+.macro                  SAVE_FLAGS
+#ifdef __i386__
+                        pushfl;
+#else                        
+                        pushfq;
+#endif
+.endm
+                        
+.macro                  LOAD_FLAGS
+#ifdef __i386__
+                        popfl;
+#else                        
+                        popfq;
+#endif
+.endm
+        
 /*
  * Exception Entries
  */
@@ -105,6 +117,7 @@ entry_exc:              push    $0
 entry_exc_error:        SAVE_STATE
                         mov     %cr2, %REG(ax)
                         mov     %REG(ax), OFS_CR2 (%REG(bx))
+                        SAVE_REGS
                         mov     %REG(bx), %ARG_1
                         call    exc_handler
                         jmp     ret_from_interrupt
@@ -146,6 +159,7 @@ INTRGATE                0
 
 entry_gsi:              push    $0
                         SAVE_STATE
+                        SAVE_REGS
                         mov     OFS_VEC (%REG(bx)), %ARG_1
                         call    gsi_vector
                         jmp     ret_from_interrupt
@@ -162,6 +176,7 @@ INTRGATE                0
 
 entry_lvt:              push    $0
                         SAVE_STATE
+                        SAVE_REGS
                         mov     OFS_VEC (%REG(bx)), %ARG_1
                         call    lvt_vector
                         jmp     ret_from_interrupt
@@ -178,6 +193,7 @@ INTRGATE                0
 
 entry_msi:              push    $0
                         SAVE_STATE
+                        SAVE_REGS
                         mov     OFS_VEC (%REG(bx)), %ARG_1
                         call    msi_vector
                         jmp     ret_from_interrupt
@@ -194,6 +210,7 @@ INTRGATE                0
 
 entry_ipi:              push    $0
                         SAVE_STATE
+                        SAVE_REGS
                         mov     OFS_VEC (%REG(bx)), %ARG_1
                         call    ipi_vector
                         jmp     ret_from_interrupt
@@ -206,7 +223,7 @@ ret_from_interrupt:     testb   $3, OFS_CS (%REG(bx))
                         call    chk_kern_preempt
                         LOAD_GPR
                         add     $(6 * SIZE), %REG(sp)
-                        RET_USER_EXC
+                        RET_USER_EXC  // we don't need to care about this iret because it is not going out of the kernel. we reached here from a kernel fault
 
 #ifdef __i386__
 entry_sysenter_db:      mov     12(%esp), %esp
@@ -224,6 +241,12 @@ entry_sysenter:         LOAD_KSP
                         lea     -11*SIZE(%REG(sp)), %REG(sp)
                         SAVE_GPR
                         mov     $(CPU_LOCAL_STCK + PAGE_SIZE), %REG(sp)
+                        SAVE_FLAGS
+                        SAVE_GPR
+                        mov     $3, %ARG_1              //PES_SYSENTER
+                        call    memory_checker
+                        LOAD_GPR
+                        LOAD_FLAGS
                         and     $0xf, %ARG_1
                         jmp     *syscall(,%ARG_1,SIZE)
 
@@ -248,7 +271,7 @@ entry_vmx:              push    %REG(ax)
                         mov     $(CPU_LOCAL_STCK + PAGE_SIZE), %REG(sp)
                         SAVE_FLAGS
                         SAVE_GPR
-                        call save_counter
+                        call subtract_host_instructions
                         LOAD_GPR
                         LOAD_FLAGS
                         jmp     vmx_handler

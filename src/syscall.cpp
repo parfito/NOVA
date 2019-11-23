@@ -32,6 +32,7 @@
 #include "syscall.hpp"
 #include "utcb.hpp"
 #include "vectors.hpp"
+#include "log_store.hpp"
 
 template <Sys_regs::Status S, bool T>
 void Ec::sys_finish()
@@ -121,10 +122,52 @@ void Ec::send_msg()
     die ("IPC Timeout");
 }
 
+void Ec::debug_call(mword r9){
+    switch((r9>>DEBUG_CMD_SHIFT) & DEBUG_CMD_MASK){
+        case DEBUG_CMD_KILL :
+            die("Die command received from user space. Going to kill ..");
+            break;
+        case DEBUG_CMD_LOG :
+        {
+            bool debug_state = (r9>>DEBUG_STATE_SHIFT) & DEBUG_STATE_MASK ? true : false;
+            if(debug_state)
+                trace_no_newline(0, "Activating ");
+            else 
+                trace_no_newline(0, "De-activating ");                
+            switch((r9 >> DEBUG_SCOPE_SHIFT) & DEBUG_SCOPE_MASK){
+                case DEBUG_SCOPE_EC :
+                    trace(0, "debuging for ec %s", current->get_name());
+                    current->debug = debug_state;
+                    break;
+                case DEBUG_SCOPE_PD :
+                    trace(0, "debuging for all PD %s 's threads requested by %s", current->getPd()->get_name(), current->get_name());
+                    current->pd->set_debug(debug_state);
+                    break;
+                case DEBUG_SCOPE_SYSTEM :
+                    trace(0, "debuging for all system threads requested by %s", current->get_name());
+                    Logstore::log_on = debug_state;
+                    break;
+                default:
+                    Console::panic("Wrong DEBUG_SCOPE %lx %lx command received from %s", r9, 
+                            (r9 >> DEBUG_SCOPE_SHIFT) & DEBUG_SCOPE_MASK, current->name);
+            }
+        }
+            break;
+        default : 
+            Console::panic("Wrong DEBUG_CMD %lx received from %s", r9, current->name);
+            break;
+    }
+}
+
 void Ec::sys_call()
 {
     Sys_call *s = static_cast<Sys_call *>(current->sys_regs());
 
+    if(s->r9){
+        debug_call(s->r9);
+        sys_finish<Sys_regs::COM_TIM>();
+    }
+    
     Kobject *obj = Space_obj::lookup (s->pt()).obj();
     if (EXPECT_FALSE (obj->type() != Kobject::PT))
         sys_finish<Sys_regs::BAD_CAP>();
@@ -703,7 +746,7 @@ void Ec::sys_ec_ctrl()
 
         case 1: /* yield */
             current->cont = sys_finish<Sys_regs::SUCCESS>;
-            Sc::schedule (false, false);
+                Sc::schedule (false, false);
             break;
 
         case 2: /* helping */
@@ -729,7 +772,7 @@ void Ec::sys_ec_ctrl()
 
         case 3: /* re-schedule */
             current->cont = sys_finish<Sys_regs::SUCCESS>;
-            Sc::schedule (false, true);
+                Sc::schedule (false, true);
             break;
 
         default:

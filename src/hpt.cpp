@@ -48,9 +48,18 @@ void Hpt::sync_master_range (Quota & quota, mword s, mword e)
         sync_from (quota, Hptp (reinterpret_cast<mword>(&PDBR)), s, CPU_LOCAL);
 }
 
-Paddr Hpt::replace (Quota &quota, mword v, mword p)
-{
-    Hpt o, *e = walk (quota, v, 0); assert (e);
+/**
+ * ---Parfait---
+ * replace the frame mapped to the address v page by an other frame starting at
+ * physical address p if it is not writable
+ * @param quota
+ * @param v
+ * @param p
+ * @return the new page table entry value
+ */
+Paddr Hpt::replace(Quota &quota, mword v, mword p) {
+    Hpt o, *e = walk(quota, v, 0);
+    assert(e);
 
     do o = *e; while (o.val != p && !(o.attr() & HPT_W) && !e->set (o.val, p));
 
@@ -58,10 +67,37 @@ Paddr Hpt::replace (Quota &quota, mword v, mword p)
     return e->addr();
 }
 
-void *Hpt::remap (Quota &quota, Paddr phys)
+/**
+ * ---Parfait---
+ * retourne un pointeur sur l'adresse virtuelle correspondant à l'addresse 
+ * physique phys dans notre espace d'adressage en y mappant au passage la frame contenant
+ * cette adresse physique
+// */
+//void *Hpt::remap(Quota &quota, Paddr phys) {
+//    Hptp hpt(current());
+//
+//    size_t size = 1UL << (bpl() + PAGE_BITS);
+//
+//    mword offset = phys & (size - 1);
+//
+//    phys &= ~offset;
+//
+//    Paddr old; mword attr;
+//    if (hpt.lookup (SPC_LOCAL_REMAP, old, attr)) {
+//        hpt.update (quota, SPC_LOCAL_REMAP,        bpl(), 0, 0, Hpt::TYPE_DN); flush (SPC_LOCAL_REMAP);
+//        hpt.update (quota, SPC_LOCAL_REMAP + size, bpl(), 0, 0, Hpt::TYPE_DN); flush (SPC_LOCAL_REMAP + size);
+//    }
+//
+//    hpt.update (quota, SPC_LOCAL_REMAP,        bpl(), phys,        HPT_W | HPT_P);
+//    hpt.update (quota, SPC_LOCAL_REMAP + size, bpl(), phys + size, HPT_W | HPT_P);
+//
+//    return reinterpret_cast<void *>(SPC_LOCAL_REMAP + offset);
+//}
+
+void *Hpt::remap (Quota &quota, Paddr phys, bool is_cow)
 {
     Hptp hpt (current());
-
+    mword page = is_cow ? COW_ADDR : SPC_LOCAL_REMAP;
     size_t size = 1UL << (bpl() + PAGE_BITS);
 
     mword offset = phys & (size - 1);
@@ -69,38 +105,53 @@ void *Hpt::remap (Quota &quota, Paddr phys)
     phys &= ~offset;
 
     Paddr old; mword attr;
-    if (hpt.lookup (SPC_LOCAL_REMAP, old, attr)) {
-        hpt.update (quota, SPC_LOCAL_REMAP,        bpl(), 0, 0, Hpt::TYPE_DN); flush (SPC_LOCAL_REMAP);
-        hpt.update (quota, SPC_LOCAL_REMAP + size, bpl(), 0, 0, Hpt::TYPE_DN); flush (SPC_LOCAL_REMAP + size);
+    if (hpt.lookup (page, old, attr)) {
+        hpt.update (quota, page,        bpl(), 0, 0, Hpt::TYPE_DN); flush (page);
+        hpt.update (quota, page + size, bpl(), 0, 0, Hpt::TYPE_DN); flush (page + size);
     }
 
-    hpt.update (quota, SPC_LOCAL_REMAP,        bpl(), phys,        HPT_W | HPT_P);
-    hpt.update (quota, SPC_LOCAL_REMAP + size, bpl(), phys + size, HPT_W | HPT_P);
+    hpt.update (quota, page,        bpl(), phys,        HPT_W | HPT_P);
+    hpt.update (quota, page + size, bpl(), phys + size, HPT_W | HPT_P);
 
-    return reinterpret_cast<void *>(SPC_LOCAL_REMAP + offset);
+    return reinterpret_cast<void *>(page + offset);
 }
 
-void *Hpt::remap_cow(Quota &quota, Paddr phys, mword addr) {
+void *Hpt::remap_cow(Quota &quota, Hpt proc_hpt, mword addr, uint8 offset, uint8 span) {
+    Paddr phys;
+    mword a;
+    if(!proc_hpt.lookup(addr, phys, a))
+        return nullptr;
+    return remap_cow(quota, phys, offset, span);
+}
+
+void *Hpt::remap_cow(Quota &quota, Paddr phys, uint8 offset, uint8 span) {
+    assert(span < PAGE_SIZE);
+    mword new_addr = COW_ADDR + PAGE_SIZE * offset, addr_offset = phys & PAGE_MASK;
     Hptp hpt(current());
-    addr += COW_ADDR;
-    hpt.replace_cow(quota, addr, phys | Hpt::HPT_W | Hpt::HPT_P);
-//    Hpt::cow_flush(addr);
-    return reinterpret_cast<void *> (addr);
+    hpt.replace_cow(quota, new_addr, phys, Hpt::HPT_W | Hpt::HPT_P);
+    if(addr_offset > static_cast<mword>(PAGE_SIZE - span))
+        hpt.replace_cow(quota, new_addr + PAGE_SIZE, phys + PAGE_SIZE, 
+                Hpt::HPT_W | Hpt::HPT_P);
+    return reinterpret_cast<void *> (new_addr + addr_offset);
 }
 
-Paddr Hpt::replace_cow(Quota &quota, mword v, mword p) {
+Paddr Hpt::replace_cow(Quota &quota, mword v, Paddr p, mword a) {
+    v &= ~PAGE_MASK; 
+    p &= ~PAGE_MASK; 
+    a &= ~HPT_NX;
+    assert((a & ~PAGE_MASK) == 0);
     Hpt o, *e = walk(quota, v, 0);
-    if(!e) return 0;
-    
+    assert(e);
+    p |= a;    
     do o = *e; while (o.val != p && !e->set(o.val, p));
 
     flush(v);
     return e->addr();
 }
 
-void Hpt::replace_cow_n(Quota &quota, mword v, int n, mword p) {
+void Hpt::replace_cow_n(Quota &quota, mword v, int n, Paddr p, mword a) {
     for (int i = 0; i< n; i++)
-        replace_cow(quota, v+i*PAGE_SIZE, p+i*PAGE_SIZE);
+        replace_cow(quota, v+i*PAGE_SIZE, p+i*PAGE_SIZE, a);
 }
 
 /**
@@ -109,9 +160,11 @@ void Hpt::replace_cow_n(Quota &quota, mword v, int n, mword p) {
  * @param phys
  * @param attr
  */
-void Hpt::cow_update(Paddr phys, mword attr){
+void Hpt::cow_update(Paddr phys, mword attr, mword v){
     /**TODO
      Use tremplate to merge Hpt::cow_update and Vtlb::cow_update in one function*/
-    val = phys | attr| HPT_W;
-//    val &= ~HPT_COW; waiting for we introduce this variable in Hpt
+    Hpt o, *e = this;
+    mword new_val = phys | attr;
+    do o = *e; while (o.val != new_val && !e->set (o.val, new_val));
+    flush(v);    
 }

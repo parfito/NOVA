@@ -32,7 +32,7 @@ class Vmcs
         static Vmcs *current CPULOCAL_HOT;
 
         static unsigned vpid_ctr CPULOCAL;
-
+        static const char* reason[57];
         static union vmx_basic {
             uint64      val;
             struct {
@@ -131,6 +131,9 @@ class Vmcs
             EPTP                    = 0x201aul,
             EPTP_HI                 = 0x201bul,
 
+            TSC_MUL                 = 0x2032ul,
+            TSC_MUL_HI              = 0x2033ul,
+            
             INFO_PHYS_ADDR          = 0x2400ul,
 
             // 64-Bit Guest State
@@ -283,13 +286,16 @@ class Vmcs
         enum Ctrl0
         {
             CPU_INTR_WINDOW         = 1ul << 2,
+            CPU_TSC_OFFSET          = 1ul << 3,
             CPU_HLT                 = 1ul << 7,
             CPU_INVLPG              = 1ul << 9,
+            CPU_RDTSC               = 1ul << 12,
             CPU_CR3_LOAD            = 1ul << 15,
             CPU_CR3_STORE           = 1ul << 16,
             CPU_NMI_WINDOW          = 1ul << 22,
             CPU_IO                  = 1ul << 24,
             CPU_IO_BITMAP           = 1ul << 25,
+            CPU_MONITOR_TRAP_FLAG   = 1ul << 27,
             CPU_SECONDARY           = 1ul << 31,
         };
 
@@ -298,6 +304,7 @@ class Vmcs
             CPU_EPT                 = 1ul << 1,
             CPU_VPID                = 1ul << 5,
             CPU_URG                 = 1ul << 7,
+            CPU_TSC_MUL             = 1ul << 25,
         };
 
         enum Reason
@@ -349,6 +356,7 @@ class Vmcs
             VMX_EPT_VIOLATION       = 48,
             VMX_EPT_MISCONFIG       = 49,
             VMX_INVEPT              = 50,
+            VMX_RDTSCP              = 51,
             VMX_PREEMPT             = 52,
             VMX_INVVPID             = 53,
             VMX_WBINVD              = 54,
@@ -441,6 +449,7 @@ class Vmcs
         static bool has_vpid()      { return ctrl_cpu[1].clr & CPU_VPID; }
         static bool has_urg()       { return ctrl_cpu[1].clr & CPU_URG; }
         static bool has_vnmi()      { return ctrl_pin.clr & PIN_VIRT_NMI; }
+        static bool has_mtf()      { return ctrl_cpu[0].clr & CPU_MONITOR_TRAP_FLAG; }
 
         static void init();
 };

@@ -25,6 +25,8 @@
 #include "vectors.hpp"
 #include "vmx.hpp"
 #include "vtlb.hpp"
+#include "pe.hpp"
+#include "log_store.hpp"
 
 void Ec::vmx_exception()
 {
@@ -60,8 +62,7 @@ void Ec::vmx_exception()
         case 0x30e:         // #PF
             mword err = Vmcs::read (Vmcs::EXI_INTR_ERROR);
             mword cr2 = Vmcs::read (Vmcs::EXI_QUALIFICATION);
-            if(current->regs.vtlb->is_cow(cr2, err))
-                ret_user_vmresume();
+            
             switch (Vtlb::miss (&current->regs, cr2, err)) {
 
                 case Vtlb::GPA_HPA:
@@ -84,7 +85,6 @@ void Ec::vmx_exception()
 void Ec::vmx_extint()
 {
     unsigned vector = Vmcs::read (Vmcs::EXI_INTR_INFO) & 0xff;
-
     if (vector >= VEC_IPI)
         Lapic::ipi_vector (vector);
     else if (vector >= VEC_MSI)
@@ -187,30 +187,43 @@ void Ec::vmx_cr()
 
 void Ec::handle_vmx()
 {
-    inVMX = false;
     Cpu::hazard = (Cpu::hazard | HZD_DS_ES | HZD_TR) & ~HZD_FPU;
 
     mword reason = Vmcs::read (Vmcs::EXI_REASON) & 0xff;
+    unsigned reason_vec = 0;
+    Counter::vmi[reason]++;
 
-    Counter::vmi[reason]++;
-    Counter::vmi[reason]++;
-//    if(reason == Vmcs::VMX_EXTINT){
-//        unsigned vector = Vmcs::read (Vmcs::EXI_INTR_INFO) & 0xff;
-//        if(vector == VEC_LVT_PERFM)
-//            trace(0, "VMExit reason %ld:%d Guest rip %lx counter %llx rcx %lx", reason, 
-//                    vector, Vmcs::read (Vmcs::GUEST_RIP), Lapic::read_instCounter(), current->regs.REG(cx));
-//    }
-//    else if (reason == Vmcs::VMX_EXC_NMI){
-//        mword intr_info = Vmcs::read (Vmcs::EXI_INTR_INFO);
-//        if((intr_info & 0x7ff) == 0x30e) {       // #PF
-//            mword err = Vmcs::read (Vmcs::EXI_INTR_ERROR);
-//            mword cr2 = Vmcs::read (Vmcs::EXI_QUALIFICATION);
-//            trace(0, "VMExit reason %ld:%lx:%lx Guest rip %lx counter %llx rcx %lx", reason, 
-//                    cr2, err, Vmcs::read (Vmcs::GUEST_RIP), Lapic::read_instCounter(), current->regs.REG(cx));    } 
-//    }
-//    else
-//        trace(0, "VMExit reason %ld Guest rip %lx counter %llx rcx %lx", reason, 
-//                Vmcs::read (Vmcs::GUEST_RIP), Lapic::read_instCounter(), current->regs.REG(cx));
+    char counter_buff[STR_MIN_LENGTH], buff[STR_MAX_LENGTH + 50];
+    if(Lapic::counter_vmexit_value > Lapic::perf_max_count - MAX_INSTRUCTION)
+        String::print(counter_buff, "%#llx", Lapic::counter_vmexit_value);
+    else
+        String::print(counter_buff, "%llu", Lapic::counter_vmexit_value);
+    size_t n = String::print(buff, "VMEXIT guest rip %lx rsp %lx flags %lx run_num %u counter %s:%#llx reason %s", 
+            Vmcs::read(Vmcs::GUEST_RIP), Vmcs::read(Vmcs::GUEST_RSP), Vmcs::read(Vmcs::GUEST_RFLAGS), 
+            Pe::run_number, counter_buff, Lapic::read_instCounter(), Vmcs::reason[reason]);
+    if(reason == Vmcs::VMX_EXTINT) {
+        reason_vec = Vmcs::read (Vmcs::EXI_INTR_INFO) & 0xff;
+        String::print(buff+n, " vec %u", reason_vec);
+    } else if(reason == Vmcs::VMX_EXC_NMI) {
+        mword intr_info = Vmcs::read (Vmcs::EXI_INTR_INFO);
+        switch(intr_info & 0x7ff) {
+            case 0x202: // NMI
+                copy_string(buff+n, " NMI", STR_MAX_LENGTH + 50 - n);
+                break;
+            case 0x307: // #NM
+                copy_string(buff+n, " NM", STR_MAX_LENGTH + 50 - n);
+                break;
+            case 0x30e: // #PF
+                String::print(buff+n, " PF %lx:%lx ", Vmcs::read (Vmcs::EXI_QUALIFICATION), 
+                        Vmcs::read (Vmcs::EXI_INTR_ERROR));    
+                break;
+            default:
+                String::print(buff+n, " Don't know this VMX_EXTINT %lx", intr_info & 0x7ff);
+        } 
+    } else if (reason == Vmcs::VMX_MTF) {
+        copy_string(buff+n, " VMX_MTF", STR_MAX_LENGTH + 50 - n);
+    }
+    Logstore::add_entry_in_buffer(buff);
 
     switch (reason) {
         case Vmcs::VMX_EXC_NMI:     vmx_exception();
@@ -226,4 +239,11 @@ void Ec::handle_vmx()
     current->regs.dst_portal = reason;
 
     send_msg<ret_user_vmresume>();
+}
+
+void Ec::enable_mtf() {
+    if (!Vmcs::has_mtf()) return;
+    mword val = Vmcs::read(Vmcs::CPU_EXEC_CTRL0);
+    val |= Vmcs::CPU_MONITOR_TRAP_FLAG;
+    Vmcs::write(Vmcs::CPU_EXEC_CTRL0, val);
 }

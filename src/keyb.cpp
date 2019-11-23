@@ -24,7 +24,8 @@
 #include "gsi.hpp"
 #include "keyb.hpp"
 #include "stdio.hpp"
-#include "vtlb.hpp"
+#include "log.hpp"
+#include "log_store.hpp"
 
 unsigned Keyb::gsi = ~0u;
 
@@ -61,6 +62,9 @@ void Keyb::interrupt()
             case 0x1:               // esc
                 Acpi::reset();
                 Io::out<uint8>(0xcf9, 0x6);
+                break;
+            case 0x20:              // d
+                Logstore::dump("Keyb::interrupt", true, 5, true);
                 break;
             case 0x2e:              // c
                 Counter::dump();

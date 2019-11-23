@@ -7,6 +7,7 @@
  * Copyright (C) 2012-2013 Udo Steinberg, Intel Corporation.
  * Copyright (C) 2014 Udo Steinberg, FireEye, Inc.
  * Copyright (C) 2012-2018 Alexander Boettcher, Genode Labs GmbH.
+ * Copyright (C) 2016-2019 Parfait Tokponnon, UCLouvain.
  *
  * This file is part of the NOVA microhypervisor.
  *
@@ -33,7 +34,6 @@
 #include "tss.hpp"
 #include "si.hpp"
 #include "cmdline.hpp"
-
 #include "stdio.hpp"
 
 class Utcb;
@@ -63,7 +63,7 @@ class Ec : public Kobject, public Refcount, public Queue<Sc>
             };
             uint32  xcpu;
         };
-        char name[MAX_STR_LENGTH];        
+        char name[STR_MAX_LENGTH];        
         unsigned const evt;
         Timeout_hypercall timeout;
         mword          user_utcb;
@@ -218,11 +218,105 @@ class Ec : public Kobject, public Refcount, public Queue<Sc>
     public:
         static Ec *current CPULOCAL_HOT;
         static Ec *fpowner CPULOCAL;
-        static bool inVMX;
 
-        Ec(Pd *, void (*)(), unsigned, char const *nm = "Unknown");
-        Ec(Pd *, mword, Pd *, void (*)(), unsigned, unsigned, mword, mword, Pt *, char const *nm = "Unknown");
-        Ec(Pd *, Pd *, void (*f)(), unsigned, Ec *, char const *nm = "Unknown");
+    bool debug = false;
+    enum Launch_type {
+        UNLAUNCHED = 0,
+        SYSEXIT = 1,
+        IRET = 2,
+        VMRESUME = 3,
+        VMRUN = 4,
+        EXT_INT = 5,
+    };
+
+    enum Step_reason {
+        SR_NIL = 0,
+        SR_MMIO = 1,
+        SR_PIO = 2,
+        SR_RDTSC = 3,
+        SR_PMI = 4,
+        SR_GP = 5,
+        SR_DBG = 6,
+        SR_EQU = 7,
+        SR_VMIO = 8,
+    };
+
+    enum PE_stopby {
+        PES_DEFAULT = 0,
+        PES_PMI = 1,
+        PES_PAGE_FAULT = 2,
+        PES_SYS_ENTER = 3,
+        PES_VMX_EXIT = 4,
+        PES_INVALID_TSS = 5,
+        PES_GP_FAULT = 6,
+        PES_DEV_NOT_AVAIL = 7,
+        PES_SEND_MSG = 8,
+        PES_MMIO = 9,
+        PES_SINGLE_STEP = 10,
+        PES_VMX_SEND_MSG = 11,
+        PES_VMX_EXT_INT = 12,
+        PES_GSI = 13,
+        PES_MSI = 14,
+        PES_LVT = 15,
+        PES_ALIGNEMENT_CHECK = 16,
+        PES_MACHINE_CHECK = 17,
+        PES_VMX_INVLPG = 18,
+        PES_VMX_PAGE_FAULT = 19,
+        PES_VMX_EPT_VIOL = 20,
+        PES_VMX_CR = 21,
+        PES_VMX_EXC = 22,
+        PES_VMX_RDTSC = 23,
+        PES_VMX_RDTSCP = 24,
+        PES_VMX_IO = 25,
+        PES_COW_IN_STACK = 26,
+    };
+    
+    enum Register {
+        NOREG       = 0,
+        RAX         = 1,
+        RBX         = 2,
+        RCX         = 3,
+        RDX         = 4,
+        RBP         = 5,
+        RDI         = 6,
+        RSI         = 7,
+        R8          = 8,
+        R9          = 9,
+        R10         = 10,
+        R11         = 11,
+        R12         = 12,
+        R13         = 13,
+        R14         = 14,
+        R15         = 15,
+        RIP         = 16,
+        RSP         = 17,
+        RFLAG       = 18,
+        GUEST_RIP   = 19,
+        GUEST_RSP   = 20,
+        GUEST_RFLAG = 21,
+        FPU_DATA    = 22,
+        FPU_STATE   = 23,
+    };
+
+    enum Debug_type {
+        DT_NULL = 0,
+        CMP_TWO_RUN = 1,
+        STORE_RUN_STATE = 2,
+    };
+    static mword prev_rip, instruction_value, tscp_rcx1, tscp_rcx2;
+    static uint64 counter1, counter2, exc_counter, exc_counter1, exc_counter2, debug_compteur, 
+    count_je, nbInstr_to_execute, tsc1, tsc2, nb_inst_single_step, second_run_instr_number, 
+    first_run_instr_number, distance_instruction, second_max_instructions;
+    static uint8 launch_state, step_reason, debug_nb, debug_type, 
+    replaced_int3_instruction, replaced_int3_instruction2;
+    static bool hardening_started, in_rep_instruction, not_nul_cowlist, 
+    no_further_check, run_switched, keep_cow, reset_pmi;
+    static int run1_reason, previous_ret, nb_try;
+    static const char* reg_names[24], *launches[6], *pe_stop[27];
+    
+    Ec(Pd *, void (*)(), unsigned, char const *nm = "Unknown");
+    Ec(Pd *, mword, Pd *, void (*)(), unsigned, unsigned, mword, mword, Pt *, char const *nm = "Unknown");
+    Ec(Pd *, Pd *, void (*f)(), unsigned, Ec *, char const *nm = "Unknown");
 
         ~Ec();
 
@@ -483,5 +577,20 @@ class Ec : public Kobject, public Refcount, public Queue<Sc>
         template <void(*C)()>
         static void check(mword, bool = true);
         
-        char *get_name() { return name; }
+    REGPARM(1)
+    static void check_memory(PE_stopby = PES_DEFAULT) asm ("memory_checker");
+    REGPARM(1)
+    static void vm_check_memory(int = 0);
+    REGPARM(1)
+    static void save_regs(Exc_regs *) asm ("save_regs");
+
+    Pd* getPd() {
+        return pd;
+    }
+
+    char *get_name() {
+        return name;
+    }
+    static void enable_mtf();
+    static void debug_call(mword);
 };

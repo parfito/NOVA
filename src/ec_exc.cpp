@@ -6,6 +6,7 @@
  *
  * Copyright (C) 2012 Udo Steinberg, Intel Corporation.
  * Copyright (C) 2013-2018 Alexander Boettcher, Genode Labs GmbH.
+ * Copyright (C) 2016-2019 Parfait Tokponnon, UCLouvain.
  *
  * This file is part of the NOVA microhypervisor.
  *
@@ -24,6 +25,8 @@
 #include "mca.hpp"
 #include "stdio.hpp"
 #include "lapic.hpp"
+#include "pe.hpp"
+#include "log_store.hpp"
 
 void Ec::load_fpu()
 {
@@ -172,7 +175,7 @@ void Ec::handle_exc (Exc_regs *r)
     switch (r->vec) {
         case Cpu::EXC_NMI:
             Console::print("NMI Counter %llx inVMX %s", Lapic::read_instCounter(), 
-                    inVMX ? "true" : "false");
+                    current->utcb ? "true" : "false");
             return;
 
         case Cpu::EXC_NM:
@@ -206,4 +209,26 @@ void Ec::handle_exc (Exc_regs *r)
         return;
 
     die ("EXC", r);
+}
+/**
+ * This function is called at the end of every processing element to save the first and second run
+ * states and also to make the states comparison and commitment if everythins went fine
+ * @param from : where it is called from. Must be different from 0
+ */
+void Ec::check_memory(PE_stopby from) {
+   asm volatile ("" ::"m" (from)); // to avoid gdb "optimized out"            
+}
+
+void Ec::save_regs(Exc_regs *r) {
+    char buff[STR_MAX_LENGTH];
+    if(r->vec == Cpu::EXC_PF) {
+        String::print(buff, "PAGE FAULT rip %lx run_num %u addr %lx Counter %llx", 
+        current->regs.REG(ip), Pe::run_number, r->cr2, Lapic::read_instCounter());
+    } else {
+        String::print(buff, "INTERRUPT rip %lx run_num %u vec %lu Counter %llx", current->regs.REG(ip), 
+        Pe::run_number, r->vec, Lapic::read_instCounter());
+    }
+//    trace(0, "%s", buff);
+    Logstore::add_entry_in_buffer(buff);
+    return;
 }

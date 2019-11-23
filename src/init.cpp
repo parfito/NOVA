@@ -69,7 +69,6 @@ void init (mword magic, mword mbi)
     // Now we're ready to talk to the world
     Console::print ("\fNOVA Microhypervisor v%d-%07lx (%s): %s %s [%s] [%s]\n", CFG_VER, reinterpret_cast<mword>(&GIT_VER), ARCH, __DATE__, __TIME__, COMPILER_STRING, magic == Multiboot::MAGIC ? "MBI" : (magic==Multiboot2::MAGIC ? "MBI2" : ""));
 
-    Hip::print_mem();
     Idt::build();
     Gsi::setup();
     Acpi::setup();

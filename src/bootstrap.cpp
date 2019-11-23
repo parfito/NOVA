@@ -24,6 +24,7 @@
 #include "hip.hpp"
 #include "msr.hpp"
 #include "lapic.hpp"
+#include "log_store.hpp"
 
 extern "C" NORETURN
 void bootstrap()
@@ -33,14 +34,14 @@ void bootstrap()
     Cpu::init();
 
     // Create idle EC
-    Ec::current = new (Pd::root) Ec (Pd::current = &Pd::kern, Ec::idle, Cpu::id);
+    Ec::current = new (Pd::root) Ec (Pd::current = &Pd::kern, Ec::idle, Cpu::id, const_cast<char* const>("idle_ec"));
     Ec::current->add_ref();
     Pd::current->add_ref();
     Space_obj::insert_root (Pd::kern.quota, Sc::current = new (Pd::root) Sc (&Pd::kern, Cpu::id, Ec::current));
     Sc::current->add_ref();
 
-    // Barrier: wait for all ECs to arrive here
-//    for (Atomic::add (barrier, 1UL); barrier != Cpu::online; pause()) ;
+//  Barrier: wait for all ECs to arrive here
+//  for (Atomic::add (barrier, 1UL); barrier != Cpu::online; pause()) ;
 
     Msr::write<uint64>(Msr::IA32_TSC, 0);
 
@@ -53,5 +54,7 @@ void bootstrap()
     }
 
     Lapic::activate_pmi();    
+    Logstore::log_on = true;
+//    Console::print_on = true;
     Sc::schedule();
 }

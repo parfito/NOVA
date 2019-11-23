@@ -340,13 +340,6 @@ void Hip::add_buddy (Hip_mem *&mem, Hip * hip)
     mem++;
 }
 
-void Hip::print_mem(){
-    Hip *h = hip();
-    h->for_each_mem([&](Hip_mem const mem){
-        mem.print();
-    });
-}
-
 bool Hip::is_mmio(Paddr const phys){
     if (phys < 0x1000UL)
         return true;

@@ -24,7 +24,7 @@
 #include "atomic.hpp"
 #include "config.hpp"
 #include "extern.hpp"
-#include "stdio.hpp"
+#include "cpu.hpp"
 
 class Hip_cpu
 {
@@ -55,18 +55,13 @@ class Hip_mem
             HYP_LOG     = -6u
         };
 
-        uint64  addr;
-        uint64  size;
-        uint32  type;
-        uint32  aux;
-        
-        void print() const {
-            Console::print("deb %llx fin %llx size %llu type %x aux %x", addr, addr + size-1, size/(1024*1024), type, aux);
-        }
+    uint64 addr;
+    uint64 size;
+    uint32 type;
+    uint32 aux;
 };
 
-class Hip
-{
+class Hip {
     private:
         uint32  signature;              // 0x0
         uint16  checksum;               // 0x4
@@ -88,17 +83,11 @@ class Hip
         Hip_cpu cpu_desc[NUM_CPU];
         Hip_mem mem_desc[];
         
-        template <typename FUNC>
-        inline void for_each_mem(FUNC fn) {
-            mword const mhv_cnt = (length - mem_offs) / mem_size;
-            for (uint32 i = 0; i < mhv_cnt; i++) fn(mem_desc[i]);
-        }        
-
     public:
         enum Feature {
-            FEAT_IOMMU  = 1U << 0,
-            FEAT_VMX    = 1U << 1,
-            FEAT_SVM    = 1U << 2,
+        FEAT_IOMMU = 1U << 0,
+        FEAT_VMX = 1U << 1,
+        FEAT_SVM = 1U << 2,
         };
 
         static mword root_addr;
@@ -152,13 +141,14 @@ class Hip
         static void add_mod (Hip_mem *&, T const *, uint32);
 
         INIT
-        static void add_mhv (Hip_mem *&);
+    static void add_buddy (Hip_mem *&, Hip *);
 
         INIT
-        static void add_buddy (Hip_mem *&, Hip *);
+    static void add_mhv(Hip_mem *&);
 
         static void add_cpu();
         static void add_check();
-        static void print_mem();
-        static bool is_mmio(Paddr const);
+    
+    static bool is_mmio(const Paddr);
+    static void list_mmio();
 };
