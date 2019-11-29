@@ -386,7 +386,12 @@ void Cow_elt::place_phys0() {
 }
 
 void Cow_elt::free(Cow_elt* c){
-    c->update_pte(PHYS0, RO);
+    Paddr phys;
+    mword attr;
+    if(Pd::current->Space_mem::loc[Cpu::id].lookup(c->page_addr, phys, attr) && 
+            phys == c->phys_addr[0]){
+        c->update_pte(PHYS0, RO);
+    }
 //    c->to_log("free deleting 1");      
     delete c;    
 }

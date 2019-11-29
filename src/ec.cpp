@@ -384,8 +384,8 @@ void Ec::ret_user_iret() {
         reset_pmi = true;*/
     char buff[STR_MAX_LENGTH];
 //    String::print_page(buff, current->regs.REG(sp));
-    String::print(buff, "Ireting : Run %d Ec %s Rip %lx Counter %llx", Pe::run_number, 
-    current->get_name(), current->get_reg(RIP), Lapic::read_instCounter());
+    String::print(buff, "Ireting : Run %d Ec %s Rip %lx RDI %lx Counter %llx", Pe::run_number, 
+    current->get_name(), current->get_reg(RIP), current->regs.REG(di), Lapic::read_instCounter());
     Logstore::add_entry_in_buffer(buff);
 //  //    debug_started_trace(0, "Ireting");
     asm volatile ("lea %0," EXPAND(PREG(sp); LOAD_GPR LOAD_SEG RET_USER_EXC) : : "m" (current->regs)
@@ -1283,8 +1283,21 @@ Ec::Register Ec::compare_regs(PE_stopby reason) {
             return FPU_STATE;
     }
     // following checks are not valid if reason is Sysenter
-    if (reason == PES_SYS_ENTER) 
+    if (reason == PES_SYS_ENTER) {
+        char buff[2*STR_MAX_LENGTH];
+        size_t n = 0;
+        if (regs.REG(ip) != (Pe::inState1 ? regs_2.REG(ip) : regs_1.REG(ip))) {
+            n = String::print(buff, "Sys_enter : rip %#lx:%#lx:%#lx:%#lx",
+                regs_0.REG(ip), regs_1.REG(ip), regs_2.REG(ip), regs.REG(ip));
+        }
+        if (regs.REG(sp) != (Pe::inState1 ? regs_2.REG(sp) : regs_1.REG(sp))) {
+            n += String::print(buff+n, " rsp %#lx:%#lx:%#lx:%#lx",
+                regs_0.REG(sp), regs_1.REG(sp), regs_2.REG(sp), regs.REG(sp));
+        }
+        String::print(buff+n, " Pe %llu", Counter::nb_pe);
+        Logstore::add_entry_in_buffer(buff);
         return NOREG;        
+    }
     if(utcb){
         if (regs.REG(ip) != (Pe::inState1 ? regs_2.REG(ip) : regs_1.REG(ip))) {
             return RIP;

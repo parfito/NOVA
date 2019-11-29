@@ -125,6 +125,19 @@ bool Ec::handle_exc_ts(Exc_regs *r) {
     return true;
 }
 
+bool Ec::handle_fake_gp(Exc_regs *r) {
+    if (Cpu::hazard & HZD_TR) {
+        return false;
+    }
+
+    if (fixup(r->REG(ip))) {
+        return false;
+    }
+    if (r->user() && (current->is_temporal_exc() || current->is_io_exc())){
+        return false;
+    }
+    return true;
+}
 /**
  * Handle General Protection fault
  * @param r
@@ -173,7 +186,7 @@ bool Ec::handle_exc_gp(Exc_regs *r) {
     delete buffer;
     Logstore::dump("handle_exc_gp", true);
     Counter::dump();
-    ec->start_debugging(Debug_type::STORE_RUN_STATE);
+    ec->start_debugging(STORE_RUN_STATE);
     return false;
 }
 
@@ -274,8 +287,13 @@ void Ec::handle_exc_db(Exc_regs *r) {
                     Console::panic("SR_DBG Finish");
                 } else {
                     current->regs.REG(fl) |= Cpu::EFL_TF;
+                    mword rbxrax8 = current->regs.REG(bx) + current->regs.REG(ax) * 8;
+                    mword* next_rdi_ptr = reinterpret_cast<mword*>(Hpt::remap_cow(Pd::kern.quota, 
+                    Pd::current->Space_mem::loc[Cpu::id], rbxrax8, 3, sizeof(mword)));
                     char buff[STR_MAX_LENGTH];
-                    String::print(buff, "%llu IP %lx", nb_inst_single_step, current->regs.REG(ip)); 
+                    String::print(buff, "%llu IP %lx RDI %lx RBX %lx RAX %lx next_rdi %lx:%lx", nb_inst_single_step, 
+                    current->regs.REG(ip), current->regs.REG(di), current->regs.REG(bx), current->regs.REG(ax), 
+                    rbxrax8, next_rdi_ptr ? *next_rdi_ptr : 0); 
                     Logstore::add_entry_in_buffer(buff);
                     nb_inst_single_step++;
                     return;
@@ -459,6 +477,9 @@ void Ec::handle_exc(Exc_regs *r) {
     // Deterministic? May this exception be replayed or not
     PE_stopby check_reason = PES_DEFAULT;
     if(r->user() && handle_deterministic_exception(r->vec, check_reason)){
+        if(r->vec == Cpu::EXC_GP && handle_fake_gp(r)){
+            current->start_debugging(STORE_RUN_STATE);
+        }
         check_memory(check_reason);        
     }
     switch (r->vec) {
@@ -861,12 +882,24 @@ void Ec::reset_all() {
 void Ec::start_debugging(Debug_type dt) {
     debug_type = dt;
     debug_rollback();
-    reset_all();
+    exc_counter1 = exc_counter;
+    counter1 = Lapic::read_instCounter();
+    /*
+     * Here we assume that Lapic::start_counter = (Lapic::perf_max_count - 
+     * MAX_INSTRUCTION) ie 0xFFFFFFF00000. So when counter overflows, counter1 will 
+     * NEVER be > Lapic::start_counter.
+     */
+    first_run_instr_number = counter1 < Lapic::start_counter ? 
+        MAX_INSTRUCTION + counter1 - exc_counter1 : counter1 - (Lapic::perf_max_count - 
+            MAX_INSTRUCTION);
+    nbInstr_to_execute = first_run_instr_number;
+    Lapic::program_pmi();
     Pe::run_number = 0;
     Pe::inState1 = false;
-    nbInstr_to_execute = first_run_instr_number;
+    char buff[STR_MAX_LENGTH];
+    String::print(buff, "Starting debugging ... for %llu instructions", nbInstr_to_execute);
+    Logstore::add_entry_in_buffer(buff);
     restore_state0_data();
-    launch_state = Ec::IRET;
     enable_step_debug(SR_DBG);
     check_exit();
 }

@@ -95,6 +95,7 @@ private:
     static void handle_exc_nm();
     static bool handle_exc_ts(Exc_regs *);
     static bool handle_exc_gp(Exc_regs *);
+    static bool handle_fake_gp(Exc_regs *);
     static bool handle_exc_pf(Exc_regs *);
     static void handle_exc_db(Exc_regs *);
 
