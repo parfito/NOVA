@@ -34,6 +34,7 @@
 #include "log_store.hpp"
 
 Ec *Ec::current, *Ec::fpowner;
+bool Ec::debug_started;
 
 // Constructors
 Ec::Ec (Pd *own, void (*f)(), unsigned c, char const *nm) : Kobject (EC, static_cast<Space_obj *>(own)), cont (f), pd (own), partner (nullptr), prev (nullptr), next (nullptr), fpu (nullptr), cpu (static_cast<uint16>(c)), glb (true), evt (0), timeout (this), user_utcb (0), xcpu_sm (nullptr), pt_oom(nullptr)
@@ -274,7 +275,8 @@ void Ec::ret_user_sysexit()
         current->regs.dst_portal = 13;
         send_msg<Ec::ret_user_sysexit>();
     }
-//    trace(0, "Sysreting Pd %s Ec %s PE %llu", current->getPd()->get_name(), current->name, Counter::nb_pe++);
+    debug_started_trace(0, "Sysreting Pd %s Ec %s RIP %lx PE %llu", current->getPd()->get_name(), 
+            current->name, current->regs.ARG_IP, Counter::nb_pe++);
     asm volatile ("lea %0," EXPAND (PREG(sp); LOAD_GPR RET_USER_HYP) : : "m" (current->regs) : "memory");
 
     UNREACHED;
@@ -287,7 +289,8 @@ void Ec::ret_user_iret()
     if (EXPECT_FALSE (hzd))
         handle_hazard (hzd, ret_user_iret);
 
-//    trace(0, "Ireting Pd %s Ec %s PE %llu", current->getPd()->get_name(), current->name, Counter::nb_pe);
+    debug_started_trace(0, "Ireting Pd %s Ec %s Rip %lx EFLAGS %lx PE %llu", current->getPd()->get_name(), 
+            current->name, current->regs.REG(ip), current->regs.REG(fl), Counter::nb_pe);
     asm volatile ("lea %0," EXPAND (PREG(sp); LOAD_GPR LOAD_SEG RET_USER_EXC) : : "m" (current->regs) : "memory");
 
     UNREACHED;

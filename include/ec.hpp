@@ -219,6 +219,7 @@ class Ec : public Kobject, public Refcount, public Queue<Sc>
         static Ec *current CPULOCAL_HOT;
         static Ec *fpowner CPULOCAL;
         bool debug = false;
+        static bool debug_started;
 
         Ec (Pd *, void (*)(), unsigned, char const *s = "Unknown");
         Ec (Pd *, mword, Pd *, void (*)(), unsigned, unsigned, mword, mword, Pt *, char const *s = "Unknown");
