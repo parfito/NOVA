@@ -348,14 +348,10 @@ void Ec::ret_user_sysexit() {
         current->save_state0();
         launch_state = Ec::SYSEXIT;
     }
-    debug_started_trace(0, "Sysreting Pd %s Ec %s PE %llu", current->getPd()->get_name(), current->name, Counter::nb_pe++);
-    asm volatile ("lea %0," EXPAND (PREG(sp); LOAD_GPR RET_USER_HYP) : : "m" (current->regs) : "memory");
     char buff[STR_MAX_LENGTH];
-//    String::print_page(buff, current->regs.REG(sp));
-    String::print(buff, "Sysreting : Run %d Ec %s Rip %lx Counter %llx", Pe::run_number, 
-    current->get_name(), current->regs.ARG_IP, Lapic::read_instCounter());
+    String::print(buff, "Sysreting Run %d Pd %s Ec %s Rip %lx Counter %llx", Pe::run_number, 
+    current->pd->get_name(), current->get_name(), current->regs.ARG_IP, Lapic::read_instCounter());
     Logstore::add_entry_in_buffer(buff);
-//    Console::print("%s", buff);
     if (step_reason == SR_NIL) {
         asm volatile ("lea %0," EXPAND(PREG(sp); LOAD_GPR RET_USER_HYP) : : "m" (current->regs) : 
                     "memory");
@@ -378,12 +374,9 @@ void Ec::ret_user_iret() {
         launch_state = Ec::IRET;
     }
     char buff[STR_MAX_LENGTH];
-//    String::print_page(buff, current->regs.REG(sp));
-    String::print(buff, "Ireting : Run %d Ec %s Rip %lx EFLAGS %lx Counter %llx", Pe::run_number, 
-    current->get_name(), current->get_reg(RIP), current->get_reg(RFLAG), Lapic::read_instCounter());
+    String::print(buff, "Ireting Run %d Pd %s Ec %s Rip %lx EFLAGS %lx Counter %llx", Pe::run_number, 
+    current->pd->get_name(), current->get_name(), current->get_reg(RIP), current->get_reg(RFLAG), Lapic::read_instCounter());
     Logstore::add_entry_in_buffer(buff);
-//  //    debug_started_trace(0, "Ireting");
-//    Console::print("%s", buff);
     asm volatile ("lea %0," EXPAND(PREG(sp); LOAD_GPR LOAD_SEG RET_USER_EXC) : : "m" (current->regs)
     : "memory");
 

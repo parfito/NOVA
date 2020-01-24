@@ -287,8 +287,8 @@ void Table_logs::dump(char const *funct_name, bool from_tail, size_t log_depth){
     if(log_depth == 0 || log_depth > log_number) {
         log_depth = log_number;
     }
-    trace(0, "%s Log %lu %s cursor %lu start %lu depth %lu", funct_name, log_number, 
-            from_tail ? "from_last" : "from_first", cursor, start, log_depth);                
+    trace(0, "%s Log %lu %s total %lu cursor %lu start %lu depth %lu", funct_name, log_number, 
+            from_tail ? "from_last" : "from_first", total_logs, cursor, start, log_depth);                
     if(log_number == 1) {
         logs[cursor ? cursor - 1 : log_max].print(false);
         return;

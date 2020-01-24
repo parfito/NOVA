@@ -54,7 +54,7 @@ void bootstrap()
 
     Hip::list_memory();
     Lapic::activate_pmi();
-    Logstore::log_on = true;
+//    Logstore::log_on = true;
 //    Console::print_on = true;
     Sc::schedule();
 }

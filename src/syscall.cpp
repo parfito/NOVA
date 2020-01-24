@@ -217,10 +217,15 @@ void Ec::recv_kern()
         fpu = current->utcb->load_exc (&ec->regs);
     else if (ec->cont == ret_user_vmresume){
         if(!debug_started) {
-            Console::print_on = true;
+            Logstore::log_on = true;
+            char buff0[STR_MAX_LENGTH];
+            String::print(buff0, "Logs starting ... PE %llu", Counter::nb_pe);
+            Logstore::add_log_in_buffer(buff0);
             debug_started = true;
         }
-        debug_started_trace(0, "current %s ec %s", current->name, ec->name);
+        char buff[STR_MAX_LENGTH];
+        String::print(buff, "current %s ec %s", current->name, ec->name);
+        Logstore::add_entry_in_buffer(buff);
         fpu = current->utcb->load_vmx (&ec->regs);
     }
     else if (ec->cont == ret_user_vmrun)
@@ -322,9 +327,11 @@ void Ec::sys_reply()
         else if (ec->cont == ret_user_iret)
             fpu = src->save_exc (&ec->regs);
         else if (ec->cont == ret_user_vmresume){
-            debug_started_trace(0, "current %s ec %s", current->name, ec->name);            
+            char buff[STR_MAX_LENGTH];
+            String::print(buff, "current %s ec %s", current->name, ec->name);
+            Logstore::add_entry_in_buffer(buff);
             fpu = src->save_vmx (&ec->regs);
-            Console::print_on = false;
+            Logstore::log_on = false;
         }
         else if (ec->cont == ret_user_vmrun)
             fpu = src->save_svm (&ec->regs);
