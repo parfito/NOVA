@@ -275,7 +275,7 @@ void Ec::ret_user_sysexit()
         current->regs.dst_portal = 13;
         send_msg<Ec::ret_user_sysexit>();
     }
-    debug_started_trace(0, "Sysreting Pd %s Ec %s RIP %lx PE %llu", current->getPd()->get_name(), 
+    debug_started_trace(0, "Sysreting Pd %s Ec %s Rip %lx PE %llu", current->getPd()->get_name(), 
             current->name, current->regs.ARG_IP, Counter::nb_pe++);
     asm volatile ("lea %0," EXPAND (PREG(sp); LOAD_GPR RET_USER_HYP) : : "m" (current->regs) : "memory");
 

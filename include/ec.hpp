@@ -490,4 +490,7 @@ class Ec : public Kobject, public Refcount, public Queue<Sc>
 
         void disable_step_debug();
         static void debug_call(mword);
+        REGPARM(1)
+        static void trace_interrupt(Exc_regs *) asm ("trace_interrupt");
+        static void trace_sysenter() asm ("trace_sysenter");
 };

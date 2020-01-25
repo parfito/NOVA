@@ -210,3 +210,16 @@ void Ec::handle_exc (Exc_regs *r)
 
     die ("EXC", r);
 }
+
+void Ec::trace_interrupt(Exc_regs *r) {
+    if(r->vec == Cpu::EXC_PF) 
+        debug_started_trace(0, "PAGE FAULT rip %lx addr %lx", current->regs.REG(ip), r->cr2);
+    else
+        debug_started_trace(0, "INTERRUPT rip %lx vec %lu", current->regs.REG(ip), r->vec);
+    return;
+}
+
+void Ec::trace_sysenter(){
+    debug_started_trace(0, "SysEnter rip %lx", current->regs.ARG_IP);
+    return;
+}
