@@ -220,6 +220,6 @@ void Ec::trace_interrupt(Exc_regs *r) {
 }
 
 void Ec::trace_sysenter(){
-    debug_started_trace(0, "SysEnter Rip %lx", current->regs.REG(ip));
+    debug_started_trace(0, "SysEnter ARG_IP/RIP %lx:%lx", current->regs.ARG_IP, current->regs.REG(ip));
     return;
 }
