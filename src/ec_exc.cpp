@@ -922,10 +922,10 @@ void Ec::trace_interrupt(Exc_regs *r) {
     else
         String::print(counter_buff, "%llu", counter_value);
     if(r->vec == Cpu::EXC_PF) {
-        String::print(buff, "PAGE FAULT rip %lx run_num %u addr %lx Counter %s", 
+        String::print(buff, "PAGE FAULT Rip %lx run_num %u addr %lx Counter %s", 
         current->regs.REG(ip), Pe::run_number, r->cr2, counter_buff);
     } else {
-        String::print(buff, "INTERRUPT rip %lx run_num %u vec %lu Counter %s", current->regs.REG(ip), 
+        String::print(buff, "INTERRUPT Rip %lx run_num %u vec %lu Counter %s", current->regs.REG(ip), 
         Pe::run_number, r->vec, counter_buff);
     }
 //    trace(0, "%s", buff);

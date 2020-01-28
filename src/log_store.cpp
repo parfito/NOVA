@@ -365,6 +365,7 @@ void Logstore::add_log_in_buffer(const char* s){
     size_t size = strlen(s); 
     if(!log_on || !size)
         return;    
+    commit_buffer();
     if(log_buffer_cursor + size + 2 > log_buffer + entry_offset) {
 // We cannot store in the buffer beyond its size which is ENTRY_OFFSET,    
         commit_buffer();
