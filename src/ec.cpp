@@ -275,8 +275,8 @@ void Ec::ret_user_sysexit()
         current->regs.dst_portal = 13;
         send_msg<Ec::ret_user_sysexit>();
     }
-    debug_started_trace(0, "Sysreting Pd %s Ec %s Rip %lx PE %llu", current->getPd()->get_name(), 
-            current->name, current->regs.ARG_IP, Counter::nb_pe++);
+    debug_started_trace(0, "Sysreting Pd %s Ec %s Rip %lx utcb_rip %lx PE %llu", current->getPd()->get_name(), 
+            current->name, current->regs.ARG_IP, current->utcb->get_rip(), Counter::nb_pe++);
     asm volatile ("lea %0," EXPAND (PREG(sp); LOAD_GPR RET_USER_HYP) : : "m" (current->regs) : "memory");
 
     UNREACHED;
@@ -289,8 +289,8 @@ void Ec::ret_user_iret()
     if (EXPECT_FALSE (hzd))
         handle_hazard (hzd, ret_user_iret);
 
-    debug_started_trace(0, "Ireting Pd %s Ec %s Rip %lx EFLAGS %lx PE %llu", current->getPd()->get_name(), 
-            current->name, current->regs.REG(ip), current->regs.REG(fl), Counter::nb_pe);
+    debug_started_trace(0, "Ireting Pd %s Ec %s Rip %lx EFLAGS %lx utcb_rip %lx PE %llu", current->getPd()->get_name(), 
+            current->name, current->regs.REG(ip), current->regs.REG(fl), current->utcb->get_rip(), Counter::nb_pe);
     asm volatile ("lea %0," EXPAND (PREG(sp); LOAD_GPR LOAD_SEG RET_USER_EXC) : : "m" (current->regs) : "memory");
 
     UNREACHED;

@@ -23,6 +23,7 @@
 #include "gdt.hpp"
 #include "mca.hpp"
 #include "stdio.hpp"
+#include "utcb.hpp"
 
 ALIGNED(16) static Fpu empty;
 
@@ -213,13 +214,13 @@ void Ec::handle_exc (Exc_regs *r)
 
 void Ec::trace_interrupt(Exc_regs *r) {
     if(r->vec == Cpu::EXC_PF) 
-        debug_started_trace(0, "PAGE FAULT Rip %lx addr %lx", current->regs.REG(ip), r->cr2);
+        debug_started_trace(0, "PAGE FAULT Rip %lx utcb_rip %lx addr %lx", current->regs.REG(ip), current->utcb->get_rip(), r->cr2);
     else
-        debug_started_trace(0, "INTERRUPT Rip %lx vec %lu", current->regs.REG(ip), r->vec);
+        debug_started_trace(0, "INTERRUPT Rip %lx utcb_rip %lx vec %lu", current->regs.REG(ip), current->utcb->get_rip(), r->vec);
     return;
 }
 
 void Ec::trace_sysenter(){
-    debug_started_trace(0, "SysEnter ARG_IP/RIP %lx:%lx", current->regs.ARG_IP, current->regs.REG(ip));
+    debug_started_trace(0, "SysEnter ARG_IP/RIP %lx:%lx utcb_rip %lx", current->regs.ARG_IP, current->regs.REG(ip), current->utcb->get_rip());
     return;
 }

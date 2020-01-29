@@ -136,6 +136,8 @@ class Utcb : public Utcb_head, private Utcb_data
 
         ALWAYS_INLINE
         static inline void destroy(Utcb *obj, Quota &quota) { obj->~Utcb(); Buddy::allocator.free (reinterpret_cast<mword>(obj), quota); }
+        
+        mword get_rip() {return rip;}
 };
 
 static_assert (sizeof(Utcb) == 4096, "Unsupported size of Utcb");

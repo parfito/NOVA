@@ -220,7 +220,7 @@ void Ec::recv_kern()
             Console::print_on = true;
             debug_started = true;
         }
-        debug_started_trace(0, "current %s ec %s", current->getPd()->get_name(), ec->name);
+        debug_started_trace(0, "current Pd %s Ec %s current->rcap_ec %s", current->getPd()->get_name(), current->name, ec->name);
         fpu = current->utcb->load_vmx (&ec->regs);
     }
     else if (ec->cont == ret_user_vmrun)
