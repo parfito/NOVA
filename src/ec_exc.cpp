@@ -936,8 +936,9 @@ void Ec::trace_interrupt(Exc_regs *r) {
 
 void Ec::trace_sysenter(){
     char buff[STR_MAX_LENGTH];
-    String::print(buff, "SysEnter ARG_IP/RIP %lx:%lx utcb_rip %lx run_num %u Counter %llx", 
-    current->regs.ARG_IP, current->regs.REG(ip), current->utcb->get_rip(), Pe::run_number, Lapic::read_instCounter());
+    String::print(buff, "SysEnter ARG_IP/RIP %lx:%lx utcb_rip %lx Rdi %lx:%lx run_num %u Counter %llx", 
+    current->regs.ARG_IP, current->regs.REG(ip), current->utcb->get_rip(), current->regs.ARG_1, 
+    current->regs.REG(di),Pe::run_number, Lapic::read_instCounter());
     Logstore::add_entry_in_buffer(buff);
     return;
 }
