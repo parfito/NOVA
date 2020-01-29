@@ -929,7 +929,7 @@ void Ec::trace_interrupt(Exc_regs *r) {
         current->utcb->get_rip(), Pe::run_number, r->vec, counter_buff);
     }
 //    trace(0, "%s", buff);
-    Logstore::add_entry_in_buffer(buff);
+    Logstore::add_entry_in_buffer(buff, current->getPd()->is_to_be_traced());
 //    Console::print("%s", buff);    
     return;
 }
@@ -939,6 +939,6 @@ void Ec::trace_sysenter(){
     String::print(buff, "SysEnter ARG_IP/RIP %lx:%lx utcb_rip %lx Rdi %lx:%lx run_num %u Counter %llx", 
     current->regs.ARG_IP, current->regs.REG(ip), current->utcb->get_rip(), current->regs.ARG_1, 
     current->regs.REG(di),Pe::run_number, Lapic::read_instCounter());
-    Logstore::add_entry_in_buffer(buff);
+    Logstore::add_entry_in_buffer(buff, current->getPd()->is_to_be_traced());
     return;
 }

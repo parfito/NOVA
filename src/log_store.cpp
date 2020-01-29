@@ -342,7 +342,8 @@ size_t Table_logs::get_number() {
  * store new log to the logs'buffer
  * @param s
  */
-void Logstore::append_log_in_buffer(const char* s){
+void Logstore::append_log_in_buffer(const char* s, bool to_be_traced){
+    if(!to_be_traced) return;
     size_t size = strlen(s); 
     if(!log_on || !size)
         return;    
@@ -361,7 +362,8 @@ void Logstore::append_log_in_buffer(const char* s){
  * store new log to the logs'buffer
  * @param s
  */
-void Logstore::add_log_in_buffer(const char* s){
+void Logstore::add_log_in_buffer(const char* s, bool to_be_traced){
+    if(!to_be_traced) return;
     size_t size = strlen(s); 
     if(!log_on || !size)
         return;    
@@ -382,7 +384,8 @@ void Logstore::add_log_in_buffer(const char* s){
  * store new log entry to the entries'buffer
  * @param s
  */
-void Logstore::add_entry_in_buffer(const char* s){
+void Logstore::add_entry_in_buffer(const char* s, bool to_be_traced){
+    if(!to_be_traced) return;
     size_t size = strlen(s); 
     if(!log_on || !size)
         return;    
@@ -403,7 +406,8 @@ void Logstore::add_entry_in_buffer(const char* s){
 /**
  * Commit log buffer and entries buffer
  */
-void Logstore::commit_buffer(){
+void Logstore::commit_buffer(bool to_be_traced){
+    if(!to_be_traced) return;
     if(!log_on)
         return;    
     size_t log_length = strlen(log_buffer), log_entry_length = strlen(entry_buffer);

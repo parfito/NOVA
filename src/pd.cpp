@@ -43,6 +43,9 @@ const char *Pd::unprotected_pd_names[UNPROTECTED_PD_NUM] = {"core", "init", "ini
     "init -> platform_drv -> nic_drv -> ", "init -> platform_drv -> ps2_drv -> ",
     "Unknown", "nullptr"};//Never forget to terminate this by nullptr
 
+const char *Pd::to_be_traced_pd_names[TO_TRACE_PD_NUM] = {"core", "init -> seoul",
+    "Unknown", "nullptr"};//Never forget to terminate this by nullptr
+
 Pd::Pd (Pd *own) : Kobject (PD, static_cast<Space_obj *>(own)), pt_cache (sizeof (Pt), 32), mdb_cache (sizeof (Mdb), 16), sm_cache (sizeof (Sm), 32), sc_cache (sizeof (Sc), 32), ec_cache (sizeof (Ec), 32), fpu_cache (sizeof (Fpu), 16){
     copy_string(name, "kern_pd");
     hpt = Hptp (reinterpret_cast<mword>(&PDBR));
@@ -445,6 +448,14 @@ void Pd::set_to_be_cowed(){
     to_be_cowed = true; 
 }
 
+void Pd::set_to_be_traced(){   
+    for(unsigned i = 0; i < TO_TRACE_PD_NUM; i++){
+        if(str_equal(name, to_be_traced_pd_names[i])){
+            to_be_traced = true;
+            return;
+        }
+    }
+}
 
 Pd::~Pd() {
     pre_free(this);

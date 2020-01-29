@@ -351,7 +351,7 @@ void Ec::ret_user_sysexit() {
     char buff[STR_MAX_LENGTH];
     String::print(buff, "Sysreting Run %d Pd %s Ec %s Rip %lx utcb_rip %lx Counter %llx", Pe::run_number, 
     current->pd->get_name(), current->get_name(), current->regs.ARG_IP, current->utcb->get_rip(), Lapic::read_instCounter());
-    Logstore::add_entry_in_buffer(buff);
+    Logstore::add_entry_in_buffer(buff, current->getPd()->is_to_be_traced());
     if (step_reason == SR_NIL) {
         asm volatile ("lea %0," EXPAND(PREG(sp); LOAD_GPR RET_USER_HYP) : : "m" (current->regs) : 
                     "memory");
@@ -377,7 +377,7 @@ void Ec::ret_user_iret() {
     String::print(buff, "Ireting Run %d Pd %s Ec %s Rip %lx EFLAGS %lx utcb_rip %lx Counter %llx", Pe::run_number, 
     current->pd->get_name(), current->get_name(), current->get_reg(RIP), current->get_reg(RFLAG), 
     current->utcb->get_rip(), Lapic::read_instCounter());
-    Logstore::add_entry_in_buffer(buff);
+    Logstore::add_entry_in_buffer(buff, current->getPd()->is_to_be_traced());
     asm volatile ("lea %0," EXPAND(PREG(sp); LOAD_GPR LOAD_SEG RET_USER_EXC) : : "m" (current->regs)
     : "memory");
 
@@ -846,7 +846,7 @@ void Ec::save_state0() {
     char buff[STR_MAX_LENGTH];
     String::print(buff, "PE %llu Pd %s Ec %s Rip0 %lx:%lx", Counter::nb_pe, 
             getPd()->get_name(), get_name(), regs.ARG_IP, regs.REG(ip));
-    Logstore::add_log_in_buffer(buff);
+    Logstore::add_log_in_buffer(buff, current->getPd()->is_to_be_traced());
     Cow_elt::place_phys0();
     Fpu::dwc_save(); // If FPU activated, save fpu state
     if (fpu)         // If fpu defined, save it 
