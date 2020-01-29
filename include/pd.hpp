@@ -30,7 +30,7 @@
 #include "cow_elt.hpp"
 
 #define UNPROTECTED_PD_NUM              18
-#define TO_TRACE_PD_NUM                 4
+#define UNTRACE_PD_NUM                  18
 
 class Pd : public Kobject, public Refcount, public Space_mem, public Space_pio, public Space_obj {
     friend class Cow_elt;
@@ -39,7 +39,7 @@ private:
     bool to_be_cowed = false, to_be_traced = false, debug = false;
     static Slab_cache cache;
     static const char *unprotected_pd_names[UNPROTECTED_PD_NUM];
-    static const char *to_be_traced_pd_names[TO_TRACE_PD_NUM];
+    static const char *untraced_pd_names[UNTRACE_PD_NUM];
     Queue<Cow_elt> cow_elts = {};
 
     WARN_UNUSED_RESULT

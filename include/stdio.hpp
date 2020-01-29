@@ -24,6 +24,7 @@
 #include "console.hpp"
 #include "cpu.hpp"
 #include "memory.hpp"
+#include "log_store.hpp"
 #define DEBUG  1
 
 #define trace(T,format,...)                                         \
@@ -54,6 +55,54 @@ do {                                                                \
                 static_cast<long>(((reinterpret_cast<mword>(&__esp) - 1) & ~PAGE_MASK) ==     \
                 CPU_LOCAL_STCK ? Cpu::id : ~0UL), ## __VA_ARGS__);  \
     }                                                               \
+} while (0)
+
+/**
+ * Macro to call log functions with variable number of parametters enabling the use of 
+ * logging formatted string. It may also call a specif tracing function if trace_funct is 
+ * different of 0.
+ * log_funct : Logstore function to call (Logstore::::add_log_in_buffer, Logstore::add_entry_in_buffer, etc.
+ * trace_funct : 0 -> tracing, 1 -> trace(0, str), 2 -> Console::panic()
+ */
+#define call_log_funct(log_funct, trace_funct, format,...)                        \
+do {                                                                \
+        char __buff[STR_MAX_LENGTH];                                \
+        String::print(__buff, format, ## __VA_ARGS__);              \
+        Logstore::call (log_funct, __buff);                         \
+        call_trace_funct(trace_funct, __buff);                      \
+} while (0)
+
+/**
+ * Do same thing as call_log_funct but for bigger log size, however less than 2*STR_MAX_LENGTH
+ */
+#define call_log_funct_with_buffer(log_funct, trace_funct, format,...)            \
+do {                                                            \
+        String *__string = new String(2*STR_MAX_LENGTH);        \
+        char* __buff = __string->get_string();                  \
+        String::print(__buff, format, ## __VA_ARGS__);          \
+        Logstore::call (log_funct, __buff);                     \
+        call_trace_funct(trace_funct, __buff);                   \
+        delete __string;                                        \
+} while (0)
+
+/**
+ * Only intended to be called  from call_log_funct_with_buffer or call_log_funct
+ */
+#define call_trace_funct(funct, __buff)                               \
+do {                                                            \
+    switch(funct) {                                             \
+        case 0:                                                 \
+            break;                                              \
+        case 1:                                                 \
+            trace(0, "%s", __buff);                             \
+            break;                                              \
+        case 2:                                                 \
+            Console::panic("%s", __buff);                       \
+            break;                                              \
+        default:                                                \
+            Console::panic("Unknown trace function");           \
+            break;                                              \
+    }                                                           \
 } while (0)
 
 /*

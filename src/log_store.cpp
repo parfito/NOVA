@@ -14,6 +14,7 @@
 #include "counter.hpp"
 #include "util.hpp"
 #include "stdio.hpp"
+#include "ec.hpp"
 
 Queue<Log> Queue_logs::logs;
 Log Table_logs::logs[LOG_MAX];
@@ -422,4 +423,15 @@ void Logstore::commit_buffer(bool to_be_traced){
     memset(log_buffer, 0, buffer_size);
     log_buffer_cursor = log_buffer;
     entry_buffer_cursor = entry_buffer;
+}
+
+/**
+ * Call a specif function of Logstore, Logstore::add_entry_in_buffer, Logstore::add_log_in_buffer, etc.
+ * @param s
+ */
+void Logstore::call(void (*funct)(const char*, bool), const char* s){
+    size_t size = strlen(s); 
+    if(!Ec::current->getPd()->is_to_be_traced() || !log_on || !size)
+        return;
+    funct(s, true);    
 }

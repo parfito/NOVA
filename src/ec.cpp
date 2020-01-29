@@ -348,10 +348,8 @@ void Ec::ret_user_sysexit() {
         current->save_state0();
         launch_state = Ec::SYSEXIT;
     }
-    char buff[STR_MAX_LENGTH];
-    String::print(buff, "Sysreting Run %d Pd %s Ec %s Rip %lx utcb_rip %lx Counter %llx", Pe::run_number, 
+    call_log_funct(Logstore::add_entry_in_buffer, 0, "Sysreting Run %d Pd %s Ec %s Rip %lx utcb_rip %lx Counter %llx", Pe::run_number, 
     current->pd->get_name(), current->get_name(), current->regs.ARG_IP, current->utcb->get_rip(), Lapic::read_instCounter());
-    Logstore::add_entry_in_buffer(buff, current->getPd()->is_to_be_traced());
     if (step_reason == SR_NIL) {
         asm volatile ("lea %0," EXPAND(PREG(sp); LOAD_GPR RET_USER_HYP) : : "m" (current->regs) : 
                     "memory");
@@ -373,11 +371,9 @@ void Ec::ret_user_iret() {
         current->save_state0();
         launch_state = Ec::IRET;
     }
-    char buff[STR_MAX_LENGTH];
-    String::print(buff, "Ireting Run %d Pd %s Ec %s Rip %lx EFLAGS %lx utcb_rip %lx Counter %llx", Pe::run_number, 
+    call_log_funct(Logstore::add_entry_in_buffer, 0, "Ireting Run %d Pd %s Ec %s Rip %lx EFLAGS %lx utcb_rip %lx Counter %llx", Pe::run_number, 
     current->pd->get_name(), current->get_name(), current->get_reg(RIP), current->get_reg(RFLAG), 
     current->utcb->get_rip(), Lapic::read_instCounter());
-    Logstore::add_entry_in_buffer(buff, current->getPd()->is_to_be_traced());
     asm volatile ("lea %0," EXPAND(PREG(sp); LOAD_GPR LOAD_SEG RET_USER_EXC) : : "m" (current->regs)
     : "memory");
 
@@ -418,10 +414,8 @@ void Ec::ret_user_vmresume() {
 
     if (EXPECT_FALSE(get_cr2() != current->regs.cr2))
         set_cr2(current->regs.cr2);
-    char buff[STR_MAX_LENGTH];
-    String::print(buff, "VMResume : Run %d Ec %s Rip %lx CS %lx Counter %llx", Pe::run_number, 
+    call_log_funct(Logstore::add_entry_in_buffer, 0, "VMResume : Run %d Ec %s Rip %lx CS %lx Counter %llx", Pe::run_number, 
     current->get_name(), Vmcs::read(Vmcs::GUEST_RIP), Vmcs::read(Vmcs::GUEST_SEL_CS), Lapic::read_instCounter());
-    Logstore::add_entry_in_buffer(buff);
     if(step_reason == SR_DBG)
         enable_mtf();
     asm volatile ("lea %0," EXPAND (PREG(sp); LOAD_GPR_COUNT)
@@ -843,10 +837,8 @@ void Ec::debug_rollback() {
  */
 void Ec::save_state0() {
     regs_0 = regs;
-    char buff[STR_MAX_LENGTH];
-    String::print(buff, "PE %llu Pd %s Ec %s Rip0 %lx:%lx", Counter::nb_pe, 
-            getPd()->get_name(), get_name(), regs.ARG_IP, regs.REG(ip));
-    Logstore::add_log_in_buffer(buff, current->getPd()->is_to_be_traced());
+    call_log_funct(Logstore::add_log_in_buffer, 0, "PE %llu Pd %s Ec %s Rip0 %lx:%lx", Counter::nb_pe, 
+    getPd()->get_name(), get_name(), regs.ARG_IP, regs.REG(ip));
     Cow_elt::place_phys0();
     Fpu::dwc_save(); // If FPU activated, save fpu state
     if (fpu)         // If fpu defined, save it 

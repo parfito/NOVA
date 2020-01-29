@@ -276,9 +276,7 @@ bool Cow_elt::compare() {
  */
 void Cow_elt::commit() {
     Cow_elt *c = cow_elts->head(), *h = c, *next = nullptr;
-    char buff[STR_MAX_LENGTH];
-    String::print(buff, "Committing PE %llu", Counter::nb_pe);
-    Logstore::add_entry_in_buffer(buff);
+    call_log_funct(Logstore::add_entry_in_buffer, 0, "Committing PE %llu", Counter::nb_pe);
     size_t count = 0;
     while (c) {
         asm volatile ("" ::"m" (c)); // to avoid gdb "optimized out"                        
@@ -303,10 +301,6 @@ void Cow_elt::commit() {
         }
         c->update_pte(PHYS0,c->pte.is_hpt?RW:RO);
 
-//        char buff[STR_MAX_LENGTH];
-//        String::print(buff, "COMMIT count %lu c %lx %lx %lx %lx ce %lx ", count, c->page_addr, 
-//            c->phys_addr[0], c->phys_addr[1], c->phys_addr[2], reinterpret_cast<mword>(ce ? ce->page_addr : 0));
-//        trace(0, "%s", buff);
         c->to_log("COMMIT");
         count++;
     
@@ -441,9 +435,7 @@ static inline void Cow_elt::operator delete (void *ptr) {
 }
 
 void Cow_elt::to_log(const char* reason){
-    char buff[2*STR_MAX_LENGTH];
-    String::print(buff, "%s d %lx %lx %lx %lx %d de %lx next %lx %s", reason, page_addr, 
+    call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 0, "%s d %lx %lx %lx %lx %d de %lx next %lx %s", reason, page_addr, 
         phys_addr[0], phys_addr[1], phys_addr[2], age, v_is_mapped_elsewhere ? 
         v_is_mapped_elsewhere->page_addr : 0, next ? next->page_addr:0, pte.is_hpt ? "Hpt" : "VTLB");
-    Logstore::add_entry_in_buffer(buff);    
 }

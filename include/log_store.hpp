@@ -44,6 +44,8 @@ public:
     
     static void commit_buffer(bool = true);
     
+    static void call(void (*)(const char*, bool), const char*);
+    
     static size_t get_number();
     
 };
