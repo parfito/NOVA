@@ -105,6 +105,7 @@ class Lapic
     public:
         static unsigned freq_tsc;
         static unsigned freq_bus;
+        static uint64 start_counter, perf_max_count, counter_vmexit_value;
 
         ALWAYS_INLINE
         static inline unsigned id()
@@ -157,4 +158,15 @@ class Lapic
 
         REGPARM (1)
         static void ipi_vector (unsigned) asm ("ipi_vector");
+        
+        REGPARM (0)
+        static void subtract_host_instructions (void) asm ("subtract_host_instructions");
+        
+        static void activate_pmi();
+        
+//        static uint64 readReset_instCounter(uint64 number = 0);
+        static uint64 read_instCounter();
+        static void program_pmi();
+        static void exec_lvt(unsigned, bool);
+        
 };

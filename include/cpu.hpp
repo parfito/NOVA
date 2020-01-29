@@ -72,6 +72,9 @@ class Cpu
         enum
         {
             EXC_DB          = 1,
+            EXC_NMI         = 2,
+            EXC_BP          = 3,
+            EXC_INV         = 6,
             EXC_NM          = 7,
             EXC_TS          = 10,
             EXC_GP          = 13,
@@ -97,6 +100,7 @@ class Cpu
 
         enum
         {
+            CR4_TSD         = 1UL << 2,         // 0x4
             CR4_DE          = 1UL << 3,         // 0x8
             CR4_PSE         = 1UL << 4,         // 0x10
             CR4_PAE         = 1UL << 5,         // 0x20
@@ -165,6 +169,7 @@ class Cpu
         static uint32 features[6]           CPULOCAL;
         static bool bsp                     CPULOCAL;
         static bool preemption              CPULOCAL;
+        static uint32 perf_bit_size;
 
         static void init();
 

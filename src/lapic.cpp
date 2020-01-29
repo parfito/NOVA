@@ -31,6 +31,7 @@
 
 unsigned    Lapic::freq_tsc;
 unsigned    Lapic::freq_bus;
+uint64 Lapic::perf_max_count, Lapic::counter_vmexit_value, Lapic::start_counter; 
 
 void Lapic::init_cpuid()
 {
@@ -153,7 +154,9 @@ void Lapic::send_ipi (unsigned cpu, unsigned vector, Delivery_mode dlv, Shorthan
 
 void Lapic::therm_handler() {}
 
-void Lapic::perfm_handler() {}
+void Lapic::perfm_handler() {
+    trace(0, "Perf Interrupt %llu", read_instCounter());
+}
 
 void Lapic::error_handler()
 {
@@ -199,4 +202,36 @@ void Lapic::ipi_vector (unsigned vector)
     eoi();
 
     Counter::print<1,16> (++Counter::ipi[ipi], Console_vga::COLOR_LIGHT_GREEN, ipi + SPN_IPI);
+}
+/**
+ * Called only from entry.S
+ * Only used in case of virtualization
+ */
+void Lapic::subtract_host_instructions(){
+    counter_vmexit_value = Msr::read<uint64>(Msr::MSR_PERF_FIXED_CTR0); 
+//    if(counter_vmexit_value < start_counter)
+//        assert(counter_vmexit_value < 300); // 300 instructions after a PMI is not valid anymore
+}    
+
+void Lapic::activate_pmi() {
+    uint64 msr_glb = Msr::read<uint64>(Msr::MSR_PERF_GLOBAL_CTRL);
+    Msr::write(Msr::MSR_PERF_GLOBAL_CTRL, msr_glb | (1ull<<32));
+    Msr::write(Msr::MSR_PERF_GLOBAL_OVF_CTRL, Msr::read<uint64>(Msr::MSR_PERF_GLOBAL_OVF_CTRL) & ~(1UL<<32));
+    program_pmi();
+}
+
+uint64 Lapic::read_instCounter() {
+    return Msr::read<uint64>(Msr::MSR_PERF_FIXED_CTR0); 
+}
+
+/**
+ * This pmi programming take as parameter the number of instruction to retrieve 
+ * from MAX_INSTRUCTION before PMI
+ * @param number
+ */
+void Lapic::program_pmi() {
+    set_lvt(LAPIC_LVT_PERFM, DLV_FIXED, VEC_LVT_PERFM); // This is only needed on real machine, I don't know why
+    Msr::write(Msr::MSR_PERF_FIXED_CTRL, 0x0);    
+    Msr::write(Msr::MSR_PERF_FIXED_CTR0, 0);
+    Msr::write(Msr::MSR_PERF_FIXED_CTRL, 0xa);
 }
