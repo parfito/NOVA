@@ -922,11 +922,11 @@ void Ec::trace_interrupt(Exc_regs *r) {
     else
         String::print(counter_buff, "%llu", counter_value);
     if(r->vec == Cpu::EXC_PF) {
-        String::print(buff, "PAGE FAULT Rip %lx run_num %u addr %lx Counter %s", 
-        current->regs.REG(ip), Pe::run_number, r->cr2, counter_buff);
+        String::print(buff, "PAGE FAULT Rip %lx utcb_rip %lx run_num %u addr %lx Counter %s", 
+        current->regs.REG(ip), current->utcb->get_rip(), Pe::run_number, r->cr2, counter_buff);
     } else {
-        String::print(buff, "INTERRUPT Rip %lx run_num %u vec %lu Counter %s", current->regs.REG(ip), 
-        Pe::run_number, r->vec, counter_buff);
+        String::print(buff, "INTERRUPT Rip %lx utcb_rip %lx run_num %u vec %lu Counter %s", current->regs.REG(ip), 
+        current->utcb->get_rip(), Pe::run_number, r->vec, counter_buff);
     }
 //    trace(0, "%s", buff);
     Logstore::add_entry_in_buffer(buff);
@@ -936,8 +936,8 @@ void Ec::trace_interrupt(Exc_regs *r) {
 
 void Ec::trace_sysenter(){
     char buff[STR_MAX_LENGTH];
-    String::print(buff, "SysEnter ARG_IP/RIP %lx:%lx run_num %u Counter %llx", 
-    current->regs.ARG_IP, current->regs.REG(ip), Pe::run_number, Lapic::read_instCounter());
+    String::print(buff, "SysEnter ARG_IP/RIP %lx:%lx utcb_rip %lx run_num %u Counter %llx", 
+    current->regs.ARG_IP, current->regs.REG(ip), current->utcb->get_rip(), Pe::run_number, Lapic::read_instCounter());
     Logstore::add_entry_in_buffer(buff);
     return;
 }

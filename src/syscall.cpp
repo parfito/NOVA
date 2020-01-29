@@ -224,7 +224,7 @@ void Ec::recv_kern()
             debug_started = true;
         }
         char buff[STR_MAX_LENGTH];
-        String::print(buff, "current %s ec %s", current->getPd()->get_name(), ec->name);
+        String::print(buff, "current Pd %s Ec %s current->rcap_ec %s", current->getPd()->get_name(), current->name, ec->name);
         Logstore::add_entry_in_buffer(buff);
         fpu = current->utcb->load_vmx (&ec->regs);
     }
@@ -331,8 +331,8 @@ void Ec::sys_reply()
             String::print(buff, "current %s ec %s", current->name, ec->name);
             Logstore::add_entry_in_buffer(buff);
             fpu = src->save_vmx (&ec->regs);
-            Logstore::log_on = false;
             Logstore::commit_buffer();
+            Logstore::log_on = false;
         }
         else if (ec->cont == ret_user_vmrun)
             fpu = src->save_svm (&ec->regs);
