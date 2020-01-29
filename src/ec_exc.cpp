@@ -900,10 +900,10 @@ void Ec::trace_interrupt(Exc_regs *r) {
     count_interrupt(r);
     char counter_buff[STR_MIN_LENGTH];
     uint64 counter_value = Lapic::read_instCounter();
-    if(counter_value > Lapic::perf_max_count - MAX_INSTRUCTION)
-        String::print(counter_buff, "%#llx", counter_value);
-    else
+    if(counter_value < Lapic::perf_max_count - MAX_INSTRUCTION)
         String::print(counter_buff, "%llu", counter_value);
+    else
+        String::print(counter_buff, "%llu", counter_value - Lapic::start_counter);
     if(r->vec == Cpu::EXC_PF) {
         call_log_funct(Logstore::add_entry_in_buffer, 0, "PAGE FAULT Rip %lx utcb_rip %lx run_num %u addr %lx Counter %s", 
         current->regs.REG(ip), current->utcb->get_rip(), Pe::run_number, r->cr2, counter_buff);
@@ -916,9 +916,15 @@ void Ec::trace_interrupt(Exc_regs *r) {
 }
 
 void Ec::trace_sysenter(){
+    char counter_buff[STR_MIN_LENGTH];
+    uint64 counter_value = Lapic::read_instCounter();
+    if(counter_value < Lapic::perf_max_count - MAX_INSTRUCTION)
+        String::print(counter_buff, "%llu", counter_value);
+    else
+        String::print(counter_buff, "%llu", counter_value - Lapic::start_counter);
     call_log_funct(Logstore::add_entry_in_buffer, 0,
-    "SysEnter ARG_IP/RIP %lx:%lx utcb_rip %lx Rdi %lx:%lx run_num %u Counter %llx", 
+    "SysEnter ARG_IP/RIP %lx:%lx utcb_rip %lx Rdi %lx:%lx run_num %u Counter %s", 
     current->regs.ARG_IP, current->regs.REG(ip), current->utcb->get_rip(), current->regs.ARG_1, 
-    current->regs.REG(di), Pe::run_number, Lapic::read_instCounter());
+    current->regs.REG(di), Pe::run_number, counter_buff);
     return;
 }

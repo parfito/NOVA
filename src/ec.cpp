@@ -348,8 +348,14 @@ void Ec::ret_user_sysexit() {
         current->save_state0();
         launch_state = Ec::SYSEXIT;
     }
-    call_log_funct(Logstore::add_entry_in_buffer, 0, "Sysreting Run %d Pd %s Ec %s Rip %lx utcb_rip %lx Counter %llx", Pe::run_number, 
-    current->pd->get_name(), current->get_name(), current->regs.ARG_IP, current->utcb->get_rip(), Lapic::read_instCounter());
+    char counter_buff[STR_MIN_LENGTH];
+    uint64 counter_value = Lapic::read_instCounter();
+    if(counter_value < Lapic::perf_max_count - MAX_INSTRUCTION)
+        String::print(counter_buff, "%llu", counter_value);
+    else
+        String::print(counter_buff, "%llu", counter_value - Lapic::start_counter);
+    call_log_funct(Logstore::add_entry_in_buffer, 0, "Sysreting Run %d Pd %s Ec %s Rip %lx utcb_rip %lx Counter %s", Pe::run_number, 
+    current->pd->get_name(), current->get_name(), current->regs.ARG_IP, current->utcb->get_rip(), counter_buff);
     if (step_reason == SR_NIL) {
         asm volatile ("lea %0," EXPAND(PREG(sp); LOAD_GPR RET_USER_HYP) : : "m" (current->regs) : 
                     "memory");
@@ -371,9 +377,14 @@ void Ec::ret_user_iret() {
         current->save_state0();
         launch_state = Ec::IRET;
     }
-    call_log_funct(Logstore::add_entry_in_buffer, 0, "Ireting Run %d Pd %s Ec %s Rip %lx EFLAGS %lx utcb_rip %lx Counter %llx", Pe::run_number, 
-    current->pd->get_name(), current->get_name(), current->get_reg(RIP), current->get_reg(RFLAG), 
-    current->utcb->get_rip(), Lapic::read_instCounter());
+    char counter_buff[STR_MIN_LENGTH];
+    uint64 counter_value = Lapic::read_instCounter();
+    if(counter_value < Lapic::perf_max_count - MAX_INSTRUCTION)
+        String::print(counter_buff, "%llu", counter_value);
+    else
+        String::print(counter_buff, "%llu", counter_value - Lapic::start_counter);
+    call_log_funct(Logstore::add_entry_in_buffer, 0, "Ireting Run %d Pd %s Ec %s Rip %lx EFLAGS %lx utcb_rip %lx Counter %s", Pe::run_number, 
+    current->pd->get_name(), current->get_name(), current->get_reg(RIP), current->get_reg(RFLAG), current->utcb->get_rip(), counter_buff);
     asm volatile ("lea %0," EXPAND(PREG(sp); LOAD_GPR LOAD_SEG RET_USER_EXC) : : "m" (current->regs)
     : "memory");
 
