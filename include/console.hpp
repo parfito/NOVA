@@ -63,6 +63,9 @@ class Console
         static void print (char const *, ...);
 
         FORMAT (1,2)
+        static void debug_started_print (char const *, ...);
+
+        FORMAT (1,2)
         static void print_no_newline (char const *, ...);
         
         FORMAT (1,2) NORETURN

@@ -23,6 +23,7 @@
 #include "lock_guard.hpp"
 #include "x86.hpp"
 #include "log_store.hpp"
+#include "ec.hpp"
 
 Console *Console::list;
 Spinlock Console::lock;
@@ -178,6 +179,20 @@ void Console::vprintf (char const *format, va_list args)
 
 void Console::print (char const *format, ...)
 {
+    Lock_guard <Spinlock> guard (lock);
+
+    for (Console *c = list; c; c = c->next) {
+        va_list args;
+        va_start (args, format);
+        c->vprintf (format, args);
+        va_end (args);
+    }
+}
+
+void Console::debug_started_print (char const *format, ...)
+{
+    if(!Ec::current->get_pd()->is_to_be_traced())
+        return;
     Lock_guard <Spinlock> guard (lock);
 
     for (Console *c = list; c; c = c->next) {

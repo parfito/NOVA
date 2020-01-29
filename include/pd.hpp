@@ -27,11 +27,15 @@
 #include "space_obj.hpp"
 #include "space_pio.hpp"
 
+#define UNTRACE_PD_NUM                  17
+
 class Pd : public Kobject, public Refcount, public Space_mem, public Space_pio, public Space_obj
 {
     private:
         static Slab_cache cache;
         char name[STR_MAX_LENGTH];
+        bool to_be_traced = false;
+        static const char *untraced_pd_names[UNTRACE_PD_NUM];
         bool debug = false;
 
         WARN_UNUSED_RESULT
@@ -184,6 +188,8 @@ class Pd : public Kobject, public Refcount, public Space_mem, public Space_pio, 
             cache.free (ptr, pd_to->quota);
         }
         char *get_name() {return name;}  
+        void set_to_be_traced();
+        bool is_to_be_traced(){ return to_be_traced;}
         bool is_debug() { return debug;}  
         void set_debug(bool db) { debug = db;}
 };

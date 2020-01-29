@@ -484,7 +484,7 @@ class Ec : public Kobject, public Refcount, public Queue<Sc>
         template <void(*C)()>
         static void check(mword, bool = true);
         
-        Pd* getPd() { return pd; }
+        Pd* get_pd() { return pd; }
 
         char *get_name() { return name;}
 

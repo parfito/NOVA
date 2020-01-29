@@ -62,7 +62,7 @@ class Sys_create_pd : public Sys_regs
         ALWAYS_INLINE
         inline const char* name() const { return ARG_6 ?  
             reinterpret_cast<char*>(Hpt::remap_cow(Pd::kern.quota, 
-                Ec::current->getPd()->Space_mem::loc[Cpu::id], 
+                Ec::current->get_pd()->Space_mem::loc[Cpu::id], 
                 ARG_6, 3, STR_MAX_LENGTH)) : "Unknown"; }
 };
 
@@ -90,7 +90,7 @@ class Sys_create_ec : public Sys_regs
         ALWAYS_INLINE
         inline const char* name() const { return ARG_6 ? 
             reinterpret_cast<char*>(Hpt::remap_cow(Pd::kern.quota, 
-                Ec::current->getPd()->Space_mem::loc[Cpu::id], 
+                Ec::current->get_pd()->Space_mem::loc[Cpu::id], 
                 ARG_6, 3, STR_MAX_LENGTH)) : "Unknown"; }
 };
 

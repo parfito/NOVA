@@ -140,7 +140,7 @@ void Ec::debug_call(mword r9){
                     current->debug = debug_state;
                     break;
                 case DEBUG_SCOPE_PD :
-                    trace(0, "debuging for all PD %s 's threads requested by %s", current->getPd()->get_name(), current->get_name());
+                    trace(0, "debuging for all PD %s 's threads requested by %s", current->get_pd()->get_name(), current->get_name());
                     current->pd->set_debug(debug_state);
                     break;
                 case DEBUG_SCOPE_SYSTEM :
@@ -220,7 +220,7 @@ void Ec::recv_kern()
             Console::print_on = true;
             debug_started = true;
         }
-        debug_started_trace(0, "current Pd %s Ec %s current->rcap_ec %s", current->getPd()->get_name(), current->name, ec->name);
+        debug_started_trace(0, "current Pd %s Ec %s current->rcap_ec %s", current->get_pd()->get_name(), current->name, ec->name);
         fpu = current->utcb->load_vmx (&ec->regs);
     }
     else if (ec->cont == ret_user_vmrun)
