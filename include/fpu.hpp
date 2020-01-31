@@ -34,7 +34,12 @@ class Fpu
 {
     private:
         static unsigned const data_size = 512, state_size = 108;
-        static char statedata[state_size], statedata_0[state_size], statedata_1[state_size], statedata_2[state_size], data_0[data_size], data_1[data_size], data_2[data_size];
+        static char statedata[state_size], statedata_0[state_size], statedata_1[state_size], 
+        statedata_2[state_size], data_0[data_size], data_1[data_size], data_2[data_size];
+        static uint16 fcw0, fcw1, fcw2, fsw0, fsw1, fsw2, fop0, fop1, fop2;
+        static uint8 ftw0, ftw1, ftw2, res0, res1, res2;
+        static uint64 fip0, fip1, fip2, fdp0, fdp1, fdp2;
+        static uint32 mxcsr0, mxcsr1, mxcsr2, mxcsr_mask0, mxcsr_mask1, mxcsr_mask2;
         static Slab_cache cache;
         static bool saved;
         
@@ -138,8 +143,8 @@ class Fpu
             if(get_cr0() & (Cpu::CR0_TS | Cpu::CR0_EM))
                 return 0;
             if(!saved)
-                Console::panic("TCHA HO HO: Cpu::CR0_TS || Cpu::CR0_EM = 0 but is_saved is false - dwc_check");// TS ou EM ont été désactivé en cours de route  
-            fpu_2->save();
+                Console::panic("TCHA HO HO: Cpu::CR0_TS || Cpu::CR0_EM = 0 but is_saved is false - dwc_check");// TS ou EM ont été désactivé en cours de route 
+           fpu_2->save();
             save_state(statedata_2);
             load_state(statedata_2);
             size_t  d1= 0, d2 = 0;
@@ -177,31 +182,49 @@ class Fpu
         
         void save_data(){
             memcpy(data_0, data, data_size);
+            fcw0 = fcw; fsw0 = fsw; ftw0 = ftw; res0 = res; fop0 = fop; fip0 = fip; 
+            fdp0 = fdp; mxcsr0 = mxcsr; mxcsr_mask0 = mxcsr_mask;
         }
         
         void restore_data(){
             memcpy(data_1, data, data_size);
             memcpy(data, data_0, data_size);
+            fcw1 = fcw; fsw1 = fsw; ftw1 = ftw; res1 = res; fop1 = fop; fip1 = fip; 
+            fdp1 = fdp; mxcsr1 = mxcsr; mxcsr_mask1 = mxcsr_mask;
+            fcw = fcw0; fsw = fsw0; ftw = ftw0; res = res0; fop = fop0; fip = fip0; 
+            fdp = fdp0; mxcsr = mxcsr0; mxcsr_mask = mxcsr_mask0;        
         }
         
         void restore_data1(){
             memcpy(data_2, data, data_size);
             memcpy(data, data_1, data_size);
+            fcw2 = fcw; fsw2 = fsw; ftw2 = ftw; res2 = res; fop2 = fop; fip2 = fip; 
+            fdp2 = fdp; mxcsr2 = mxcsr; mxcsr_mask2 = mxcsr_mask;
+            fcw = fcw1; fsw = fsw1; ftw = ftw1; res = res1; fop = fop1; fip = fip1; 
+            fdp = fdp1; mxcsr = mxcsr1; mxcsr_mask = mxcsr_mask1;        
         }
         
         void restore_data2(){
             memcpy(data_1, data, data_size);
             memcpy(data, data_2, data_size);
+            fcw1 = fcw; fsw1 = fsw; ftw1 = ftw; res1 = res; fop1 = fop; fip1 = fip; 
+            fdp1 = fdp; mxcsr1 = mxcsr; mxcsr_mask1 = mxcsr_mask;
+            fcw = fcw2; fsw = fsw2; ftw = ftw2; res = res2; fop = fop2; fip = fip2; 
+            fdp = fdp2; mxcsr = mxcsr2; mxcsr_mask = mxcsr_mask2;        
         }
         
         void roll_back(){
             memcpy(data, data_0, data_size);
-        }
+            fcw = fcw0; fsw = fsw0; ftw = ftw0; res = res0; fop = fop0; fip = fip0; 
+            fdp = fdp0; mxcsr = mxcsr0; mxcsr_mask = mxcsr_mask0;
+         }
         
         mword data_check(){
             size_t d = 0;
-            int ret = page_comp(data, data_1, d, data_size);
-            if(ret){
+            bool member_comp = !(fcw == fcw1 && fsw == fsw1 && ftw == ftw1 && res == res1 && fop == fop1 && 
+                    fip == fip1 && fdp == fdp1 && mxcsr == mxcsr1 && mxcsr_mask == mxcsr_mask1);
+             int ret = page_comp(data, data_1, d, data_size);
+            if(member_comp || ret){
                 mword data_index = d/sizeof(mword);
                 mword vald1 = *reinterpret_cast<mword*> (data + data_index);
                 mword vald2 = *reinterpret_cast<mword*> (data_1 + data_index);

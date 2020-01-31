@@ -21,6 +21,11 @@
 
 INIT_PRIORITY (PRIO_SLAB)
 Slab_cache Fpu::cache (sizeof (Fpu), 16);
-char Fpu::statedata[state_size], Fpu::statedata_0[state_size], Fpu::statedata_1[state_size], Fpu::statedata_2[state_size], Fpu::data_0[data_size], Fpu::data_1[data_size], Fpu::data_2[data_size];
+char Fpu::statedata[state_size], Fpu::statedata_0[state_size], Fpu::statedata_1[state_size], 
+        Fpu::statedata_2[state_size], Fpu::data_0[data_size], Fpu::data_1[data_size], Fpu::data_2[data_size];
+uint16 Fpu::fcw0, Fpu::fcw1, Fpu::fcw2, Fpu::fsw0, Fpu::fsw1, Fpu::fsw2, Fpu::fop0, Fpu::fop1, Fpu::fop2;
+uint8 Fpu::ftw0, Fpu::ftw1, Fpu::ftw2, Fpu::res0, Fpu::res1, Fpu::res2;
+uint64 Fpu::fip0, Fpu::fip1, Fpu::fip2, Fpu::fdp0, Fpu::fdp1, Fpu::fdp2;
+uint32 Fpu::mxcsr0, Fpu::mxcsr1, Fpu::mxcsr2, Fpu::mxcsr_mask0, Fpu::mxcsr_mask1, Fpu::mxcsr_mask2;
 Fpu *Fpu::fpu_0 = new(Pd::kern) Fpu, *Fpu::fpu_1 = new(Pd::kern) Fpu, *Fpu::fpu_2 = new(Pd::kern) Fpu;
 bool Fpu::saved = false;

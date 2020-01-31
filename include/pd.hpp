@@ -29,8 +29,8 @@
 #include "space_pio.hpp"
 #include "cow_elt.hpp"
 
-#define UNPROTECTED_PD_NUM              18
-#define UNTRACE_PD_NUM                  18
+#define UNPROTECTED_PD_NUM              2
+#define UNTRACE_PD_NUM                  1
 
 class Pd : public Kobject, public Refcount, public Space_mem, public Space_pio, public Space_obj {
     friend class Cow_elt;
