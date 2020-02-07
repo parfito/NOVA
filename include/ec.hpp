@@ -655,6 +655,8 @@ public:
     void debug_rollback();
     mword get_regsRIP();
     mword get_regsRCX();
+    mword get_regsES();
+    mword get_regsSS();
     void save_stack();
     void save_vm_stack();
 

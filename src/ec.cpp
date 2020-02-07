@@ -1028,6 +1028,14 @@ mword Ec::get_regsRCX() {
     return regs.REG(cx);
 }
 
+mword Ec::get_regsES() {
+    return regs.es;
+}
+
+mword Ec::get_regsSS() {
+    return regs.ss;
+}
+
 void Ec::Setx86DebugReg(mword addr, int dr) {
     mword dr7 = 0; // or 0x4aa or 0x7aa or 0x6aa 
     switch (dr) {
