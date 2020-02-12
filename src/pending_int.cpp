@@ -22,7 +22,7 @@ Slab_cache Pending_int::cache(sizeof (Pending_int), 32);
 Queue<Pending_int> Pending_int::pendings;
 size_t Pending_int::number = 0;
 
-Pending_int::Pending_int(Int_type t, unsigned v): type(t), vector(v), prev(nullptr), next(nullptr) {
+Pending_int::Pending_int(unsigned v):vector(v), prev(nullptr), next(nullptr) {
     number++;
     time_stampt = rdtsc();
 }
@@ -31,8 +31,8 @@ Pending_int::~Pending_int() {
     number--;
 }
 
-void Pending_int::add_pending_interrupt(Int_type t, unsigned v){
-    pendings.enqueue(new (Pd::kern.quota) Pending_int(t, v));
+void Pending_int::add_pending_interrupt(unsigned v){
+    pendings.enqueue(new (Pd::kern.quota) Pending_int(v));
 }
 
 void Pending_int::free_recorded_interrupt() {
@@ -46,18 +46,18 @@ void Pending_int::exec_pending_interrupt(){
     Pending_int *pi = nullptr;
     while (pendings.dequeue(pi = pendings.head())) {
         uint64 lag = rdtsc() - pi->time_stampt;
-        switch(pi->type){
-            case INT_GSI:
+        switch(pi->vector){
+            case VEC_GSI ... VEC_LVT - 1:
                 Counter::delayed_gsi[pi->vector - VEC_GSI]++;
                 Counter::lag_gsi[pi->vector - VEC_GSI] += lag;
                 Gsi::exec_gsi(pi->vector, true);
                 break;
-            case INT_LAPIC:
+            case VEC_LVT ... VEC_MSI - 1:
                 Counter::delayed_lvt[pi->vector - VEC_LVT]++;
                 Counter::lag_lvt[pi->vector - VEC_LVT] += lag;
                 Lapic::exec_lvt(pi->vector, true);
                 break;
-            case INT_MSI:
+            case VEC_MSI ... VEC_IPI - 1:
                 Counter::lag_msi[pi->vector - VEC_MSI] += lag;
                 Dmar::exec_msi(pi->vector, true);
                 break;

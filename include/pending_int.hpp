@@ -24,13 +24,7 @@ class Pending_int {
     static  Queue<Pending_int> pendings;
         
 public:
-    enum Int_type {
-        INT_GSI,
-        INT_MSI,
-        INT_LAPIC,
-    };
-    
-    Pending_int(Int_type t, unsigned v);
+    Pending_int(unsigned v);
     Pending_int(const Pending_int& orig);
     ~Pending_int();
     ALWAYS_INLINE
@@ -46,7 +40,7 @@ public:
 
     Pending_int &operator = (Pending_int const &);
     
-    static void add_pending_interrupt(Int_type, unsigned);
+    static void add_pending_interrupt(unsigned);
     
     static void free_recorded_interrupt();
     
@@ -55,7 +49,6 @@ public:
     static size_t get_numero();
     
 private:
-    Int_type type;
     unsigned vector = 0;
     uint64 time_stampt = 0;
     Pending_int* prev;

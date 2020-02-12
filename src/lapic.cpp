@@ -190,7 +190,7 @@ void Lapic::lvt_vector (unsigned vector){
     if(Ec::is_idle()){
         exec_lvt(vector, false);
     }else{
-        Pending_int::add_pending_interrupt(Pending_int::INT_LAPIC, vector);
+        Pending_int::add_pending_interrupt(vector);
         eoi();
     }    
 }
