@@ -213,6 +213,7 @@ void Ec::handle_exc_db(Exc_regs *r) {
                     }
                 }
                 current->disable_step_debug();
+                check_memory(PES_SINGLE_STEP_FINISHED);
                 launch_state = UNLAUNCHED;
                 return;
             case SR_PMI:
