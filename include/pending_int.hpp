@@ -17,6 +17,8 @@
 #include "slab.hpp"
 #include "compiler.hpp"
 #include "queue.hpp"
+#include "pd.hpp"
+#include "stdio.hpp"
 
 class Pending_int {
     friend class Queue<Pending_int>;
@@ -28,14 +30,10 @@ public:
     Pending_int(const Pending_int& orig);
     ~Pending_int();
     ALWAYS_INLINE
-    static inline void *operator new (size_t, Quota &quota) { return cache.alloc(quota); }
+    static inline void *operator new (size_t) { return cache.alloc(Pd::kern.quota); }
     ALWAYS_INLINE
-    static inline void destroy (Pending_int *obj, Quota &quota) { obj->~Pending_int(); cache.free (obj, quota);}
-    ALWAYS_INLINE
-    static inline void operator delete (void *ptr, Quota &quota) {
-        Pending_int* pi = static_cast<Pending_int*> (ptr);
-        pi->~Pending_int();
-        cache.free (ptr, quota);
+    static inline void operator delete (void *ptr) {
+        cache.free(ptr, Pd::kern.quota);
     }
 
     Pending_int &operator = (Pending_int const &);
@@ -46,7 +44,9 @@ public:
     
     static void exec_pending_interrupt();
     
-    static size_t get_numero();
+    static size_t get_number();
+    
+    static size_t get_max_number() {return max_number; }
     
 private:
     unsigned vector = 0;
@@ -54,5 +54,6 @@ private:
     Pending_int* prev;
     Pending_int* next; 
     static size_t number;
+    static size_t max_number;
     
 };

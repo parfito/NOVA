@@ -20,25 +20,28 @@
 
 Slab_cache Pending_int::cache(sizeof (Pending_int), 32);
 Queue<Pending_int> Pending_int::pendings;
-size_t Pending_int::number = 0;
+size_t Pending_int::number = 0, Pending_int::max_number = 0;
 
 Pending_int::Pending_int(unsigned v):vector(v), prev(nullptr), next(nullptr) {
     number++;
+    if(number > max_number)
+        max_number = number;
     time_stampt = rdtsc();
 }
 
 Pending_int::~Pending_int() {
+    assert(number);
     number--;
 }
 
 void Pending_int::add_pending_interrupt(unsigned v){
-    pendings.enqueue(new (Pd::kern.quota) Pending_int(v));
+    pendings.enqueue(new Pending_int(v));
 }
 
 void Pending_int::free_recorded_interrupt() {
     Pending_int *pi = nullptr;
     while (pendings.dequeue(pi = pendings.head())) {
-        Pending_int::destroy(pi, Pd::kern.quota);
+        delete pi;
     }
 }
 
@@ -64,10 +67,10 @@ void Pending_int::exec_pending_interrupt(){
             default:
                 Console::panic("Unhandled pending interrupt");
         }
-        destroy(pi, Pd::kern.quota);
+        delete pi;
     }
 }
 
-size_t Pending_int::get_numero(){
+size_t Pending_int::get_number(){
     return number;
 }
