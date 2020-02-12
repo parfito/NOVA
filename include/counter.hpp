@@ -60,8 +60,9 @@ class Counter
         static uint64   cycles_idle             CPULOCAL;
         static unsigned rep_prefix[2]           ;
         static unsigned hlt_instr[2]            ;
-        
-        static void dump();
+        static bool    has_been_dumped          ;
+       
+        static void dump(bool = false);
 
         ALWAYS_INLINE
         static inline unsigned remote (unsigned c, unsigned i)

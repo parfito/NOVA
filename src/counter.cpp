@@ -21,6 +21,7 @@
 #include "counter.hpp"
 #include "stdio.hpp"
 #include "x86.hpp"
+#include "pending_int.hpp"
 
 unsigned Counter::ipi[NUM_IPI][2];
 unsigned Counter::lvt[NUM_LVT][2];
@@ -55,8 +56,11 @@ unsigned Counter::vmio;
 uint64 Counter::cycles_idle;
 unsigned Counter::rep_prefix[2];
 unsigned Counter::hlt_instr[2];
+bool Counter::has_been_dumped = false;
 
-void Counter::dump() {
+void Counter::dump(bool force) {
+    if(has_been_dumped && !force)
+        return;
     trace(0, "TIME: %16llu", rdtsc());
     trace(0, "IDLE: %16llu", cycles_idle);
 //    trace(0, "VGPF: %16u", vtlb_gpf);
@@ -75,7 +79,7 @@ void Counter::dump() {
 //    trace(0, "T_IO: %16u", io);
 //    trace(0, "PMI_SS: %14u", pmi_ss);
     trace(0, "NB_PE: %15llu", nb_pe);
-
+    trace(0, "Pending Number %#lx Max Number %lu", Pending_int::get_max_number(), Pending_int::get_max_number());
     vtlb_gpf = vtlb_hpf = vtlb_fill = vtlb_flush = vtlb_cow_fault = schedule = helping = rep_io =
     io = simple_io = pmi_ss = pio = mmio = 0;
 
@@ -116,4 +120,5 @@ void Counter::dump() {
             trace(0, "VMI %#4x: %12u %12u", i, vmi[i][0], vmi[i][1]);
             vmi[i][0] = vmi[i][1] = 0;
         }
+    has_been_dumped = true;
 }
