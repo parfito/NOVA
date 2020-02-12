@@ -213,7 +213,7 @@ void Dmar::vector (unsigned vector)
     if(Ec::is_idle()){
         exec_msi(vector, false);
     }else{
-        Pending_int::add_pending_interrupt(Pending_int::INT_MSI, vector);
+        Pending_int::add_pending_interrupt(vector);
         Lapic::eoi();
     }
 }

@@ -95,7 +95,7 @@ void Gsi::vector (unsigned vector)
     if(Ec::is_idle() || gsi == Acpi::gsi){// Acpi::gsi (0x9) triggers too much (10000) so we choose not to delay it
         exec_gsi(vector, false);
     }else{
-        Pending_int::add_pending_interrupt(Pending_int::INT_GSI, vector);
+        Pending_int::add_pending_interrupt(vector);
         Lapic::eoi();        
     }
     
