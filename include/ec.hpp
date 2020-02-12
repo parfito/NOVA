@@ -291,6 +291,7 @@ public:
         PES_VMX_RDTSCP = 24,
         PES_VMX_IO = 25,
         PES_COW_IN_STACK = 26,
+        PES_SINGLE_STEP_FINISHED = 27,
     };
     
     enum Register {

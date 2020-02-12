@@ -80,6 +80,7 @@ void Counter::dump(bool force) {
 //    trace(0, "PMI_SS: %14u", pmi_ss);
     trace(0, "NB_PE: %15llu", nb_pe);
     trace(0, "Pending Number %#lx Max Number %lu", Pending_int::get_max_number(), Pending_int::get_max_number());
+    Pending_int::dump();
     vtlb_gpf = vtlb_hpf = vtlb_fill = vtlb_flush = vtlb_cow_fault = schedule = helping = rep_io =
     io = simple_io = pmi_ss = pio = mmio = 0;
 

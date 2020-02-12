@@ -41,6 +41,7 @@
 #include "pe_stack.hpp"
 #include "pe.hpp"
 #include "log_store.hpp"
+#include "pending_int.hpp"
 
 mword Ec::prev_rip = 0, Ec::tscp_rcx1 = 0, Ec::tscp_rcx2 = 0;
 bool Ec::hardening_started = false, Ec::in_rep_instruction = false, Ec::not_nul_cowlist = false, 
@@ -480,6 +481,7 @@ void Ec::ret_user_vmrun() {
 }
 
 void Ec::idle() {
+    Counter::dump();
     for (;;) {
 
         mword hzd = Cpu::hazard & (HZD_RCU | HZD_SCHED);
@@ -490,7 +492,6 @@ void Ec::idle() {
         asm volatile ("sti; hlt; cli" : : : "memory");
         uint64 t2 = rdtsc();
 
-//        Counter::dump();
         Counter::cycles_idle += t2 - t1;
     }
 }
@@ -847,6 +848,7 @@ void Ec::debug_rollback() {
  * save state before starting the PE double execution
  */
 void Ec::save_state0() {
+    assert(!Pending_int::get_number());
     regs_0 = regs;
     call_log_funct(Logstore::add_log_in_buffer, 0, "PE %llu Pd %s Ec %s Rip0 %lx:%lx", Counter::nb_pe, 
     getPd()->get_name(), get_name(), regs.ARG_IP, regs.REG(ip));
