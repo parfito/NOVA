@@ -26,7 +26,6 @@ Pending_int::Pending_int(unsigned v):vector(v), prev(nullptr), next(nullptr) {
     number++;
     if(number > max_number)
         max_number = number;
-    call_log_funct(Logstore::add_entry_in_buffer, 0, "Add pending number %lu vec %u", number, vector);
     time_stampt = rdtsc();
 }
 
@@ -49,7 +48,6 @@ void Pending_int::free_recorded_interrupt() {
 void Pending_int::exec_pending_interrupt(){
     Pending_int *pi = nullptr;
     while (pendings.dequeue(pi = pendings.head())) {
-        call_log_funct(Logstore::add_entry_in_buffer, 0, "Exec pending number %lu vec %u", number, pi->vector);
         uint64 lag = rdtsc() - pi->time_stampt;
         switch(pi->vector){
             case VEC_GSI ... VEC_LVT - 1:
@@ -71,8 +69,6 @@ void Pending_int::exec_pending_interrupt(){
         }
         delete pi;
     }
-    call_log_funct(Logstore::add_entry_in_buffer, 0, "Exec pending Finished %lu", number);    
-    assert(!number);
 }
 
 size_t Pending_int::get_number(){
@@ -80,9 +76,10 @@ size_t Pending_int::get_number(){
 }
 
 void Pending_int::dump() {
+    call_log_funct(Logstore::add_entry_in_buffer, 1, "Dumping %lu interrupts ", number);        
     Pending_int *pi = pendings.head(), *h = pi, *next = nullptr;
     while(pi) {
-        trace(0, "Pi vec %u", pi->vector);        
+        call_log_funct(Logstore::add_entry_in_buffer, 1, "Pi vec %u", pi->vector);        
         next = pi->next; 
         pi = (next == h) ? nullptr : next;          
     } 
