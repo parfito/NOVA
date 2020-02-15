@@ -99,6 +99,9 @@ do {                                                            \
         case 2:                                                 \
             Console::panic("%s", __buff);                       \
             break;                                              \
+        case 3:                                                 \
+           debug_started_trace(0, "%s", __buff);                   \
+           break;                                               \
         default:                                                \
             Console::panic("Unknown trace function");           \
             break;                                              \

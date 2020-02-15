@@ -48,6 +48,8 @@ public:
     
     static size_t get_max_number() {return max_number; }
     
+    static void dump();
+    
 private:
     unsigned vector = 0;
     uint64 time_stampt = 0;

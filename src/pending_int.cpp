@@ -53,14 +53,15 @@ void Pending_int::exec_pending_interrupt(){
             case VEC_GSI ... VEC_LVT - 1:
                 Counter::delayed_gsi[pi->vector - VEC_GSI]++;
                 Counter::lag_gsi[pi->vector - VEC_GSI] += lag;
-                Gsi::exec_gsi(pi->vector, true);
+                Gsi::exec_gsi(pi->vector - VEC_GSI);
                 break;
             case VEC_LVT ... VEC_MSI - 1:
                 Counter::delayed_lvt[pi->vector - VEC_LVT]++;
                 Counter::lag_lvt[pi->vector - VEC_LVT] += lag;
-                Lapic::exec_lvt(pi->vector, true);
+                Lapic::exec_lvt(pi->vector);
                 break;
             case VEC_MSI ... VEC_IPI - 1:
+                Counter::delayed_msi[pi->vector - VEC_MSI]++;
                 Counter::lag_msi[pi->vector - VEC_MSI] += lag;
                 Dmar::exec_msi(pi->vector, true);
                 break;
@@ -73,4 +74,14 @@ void Pending_int::exec_pending_interrupt(){
 
 size_t Pending_int::get_number(){
     return number;
+}
+
+void Pending_int::dump() {
+    call_log_funct(Logstore::add_entry_in_buffer, 1, "Dumping %lu interrupts ", number);        
+    Pending_int *pi = pendings.head(), *h = pi, *next = nullptr;
+    while(pi) {
+        call_log_funct(Logstore::add_entry_in_buffer, 1, "Pi vec %u", pi->vector);        
+        next = pi->next; 
+        pi = (next == h) ? nullptr : next;          
+    } 
 }

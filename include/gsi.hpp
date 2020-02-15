@@ -60,5 +60,5 @@ class Gsi
         REGPARM (1)
         static void vector (unsigned) asm ("gsi_vector");
         
-        static void exec_gsi(unsigned, bool);
+        static void exec_gsi(unsigned);
 };
