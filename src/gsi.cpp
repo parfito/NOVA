@@ -92,18 +92,6 @@ void Gsi::vector (unsigned vector)
 {
     unsigned gsi = vector - VEC_GSI;
 
-    if(Ec::is_idle() || gsi == Acpi::gsi){// Acpi::gsi (0x9) triggers too much (10000) so we choose not to delay it
-        exec_gsi(vector, false);
-    }else{
-        Pending_int::add_pending_interrupt(vector);
-        Lapic::eoi();        
-    }
-    
-}
-
-void Gsi::exec_gsi(unsigned vector, bool pending){
-    unsigned gsi = vector - VEC_GSI;
-
     if (gsi == Keyb::gsi)
         Keyb::interrupt();
 
@@ -113,10 +101,16 @@ void Gsi::exec_gsi(unsigned vector, bool pending){
     else if (gsi_table[gsi].trg)
         mask (gsi);
 
-    if(!pending)
-        Lapic::eoi();
+    if(Ec::is_idle()){// Acpi::gsi (0x9) triggers too much (10000) so we choose not to delay it
+        exec_gsi(gsi);
+    }else{
+        Pending_int::add_pending_interrupt(vector);
+    }
+    Lapic::eoi();  
+}
 
+void Gsi::exec_gsi(unsigned gsi){
     gsi_table[gsi].sm->submit();
 
-    Counter::print<1,16> (++Counter::gsi[gsi][Pe::run_number], Console_vga::Color (Console_vga::COLOR_LIGHT_YELLOW - gsi / 64), SPN_GSI + gsi % 64);
+    Counter::print<1,16> (Counter::gsi[gsi][Pe::run_number], Console_vga::Color (Console_vga::COLOR_LIGHT_YELLOW - gsi / 64), SPN_GSI + gsi % 64);
 }

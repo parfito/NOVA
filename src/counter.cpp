@@ -31,7 +31,7 @@ unsigned Counter::gsi[NUM_GSI][2];
 unsigned Counter::delayed_gsi[NUM_GSI];
 uint64 Counter::lag_gsi[NUM_GSI];
 unsigned Counter::msi[NUM_MSI][2];
-uint64 Counter::delayed_msi[NUM_MSI];
+unsigned Counter::delayed_msi[NUM_MSI];
 uint64 Counter::lag_msi[NUM_MSI];
 unsigned Counter::exc[NUM_EXC][2];
 unsigned Counter::vmi[NUM_VMI][2];
@@ -79,7 +79,7 @@ void Counter::dump(bool force) {
 //    trace(0, "T_IO: %16u", io);
 //    trace(0, "PMI_SS: %14u", pmi_ss);
     trace(0, "NB_PE: %15llu", nb_pe);
-    trace(0, "Pending Number %#lx Max Number %lu", Pending_int::get_max_number(), Pending_int::get_max_number());
+    trace(0, "Pending Number %#lx Max Number %lu", Pending_int::get_number(), Pending_int::get_max_number());
     if(Pending_int::get_number())
         Pending_int::dump();
     vtlb_gpf = vtlb_hpf = vtlb_fill = vtlb_flush = vtlb_cow_fault = schedule = helping = rep_io =
@@ -99,6 +99,16 @@ void Counter::dump(bool force) {
             lvt[i][0] = lvt[i][1] = 0;
             delayed_lvt[i] = 0;
             lag_lvt[i] = 0;
+        }
+
+    for (unsigned i = 0; i < sizeof (msi) / sizeof (*msi); i++)
+        if (msi[i][0]) {
+            uint64 mean = lag_msi[i]/(delayed_msi[i]?delayed_msi[i]:msi[i][0]);
+            trace(0, "MSI %#4x: %12u %12u %12u lag %12llu %12llu", i, msi[i][0], 
+                    msi[i][1], delayed_msi[i], lag_msi[i], mean);
+            msi[i][0] = msi[i][1] = 0;
+            delayed_msi[i] = 0;
+            lag_msi[i] = 0;
         }
 
     for (unsigned i = 0; i < sizeof (gsi) / sizeof (*gsi); i++)

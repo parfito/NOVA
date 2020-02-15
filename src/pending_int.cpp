@@ -53,14 +53,15 @@ void Pending_int::exec_pending_interrupt(){
             case VEC_GSI ... VEC_LVT - 1:
                 Counter::delayed_gsi[pi->vector - VEC_GSI]++;
                 Counter::lag_gsi[pi->vector - VEC_GSI] += lag;
-                Gsi::exec_gsi(pi->vector, true);
+                Gsi::exec_gsi(pi->vector - VEC_GSI);
                 break;
             case VEC_LVT ... VEC_MSI - 1:
                 Counter::delayed_lvt[pi->vector - VEC_LVT]++;
                 Counter::lag_lvt[pi->vector - VEC_LVT] += lag;
-                Lapic::exec_lvt(pi->vector, true);
+                Lapic::exec_lvt(pi->vector);
                 break;
             case VEC_MSI ... VEC_IPI - 1:
+                Counter::delayed_msi[pi->vector - VEC_MSI]++;
                 Counter::lag_msi[pi->vector - VEC_MSI] += lag;
                 Dmar::exec_msi(pi->vector, true);
                 break;

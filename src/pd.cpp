@@ -43,7 +43,7 @@ ALIGNED(32) Pd Pd::root (&Pd::root, NUM_EXC, 0x1f);
 //    "init -> platform_drv -> nic_drv -> ", "init -> platform_drv -> ps2_drv -> ",
 //    "Unknown", "nullptr"};//Never forget to terminate this by nullptr
 
-const char *Pd::unprotected_pd_names[UNPROTECTED_PD_NUM] = {"init -> seoul", "nullptr"};//Never forget to terminate this by nullptr
+const char *Pd::unprotected_pd_names[UNPROTECTED_PD_NUM] = {"nullptr"};//Never forget to terminate this by nullptr
 
 const char *Pd::untraced_pd_names[UNTRACED_PD_NUM] = {"nullptr"};//Never forget to terminate this by nullptr
 
