@@ -173,39 +173,37 @@ void Lapic::error_handler(){
 }
 
 void Lapic::timer_handler(){
-    bool expired = (freq_bus ? read (LAPIC_TMR_CCR) : Msr::read<uint64>(Msr::IA32_TSC_DEADLINE)) == 0;
-    if (expired)
-       Timeout::check(); 
-
     Rcu::update();
 }
 
 void Lapic::lvt_vector (unsigned vector){    
-    Counter::print<1,16> (++Counter::lvt[vector - VEC_LVT][Pe::run_number], 
-            Console_vga::COLOR_LIGHT_BLUE, vector - VEC_LVT + SPN_LVT);
     if(vector == VEC_LVT_PERFM){
         perfm_handler();
         return;
     }
-    if(Ec::is_idle()){
-        exec_lvt(vector, false);
-    }else{
-        Pending_int::add_pending_interrupt(vector);
-        eoi();
-    }    
-}
-
-void Lapic::exec_lvt(unsigned vector, bool pending){
-    unsigned lvt = vector - VEC_LVT;
     
-    switch (vector) {
-        case VEC_LVT_TIMER: timer_handler(); if(!pending) eoi(); break;
-        case VEC_LVT_ERROR: error_handler(); if(!pending) eoi(); break;
-        case VEC_LVT_PERFM: Console::panic("VEC_LVT_PERFM here"); //No VEC_LVT_PERFM here
-        case VEC_LVT_THERM: therm_handler(); if(!pending) eoi(); break;
+    if(vector == VEC_LVT_TIMER){
+        bool expired = (freq_bus ? read (LAPIC_TMR_CCR) : Msr::read<uint64>(Msr::IA32_TSC_DEADLINE)) == 0;
+        if (expired)
+           Timeout::check(); 
     }    
- 
-    Counter::print<1,16> (++Counter::lvt[lvt][Pe::run_number], Console_vga::COLOR_LIGHT_BLUE, lvt + SPN_LVT);    
+    if(Ec::is_idle()){
+        exec_lvt(vector);
+    } else {
+        Pending_int::add_pending_interrupt(vector);
+    }
+    unsigned lvt = vector - VEC_LVT;
+    Counter::print<1,16> (Counter::lvt[lvt][Pe::run_number], Console_vga::COLOR_LIGHT_BLUE, lvt + SPN_LVT);  
+    eoi();
+}    
+
+void Lapic::exec_lvt(unsigned vector){    
+    switch (vector) {
+        case VEC_LVT_TIMER: timer_handler(); break;
+        case VEC_LVT_ERROR: error_handler(); break;
+        case VEC_LVT_PERFM: Console::panic("VEC_LVT_PERFM here"); //No VEC_LVT_PERFM here
+        case VEC_LVT_THERM: therm_handler(); break;
+    }    
 }
 
 void Lapic::ipi_vector (unsigned vector){
@@ -219,7 +217,7 @@ void Lapic::ipi_vector (unsigned vector){
 
     eoi();
 
-    Counter::print<1,16> (++Counter::ipi[ipi][Pe::run_number], Console_vga::COLOR_LIGHT_GREEN, ipi + SPN_IPI);
+    Counter::print<1,16> (Counter::ipi[ipi][Pe::run_number], Console_vga::COLOR_LIGHT_GREEN, ipi + SPN_IPI);
 }
 /**
  * Called only from entry.S

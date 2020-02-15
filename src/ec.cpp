@@ -41,6 +41,7 @@
 #include "pe_stack.hpp"
 #include "pe.hpp"
 #include "log_store.hpp"
+#include "pending_int.hpp"
 
 mword Ec::prev_rip = 0, Ec::tscp_rcx1 = 0, Ec::tscp_rcx2 = 0;
 bool Ec::hardening_started = false, Ec::in_rep_instruction = false, Ec::not_nul_cowlist = false, 
@@ -847,6 +848,7 @@ void Ec::debug_rollback() {
  * save state before starting the PE double execution
  */
 void Ec::save_state0() {
+    assert(!Pending_int::get_number());
     regs_0 = regs;
     call_log_funct(Logstore::add_log_in_buffer, 0, "PE %llu Pd %s Ec %s Rip0 %lx:%lx", Counter::nb_pe, 
     getPd()->get_name(), get_name(), regs.ARG_IP, regs.REG(ip));
@@ -1026,6 +1028,14 @@ mword Ec::get_regsRIP() {
 
 mword Ec::get_regsRCX() {
     return regs.REG(cx);
+}
+
+mword Ec::get_regsES() {
+    return regs.es;
+}
+
+mword Ec::get_regsSS() {
+    return regs.ss;
 }
 
 void Ec::Setx86DebugReg(mword addr, int dr) {
