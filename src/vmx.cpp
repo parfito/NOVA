@@ -44,6 +44,15 @@ Vmcs::vmx_ctrl_ent  Vmcs::ctrl_ent;
 mword               Vmcs::fix_cr0_set, Vmcs::fix_cr0_clr;
 mword               Vmcs::fix_cr4_set, Vmcs::fix_cr4_clr;
 
+const char* Vmcs::reason[57] = {"EXC_NMI", "EXTINT", "TRIPLE_FAULT", "INIT",
+"SIPI", "SMI_IO", "SMI_OTHER", "INTR_WINDOW", "NMI_WINDOW", "TASK_SWITCH", 
+"CPUID", "GETSEC", "HLT", "INVD", "INVLPG", "RDPMC", "RDTSC", "RSM", "VMCALL", 
+"VMCLEAR", "VMLAUNCH", "VMPTRLD", "VMPTRST", "VMREAD", "VMRESUME", "VMWRITE",
+"VMXOFF", "VMXON", "CR", "DR", "IO", "RDMSR", "WRMSR", "FAIL_STATE", "FAIL_MSR", 
+"MWAIT", "MTF", "MONITOR", "PAUSE", "FAIL_MCHECK", "TPR_THRESHOLD", "APIC_ACCESS", 
+"GDTR_IDTR", "LDTR_TR", "EPT_VIOLATION", "EPT_MISCONFIG", "INVEPT", "RDTSCP",
+"PREEMPT", "INVVPID", "WBINVD", "XSETBV"};
+
 Vmcs::Vmcs (mword esp, mword bmp, mword cr3, uint64 eptp) : rev (basic.revision)
 {
     make_current();

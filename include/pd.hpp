@@ -27,7 +27,7 @@
 #include "space_obj.hpp"
 #include "space_pio.hpp"
 
-#define UNTRACE_PD_NUM                  17
+#define UNTRACE_PD_NUM                  16
 
 class Pd : public Kobject, public Refcount, public Space_mem, public Space_pio, public Space_obj
 {

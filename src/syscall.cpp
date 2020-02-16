@@ -324,7 +324,7 @@ void Ec::sys_reply()
         else if (ec->cont == ret_user_vmresume){
             debug_started_trace(0, "current %s ec %s", current->name, ec->name);            
             fpu = src->save_vmx (&ec->regs);
-            Console::print_on = false;
+//            Console::print_on = false;
         }
         else if (ec->cont == ret_user_vmrun)
             fpu = src->save_svm (&ec->regs);

@@ -32,7 +32,7 @@ class Vmcs
         static Vmcs *current CPULOCAL_HOT;
 
         static unsigned vpid_ctr CPULOCAL;
-
+        static const char* reason[57];
         static union vmx_basic {
             uint64      val;
             struct {

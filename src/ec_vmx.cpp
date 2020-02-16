@@ -196,9 +196,41 @@ void Ec::handle_vmx()
     Cpu::hazard = (Cpu::hazard | HZD_DS_ES | HZD_TR) & ~HZD_FPU;
 
     mword reason = Vmcs::read (Vmcs::EXI_REASON) & 0xff;
+    unsigned reason_vec = 0;
 
     Counter::vmi[reason]++;
-
+    char counter_buff[STR_MIN_LENGTH], buff[STR_MAX_LENGTH + 50];
+    if(Lapic::counter_vmexit_value > Lapic::perf_max_count - MAX_INSTRUCTION)
+        String::print(counter_buff, "%#llx", Lapic::counter_vmexit_value);
+    else
+        String::print(counter_buff, "%llu", Lapic::counter_vmexit_value);
+    size_t n = String::print(buff, "VMEXIT guest rip %lx rsp %lx flags %lx CS %lx counter %s:%#llx reason %s", 
+            Vmcs::read(Vmcs::GUEST_RIP), Vmcs::read(Vmcs::GUEST_RSP), Vmcs::read(Vmcs::GUEST_RFLAGS), 
+            Vmcs::read(Vmcs::GUEST_SEL_CS), counter_buff, Lapic::read_instCounter(), Vmcs::reason[reason]);
+    if(reason == Vmcs::VMX_EXTINT) {
+        reason_vec = Vmcs::read (Vmcs::EXI_INTR_INFO) & 0xff;
+        String::print(buff+n, " vec %u", reason_vec);
+    } else if(reason == Vmcs::VMX_EXC_NMI) {
+        mword intr_info = Vmcs::read (Vmcs::EXI_INTR_INFO);
+        switch(intr_info & 0x7ff) {
+            case 0x202: // NMI
+                copy_string(buff+n, " NMI", STR_MAX_LENGTH + 50 - n);
+                break;
+            case 0x307: // #NM
+                copy_string(buff+n, " NM", STR_MAX_LENGTH + 50 - n);
+                break;
+            case 0x30e: // #PF
+                String::print(buff+n, " PF %lx:%lx ", Vmcs::read (Vmcs::EXI_QUALIFICATION), 
+                        Vmcs::read (Vmcs::EXI_INTR_ERROR));    
+                break;
+            default:
+                String::print(buff+n, " Don't know this VMX_EXTINT %lx", intr_info & 0x7ff);
+        } 
+    } else if (reason == Vmcs::VMX_MTF) {
+        copy_string(buff+n, " VMX_MTF", STR_MAX_LENGTH + 50 - n);
+    }
+    debug_started_trace(0, "%s ", buff);
+    Console::print_on = false;    
     switch (reason) {
         case Vmcs::VMX_EXC_NMI:     vmx_exception();
         case Vmcs::VMX_EXTINT:      vmx_extint();

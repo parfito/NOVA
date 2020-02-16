@@ -41,7 +41,7 @@ const char *Pd::untraced_pd_names[UNTRACE_PD_NUM] = {"init", "init -> report_rom
     "init -> platform_drv", "init -> acpi_report_rom", "init -> acpi_drv", "init -> ps2_drv",
     "init -> rtc_drv", "init -> timer", "init -> platform_drv -> fb_drv -> ",
     "init -> platform_drv -> nic_drv -> ", "init -> platform_drv -> ps2_drv -> ",
-    "Unknown", "nullptr"};//Never forget to terminate this by nullptr
+    "nullptr"};//Never forget to terminate this by nullptr
 
 Pd::Pd (Pd *own) : Kobject (PD, static_cast<Space_obj *>(own)), pt_cache (sizeof (Pt), 32), mdb_cache (sizeof (Mdb), 16), sm_cache (sizeof (Sm), 32), sc_cache (sizeof (Sc), 32), ec_cache (sizeof (Ec), 32), fpu_cache (sizeof (Fpu), 16)
 {
