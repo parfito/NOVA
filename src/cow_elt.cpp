@@ -466,7 +466,7 @@ static inline void Cow_elt::operator delete (void *ptr) {
 }
 
 void Cow_elt::to_log(const char* reason){
-    call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 0, "%s d %lx %lx %lx %lx %d de %lx next %lx %s", reason, page_addr, 
+    call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 1, "%s d %lx %lx %lx %lx %d de %lx next %lx %s", reason, page_addr, 
         phys_addr[0], phys_addr[1], phys_addr[2], age, v_is_mapped_elsewhere ? 
         v_is_mapped_elsewhere->page_addr : 0, next ? next->page_addr:0, pte.is_hpt ? "Hpt" : "VTLB");
 }

@@ -218,11 +218,11 @@ void Ec::recv_kern()
     else if (ec->cont == ret_user_vmresume){
         if(!debug_started) {
             Logstore::log_on = true;
-            call_log_funct(Logstore::add_entry_in_buffer, 1, "Logs starting ... PE %llu", Counter::nb_pe);
+            call_log_funct(Logstore::add_entry_in_buffer, 0, "Logs starting ... PE %llu", Counter::nb_pe);
             debug_started = true;
             Console::print_on = true;
         }
-        call_log_funct(Logstore::add_entry_in_buffer, 1, "current Pd %s Ec %s current->rcap_ec %s", current->getPd()->get_name(), current->name, ec->name);
+        call_log_funct(Logstore::add_entry_in_buffer, 0, "current Pd %s Ec %s current->rcap_ec %s", current->getPd()->get_name(), current->name, ec->name);
         fpu = current->utcb->load_vmx (&ec->regs);
     }
     else if (ec->cont == ret_user_vmrun)
