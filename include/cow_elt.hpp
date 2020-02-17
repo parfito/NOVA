@@ -47,7 +47,9 @@ private:
     mword page_addr = {}; // if VM, this will hold the gla, else hold page addr
     mword attr = {};
     Paddr phys_addr[3];
-    mword ec_rip = 0, ec_rcx = 0, ec_rsp = 0, ec_rsp_content = 0, m_fault_addr = 0;
+    mword ec_rip = 0, ec_rax = 0, ec_rcx = 0, ec_rsp = 0, ec_rsp_content = 0, 
+    m_fault_addr = 0, ec_ss = 0, ec_es = 0;
+    char ec_rip_content[STR_MIN_LENGTH];
     uint32 crc = 0, crc1 = 0;
     int age = 0;
     Cow_elt* v_is_mapped_elsewhere = nullptr;

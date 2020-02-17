@@ -36,14 +36,14 @@ INIT_PRIORITY (PRIO_SLAB)
 ALIGNED(32) Pd Pd::kern (&Pd::kern);
 ALIGNED(32) Pd Pd::root (&Pd::root, NUM_EXC, 0x1f);
 
-//const char *Pd::unprotected_pd_names[UNPROTECTED_PD_NUM] = {"core", "init", "init -> report_rom",
-//    "init -> pointer", "init -> nitpicker", "init -> fb_drv", "init -> nic_drv", "init -> seoul", 
-//    "init -> platform_drv", "init -> acpi_report_rom", "init -> acpi_drv", "init -> ps2_drv",
-//    "init -> rtc_drv", "init -> timer", "init -> platform_drv -> fb_drv -> ",
-//    "init -> platform_drv -> nic_drv -> ", "init -> platform_drv -> ps2_drv -> ",
-//    "Unknown", "nullptr"};//Never forget to terminate this by nullptr
+const char *Pd::unprotected_pd_names[UNPROTECTED_PD_NUM] = {"root", "init", "init -> report_rom",
+    "init -> pointer", "init -> nitpicker", "init -> fb_drv", "init -> nic_drv", "init -> seoul", 
+    "init -> platform_drv", "init -> acpi_report_rom", "init -> acpi_drv", "init -> ps2_drv",
+    "init -> rtc_drv", "init -> timer", "init -> platform_drv -> fb_drv -> ",
+    "init -> platform_drv -> nic_drv -> ", "init -> platform_drv -> ps2_drv -> ",
+    "nullptr"};//Never forget to terminate this by nullptr
 
-const char *Pd::unprotected_pd_names[UNPROTECTED_PD_NUM] = {"nullptr"};//Never forget to terminate this by nullptr
+//const char *Pd::unprotected_pd_names[UNPROTECTED_PD_NUM] = {"nullptr"};//Never forget to terminate this by nullptr
 
 const char *Pd::untraced_pd_names[UNTRACED_PD_NUM] = {"nullptr"};//Never forget to terminate this by nullptr
 
