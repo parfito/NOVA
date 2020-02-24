@@ -42,7 +42,7 @@ public:
     
     static void append_log_in_buffer(const char*, bool = true);
     
-    static void commit_buffer(bool = true);
+    static void commit_buffer();
     
     static void call(void (*)(const char*, bool), const char*);
     

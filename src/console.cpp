@@ -301,7 +301,7 @@ void Console::panic (char const *format, ...)
         }
     }
     
-    Logstore::dump("Panic", true);                                                          \
+    Logstore::dump("Panic", false, 0);                                                          \
     shutdown();
 }
 

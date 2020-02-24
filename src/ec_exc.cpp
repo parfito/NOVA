@@ -594,7 +594,7 @@ void Ec::check_memory(PE_stopby from) {
             if(step_reason == SR_DBG){
                 nb_inst_single_step = 0;
             }
-            Lapic::program_pmi(ec->utcb ? 0 : Lapic::perf_max_count);
+            Lapic::program_pmi(0);
             check_exit();
             break;
         case 1: // Second run

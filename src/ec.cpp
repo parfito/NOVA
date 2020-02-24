@@ -43,7 +43,7 @@
 #include "log_store.hpp"
 #include "pending_int.hpp"
 
-mword Ec::prev_rip = 0, Ec::tscp_rcx1 = 0, Ec::tscp_rcx2 = 0;
+mword Ec::prev_rip = 0, Ec::tscp_rcx1 = 0, Ec::tscp_rcx2 = 0, Ec::vmlaunch;
 bool Ec::hardening_started = false, Ec::in_rep_instruction = false, Ec::not_nul_cowlist = false, 
         Ec::no_further_check = false, Ec::run_switched = false, Ec::keep_cow = false, 
         Ec::single_stepped = false;
@@ -426,18 +426,17 @@ void Ec::ret_user_vmresume() {
 
     if (EXPECT_FALSE(get_cr2() != current->regs.cr2))
         set_cr2(current->regs.cr2);
-    call_log_funct(Logstore::add_entry_in_buffer, 0, "VMResume : Run %d Ec %s Rip %lx CS %lx Counter %llx", Pe::run_number, 
+    call_log_funct(Logstore::add_entry_in_buffer, 1, "VMResume : Run %d Ec %s Rip %lx CS %lx Counter %llx", Pe::run_number, 
     current->get_name(), Vmcs::read(Vmcs::GUEST_RIP), Vmcs::read(Vmcs::GUEST_SEL_CS), Lapic::read_instCounter());
     if(step_reason == SR_DBG)
         enable_mtf();
-    asm volatile ("lea %0," EXPAND (PREG(sp); LOAD_GPR_COUNT)
-                  "vmresume;" 
-    //vmresume does not count as instruction, at least if not succeeded. 
-    //Just remove it and you will notice that rdmsr will yield same rax value.
-                  EXPAND(RESET_COUNTER)
-                  "vmlaunch;"
-                  "mov %1," EXPAND (PREG(sp);)
-                  : : "m" (current->regs), "i" (CPU_LOCAL_STCK + PAGE_SIZE) : "memory");
+    asm volatile (EXPAND(LOAD_GPR_COUNT)
+                "vmresume;" // VMRESUME is not counted as instruction; we don't know why
+                EXPAND(RESET_COUNTER)
+                "vmlaunch;"
+                "mov %2," EXPAND(PREG(sp);)
+                : "=m" (vmlaunch) : "m" (current->regs), "i" (CPU_LOCAL_STCK + PAGE_SIZE), "i" 
+                (CPU_LOCAL_STCK + PAGE_SIZE - 0x80) : "memory");
 
     trace(0, "VM entry failed with error %#lx", Vmcs::read(Vmcs::VMX_INST_ERROR));
 
@@ -609,7 +608,7 @@ void Ec::die(char const *reason, Exc_regs *r) {
         trace(0, "Killed EC:%s SC:%p V:%#lx CR0:%#lx CR3:%#lx CR4:%#lx (%s) Pd: %s Ec: %s",
             current->name, Sc::current, r->vec, r->cr0_shadow, r->cr3_shadow, r->cr4_shadow, reason, 
                 Pd::current->get_name(), Ec::current->get_name());
-    Logstore::dump("die");
+    Logstore::dump("die", false, 0);
     Ec *ec = current->rcap;
 
     if (ec)
@@ -851,7 +850,7 @@ void Ec::save_state0() {
     assert(!Pending_int::get_number());
     regs_0 = regs;
     call_log_funct(Logstore::add_log_in_buffer, 0, "PE %llu Pd %s Ec %s Rip0 %lx:%lx", Counter::nb_pe, 
-    getPd()->get_name(), get_name(), regs.ARG_IP, regs.REG(ip));
+    getPd()->get_name(), get_name(), regs.ARG_IP, get_reg(RIP));
     Cow_elt::place_phys0();
     Fpu::dwc_save(); // If FPU activated, save fpu state
     if (fpu)         // If fpu defined, save it 
@@ -865,7 +864,7 @@ void Ec::save_state0() {
 //              cr4_shadow = current->regs.cr4_shadow; 
 //        regs.vtlb->reserve_stack(cr0_shadow, cr3_shadow, cr4_shadow);
         vmx_save_state0();        
-        Lapic::program_pmi(Lapic::perf_max_count);
+        Lapic::program_pmi();
     }
     Pe::c_regs[0] = regs_0;
     Pe::inState1 = false;

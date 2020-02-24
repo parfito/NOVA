@@ -140,47 +140,42 @@
 #define RET_USER_EXC    iretq;
 
 // 0xb is the number of instrutions executed in the hypervisor in kernel mode
-#define LOAD_GPR_COUNT  pop     PREG(15);               \
-                        pop     PREG(14);               \
-                        pop     PREG(13);               \
-                        pop     PREG(12);               \
-                        pop     PREG(11);               \
-                        pop     PREG(10);               \
-                        pop     PREG(9);                \
-                        pop     PREG(8);                \
-                        pop     PREG(di);               \
-                        pop     PREG(si);               \
-                        pop     PREG(bp);               \
-                        mov    	$0x309,     PREG(cx);	\
-                        rdmsr;  			\
-                        sub   	$0xb,       PREG(ax);	\
-                        mov     $0x38d,     PREG(cx);   \
-                        xor     PREG(dx),   PREG(dx);   \
-                        mov     $0xb,       PREG(ax);   \
+#define LOAD_GPR_COUNT  mov %2, PREG(sp);               \
+                        SAVE_GPR                        \
+                        movb $0x0, %0;                  \
+                        lea %1, PREG(sp);               \
+                        LOAD_GPR                        \
+                        push PREG(ax);                  \
+                        push PREG(cx);                  \
+                        push PREG(dx);                  \
+                        mov $0x309, PREG(cx);           \
+                        rdmsr;                          \
+                        sub $0x9, PREG(ax);             \
                         wrmsr;                          \
-                        pop     PREG(ax);               \
-                        pop     PREG(bx);               \
-                        pop     PREG(dx);               \
-                        pop     PREG(cx);               \
-                        pop     PREG(ax);               \
+                        mov $0x38d, PREG(cx);           \
+                        xor PREG(dx), PREG(dx);         \
+                        mov $0xb, PREG(ax);             \
+                        wrmsr;                          \
+                        pop PREG(dx);                   \
+                        pop PREG(cx);                   \
+                        pop PREG(ax);                   
                         
 // 0x9 is the number of instructions counted as hypervisor's ones after vmresume failed
-#define RESET_COUNTER   push    PREG(ax);               \
-                        push    PREG(cx);               \
-                        push    PREG(dx);               \
-                        mov    	$0x0,       PREG(dx);	\
-                        mov    	$0x0,       PREG(ax);	\
-                        mov    	$0x38d,     PREG(cx);	\
-                        wrmsr; 				\
-                        mov    	$0x309,     PREG(cx);	\
-                        rdmsr;  			\
-                        sub   	$0x9,       PREG(ax);	\
-                        wrmsr;				\
-                        mov 	$0x38d,     PREG(cx);  	\
-                        xor     PREG(dx),   PREG(dx);   \
-                        mov 	$0xb,       PREG(ax);  	\
+#define RESET_COUNTER   mov $0x0, PREG(dx);             \
+                        mov $0x0, PREG(ax);             \
+                        mov $0x38d, PREG(cx);           \
                         wrmsr;                          \
-                        pop     PREG(dx);               \
-                        pop     PREG(cx);               \
-                        pop     PREG(ax);               
+                        mov $0x309, PREG(cx);           \
+                        rdmsr;                          \
+                        sub $0x26, PREG(ax);            \
+                        wrmsr;				\
+                        mov $0x38d, PREG(cx);           \
+                        xor PREG(dx), PREG(dx);         \
+                        mov $0xb, PREG(ax);             \
+                        wrmsr;                          \
+                        mov %3, PREG(sp);               \
+                        LOAD_GPR                        \
+                        movb $0x1, %0;                  \
+                        lea %1, PREG(sp);               \
+                        LOAD_GPR                        
 #endif
