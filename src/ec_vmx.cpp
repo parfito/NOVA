@@ -205,13 +205,14 @@ void Ec::handle_vmx()
 
     String *buff = new String(2*STR_MAX_LENGTH);
     char counter_buff[STR_MIN_LENGTH];
-    if(Lapic::counter_vmexit_value > Lapic::perf_max_count - MAX_INSTRUCTION)
-        String::print(counter_buff, "%#llx", Lapic::counter_vmexit_value);
+    uint64 counter_value = Lapic::read_instCounter();
+    if(counter_value >= Lapic::perf_max_count - MAX_INSTRUCTION)
+        String::print(counter_buff, "%#llx", counter_value);
     else
-        String::print(counter_buff, "%llu", Lapic::counter_vmexit_value);
-    size_t n = String::print(buff->get_string(), "VMEXIT guest rip %lx rsp %lx flags %lx CS %lx run_num %u counter %s:%#llx reason %s", 
-            Vmcs::read(Vmcs::GUEST_RIP), Vmcs::read(Vmcs::GUEST_RSP), Vmcs::read(Vmcs::GUEST_RFLAGS), 
-            Vmcs::read(Vmcs::GUEST_SEL_CS), Pe::run_number, counter_buff, Lapic::read_instCounter(), Vmcs::reason[reason]);
+        String::print(counter_buff, "%llu", counter_value);
+    size_t n = String::print(buff->get_string(), "VMEXIT PE %llu guest rip %lx rsp %lx flags %lx CS %lx run_num %u counter %s reason %s", 
+            Counter::nb_pe, Vmcs::read(Vmcs::GUEST_RIP), Vmcs::read(Vmcs::GUEST_RSP), Vmcs::read(Vmcs::GUEST_RFLAGS), 
+            Vmcs::read(Vmcs::GUEST_SEL_CS), Pe::run_number, counter_buff, Vmcs::reason[reason]);
     if(reason == Vmcs::VMX_EXTINT) {
         reason_vec = Vmcs::read (Vmcs::EXI_INTR_INFO) & 0xff;
         String::print(buff->get_string()+n, " vec %u", reason_vec);
@@ -249,12 +250,12 @@ void Ec::handle_vmx()
         case Vmcs::VMX_INVLPG:
             if (!current->regs.nst_on) vmx_invlpg();
             else break;
-        case Vmcs::VMX_RDTSC:       
-            if(Pe::run_number == 0)
-                tsc1 = rdtsc();
-            keep_cow = true;
-            check_memory(PES_VMX_RDTSC); 
-            vmx_resolve_rdtsc();
+//        case Vmcs::VMX_RDTSC:       
+//            if(Pe::run_number == 0)
+//                tsc1 = rdtsc();
+//            keep_cow = true;
+//            check_memory(PES_VMX_RDTSC); 
+//            vmx_resolve_rdtsc();
         case Vmcs::VMX_CR:          check_memory(PES_VMX_CR); vmx_cr();
         case Vmcs::VMX_MTF:         vmx_disable_single_step();
         case Vmcs::VMX_EPT_VIOLATION:
@@ -262,13 +263,13 @@ void Ec::handle_vmx()
             current->regs.nst_error = Vmcs::read (Vmcs::EXI_QUALIFICATION);
             current->regs.nst_fault = Vmcs::read (Vmcs::INFO_PHYS_ADDR);
             break;
-        case Vmcs::VMX_RDTSCP:      
-            if(Pe::run_number == 0)
-                tsc1 = rdtscp(tscp_rcx1);
-            keep_cow = true;
-            check_memory(PES_VMX_RDTSCP); 
-            vmx_resolve_rdtsc(true);
-            break;
+//        case Vmcs::VMX_RDTSCP:      
+//            if(Pe::run_number == 0)
+//                tsc1 = rdtscp(tscp_rcx1);
+//            keep_cow = true;
+//            check_memory(PES_VMX_RDTSCP); 
+//            vmx_resolve_rdtsc(true);
+//            break;
     }
     
     if(reason == Vmcs::VMX_IO)

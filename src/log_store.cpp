@@ -282,14 +282,16 @@ void Table_logs::free_logs(size_t left, bool in_percent) {
 void Table_logs::dump(char const *funct_name, bool from_tail, size_t log_depth){   
     if(!total_logs)
         return;
+    Logstore::commit_buffer();
     size_t log_max = static_cast<size_t>(LOG_MAX), 
             log_number = total_logs < log_max ? cursor - start : 
             cursor > start ? cursor - start : cursor + log_max - start;
     if(log_depth == 0 || log_depth > log_number) {
         log_depth = log_number;
     }
-    trace(0, "%s Log %lu %s total %lu cursor %lu start %lu depth %lu", funct_name, log_number, 
-            from_tail ? "from_last" : "from_first", total_logs, cursor, start, log_depth);                
+    trace(0, "%s Current Pe %llu Log %lu %s total %lu cursor %lu start %lu depth %lu", funct_name, 
+        Counter::nb_pe, log_number, from_tail ? "from_last" : "from_first", total_logs, cursor, 
+        start, log_depth);                
     if(log_number == 1) {
         logs[cursor ? cursor - 1 : log_max].print(false);
         return;
@@ -320,6 +322,9 @@ void Table_logs::dump(char const *funct_name, bool from_tail, size_t log_depth){
                 e = i_end;
             }
         }
+        if(log_depth == log_number)
+            for(size_t i = 0; i < start; i++)
+                logs[i].print(false);            
     }    
 }
 
@@ -407,8 +412,7 @@ void Logstore::add_entry_in_buffer(const char* s, bool to_be_traced){
 /**
  * Commit log buffer and entries buffer
  */
-void Logstore::commit_buffer(bool to_be_traced){
-    if(!to_be_traced) return;
+void Logstore::commit_buffer(){
     if(!log_on)
         return;    
     size_t log_length = strlen(log_buffer), log_entry_length = strlen(entry_buffer);
