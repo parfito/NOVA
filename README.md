@@ -1,3 +1,10 @@
+The goal is to protect a running operating system without modifying it. 
+To achieve this, we use a hypervisor which is composed of a kernel (Nova), 
+an OS framework (Genode) and a virtualization software (Seoul). The method 
+consist of modifying the kernel so that it can protect the execution of 
+the OS framework Genode and the virtualization program Seoul without 
+forgetting to protect itself.
+
 NOVA Microhypervisor
 ====================
 
