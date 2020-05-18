@@ -1,3 +1,6 @@
+
+Hardening the operating system exectution
+=========================================
 The goal is to protect a running operating system without modifying it. 
 To achieve this, we use a hypervisor which is composed of a kernel (Nova), 
 an OS framework (Genode) and a virtualization software (Seoul). The method 
