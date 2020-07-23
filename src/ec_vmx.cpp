@@ -235,7 +235,7 @@ void Ec::handle_vmx()
     } else if (reason == Vmcs::VMX_MTF) {
         copy_string(buff->get_string()+n, " VMX_MTF", STR_MAX_LENGTH + 50 - n);
     }
-    call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 1, "%s %s", buff->get_string(), vmlaunch ? "true" : "false");
+    call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 0, "%s %s", buff->get_string(), vmlaunch ? "VMLAUNCH" : "VMRESUME");
     delete buff;
 
     if(Pe::run_number == 1 && step_reason == SR_NIL && run1_reason == PES_PMI && reason_vec != 164) {

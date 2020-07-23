@@ -728,7 +728,7 @@ void Ec::check_memory(PE_stopby from) {
                 ec->regs.ARG_IP : ec->regs_2.REG(ip) : Vmcs::read(Vmcs::GUEST_RIP));
             if (Cow_elt::compare() || reg_diff) {
                 if(IN_PRODUCTION){
-                    Logstore::commit_buffer();
+//                    Logstore::commit_buffer();
                     ec->rollback();
                     ec->reset_all();
                     ec->restore_state0_data();
@@ -755,7 +755,7 @@ void Ec::check_memory(PE_stopby from) {
     //                Console::debug_started = true;
     //                int from_value = from;
     //                int prev_reason_value = prev_reason;
-                    Logstore::commit_buffer();
+//                    Logstore::commit_buffer();
                     ec->debug_rollback();
                     ec->reset_all();
                     ec->save_state0();
@@ -807,7 +807,7 @@ void Ec::check_memory(PE_stopby from) {
                     Cpu::enable_fast_string();                    
                 }
                 launch_state = UNLAUNCHED;
-                Logstore::commit_buffer();
+//                Logstore::commit_buffer();
                 reset_all();
                 return;
             }
@@ -862,6 +862,7 @@ void Ec::reset_all() {
     no_further_check = false;
     run_switched = false;
     Pending_int::exec_pending_interrupt();
+    Logstore::commit_buffer();
 }
 
 /**

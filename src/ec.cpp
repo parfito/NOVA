@@ -426,7 +426,7 @@ void Ec::ret_user_vmresume() {
 
     if (EXPECT_FALSE(get_cr2() != current->regs.cr2))
         set_cr2(current->regs.cr2);
-    call_log_funct(Logstore::add_entry_in_buffer, 1, "VMResume : Run %d Ec %s Rip %lx CS %lx Counter %llx", Pe::run_number, 
+    call_log_funct(Logstore::add_entry_in_buffer, 0, "VMResume : Run %d Ec %s Rip %lx CS %lx Counter %llx", Pe::run_number, 
     current->get_name(), Vmcs::read(Vmcs::GUEST_RIP), Vmcs::read(Vmcs::GUEST_SEL_CS), Lapic::read_instCounter());
     if(step_reason == SR_DBG)
         enable_mtf();
