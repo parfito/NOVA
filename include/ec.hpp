@@ -7,6 +7,7 @@
  * Copyright (C) 2012-2013 Udo Steinberg, Intel Corporation.
  * Copyright (C) 2014 Udo Steinberg, FireEye, Inc.
  * Copyright (C) 2012-2018 Alexander Boettcher, Genode Labs GmbH.
+ * Copyright (C) 2016-2019 Parfait Tokponnon, UCLouvain.
  *
  * This file is part of the NOVA microhypervisor.
  *
@@ -63,9 +64,12 @@ class Ec : public Kobject, public Refcount, public Queue<Sc>
             };
             uint32  xcpu;
         };
+        char name[STR_MAX_LENGTH];
         unsigned const evt;
         Timeout_hypercall timeout;
         mword          user_utcb;
+        static mword vmlaunch;
+    static uint8 debug_type;
 
         Sm *         xcpu_sm;
         Pt *         pt_oom;
@@ -217,10 +221,17 @@ class Ec : public Kobject, public Refcount, public Queue<Sc>
     public:
         static Ec *current CPULOCAL_HOT;
         static Ec *fpowner CPULOCAL;
-
-        Ec (Pd *, void (*)(), unsigned);
-        Ec (Pd *, mword, Pd *, void (*)(), unsigned, unsigned, mword, mword, Pt *);
-        Ec (Pd *, Pd *, void (*f)(), unsigned, Ec *);
+    static bool debug_started;
+    bool debug = false;
+    enum Debug_type {
+        DT_NULL = 0,
+        CMP_TWO_RUN = 1,
+        STORE_RUN_STATE = 2,
+    };
+        Ec(Pd *, void (*)(), unsigned, char const *nm = "Unknown");
+        Ec(Pd *, mword, Pd *, void (*)(), unsigned, unsigned, mword, mword, Pt *, 
+        char const *nm = "Unknown");
+        Ec(Pd *, Pd *, void (*f)(), unsigned, Ec *, char const *nm = "Unknown");
 
         ~Ec();
 
@@ -479,5 +490,19 @@ class Ec : public Kobject, public Refcount, public Queue<Sc>
         void oom_call_cpu(Pt *, mword, void (*)(), void (*)());
 
         template <void(*C)()>
-        static void check(mword, bool = true);
+    static void check(mword, bool = true);
+    static void debug_call(mword);        
+    static void count_interrupt(Exc_regs*);
+    static void trace_interrupt(Exc_regs *) asm ("trace_interrupt");
+    static void trace_sysenter() asm ("trace_sysenter");
+    Pd* getPd() {
+        return pd;
+    }
+
+    char *get_name() {
+        return name;
+    }
+    REGPARM(1)
+    static void check_memory(int = 0) asm ("memory_checker");
+        
 };

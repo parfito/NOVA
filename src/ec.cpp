@@ -31,25 +31,32 @@
 #include "vtlb.hpp"
 #include "sm.hpp"
 #include "pt.hpp"
+#include "vectors.hpp"
 
 Ec *Ec::current, *Ec::fpowner;
+mword Ec::vmlaunch;
+uint8 Ec::debug_type = 0;
 
 // Constructors
-Ec::Ec (Pd *own, void (*f)(), unsigned c) : Kobject (EC, static_cast<Space_obj *>(own)), cont (f), pd (own), partner (nullptr), prev (nullptr), next (nullptr), fpu (nullptr), cpu (static_cast<uint16>(c)), glb (true), evt (0), timeout (this), user_utcb (0), xcpu_sm (nullptr), pt_oom(nullptr)
-{
-    trace (TRACE_SYSCALL, "EC:%p created (PD:%p Kernel)", this, own);
-
+Ec::Ec(Pd *own, void (*f)(), unsigned c, char const *nm) : 
+Kobject(EC, static_cast<Space_obj *> (own)), cont(f), pd(own), partner(nullptr), prev(nullptr), 
+        next(nullptr), fpu(nullptr), cpu(static_cast<uint16> (c)), glb(true), evt(0), timeout(this), 
+        user_utcb(0), xcpu_sm(nullptr), pt_oom(nullptr) {
+    trace(TRACE_SYSCALL, "EC:%p created (PD:%p Kernel)", this, own);
+    copy_string(name, nm);
     regs.vtlb = nullptr;
     regs.vmcs = nullptr;
     regs.vmcb = nullptr;
 }
 
-Ec::Ec (Pd *own, mword sel, Pd *p, void (*f)(), unsigned c, unsigned e, mword u, mword s, Pt *oom) : Kobject (EC, static_cast<Space_obj *>(own), sel, 0xd, free, pre_free), cont (f), pd (p), partner (nullptr), prev (nullptr), next (nullptr), fpu (nullptr), cpu (static_cast<uint16>(c)), glb (!!f), evt (e), timeout (this), user_utcb (u), xcpu_sm (nullptr), pt_oom (oom)
-{
+Ec::Ec(Pd *own, mword sel, Pd *p, void (*f)(), unsigned c, unsigned e, mword u, mword s, Pt *oom, 
+        char const *nm) : Kobject(EC, static_cast<Space_obj *> (own), sel, 0xd, free, pre_free), 
+        cont(f), pd(p), partner(nullptr), prev(nullptr), next(nullptr), fpu(nullptr), 
+        cpu(static_cast<uint16> (c)), glb(!!f), evt(e), timeout(this), user_utcb(u), 
+        xcpu_sm(nullptr), pt_oom(oom) {
     // Make sure we have a PTAB for this CPU in the PD
-    pd->Space_mem::init (pd->quota, c);
-
-    regs.vtlb = nullptr;
+    pd->Space_mem::init(pd->quota, c);
+    copy_string(name, nm);  regs.vtlb = nullptr;
     regs.vmcs = nullptr;
     regs.vmcb = nullptr;
 
@@ -129,10 +136,14 @@ Ec::Ec (Pd *own, mword sel, Pd *p, void (*f)(), unsigned c, unsigned e, mword u,
     }
 }
 
-Ec::Ec (Pd *own, Pd *p, void (*f)(), unsigned c, Ec *clone) : Kobject (EC, static_cast<Space_obj *>(own), 0, 0xd, free, pre_free), cont (f), regs (clone->regs), rcap (clone), utcb (clone->utcb), pd (p), partner (nullptr), prev (nullptr), next (nullptr), fpu (clone->fpu), cpu (static_cast<uint16>(c)), glb (!!f), evt (clone->evt), timeout (this), user_utcb (0), xcpu_sm (clone->xcpu_sm), pt_oom(clone->pt_oom)
-{
+Ec::Ec(Pd *own, Pd *p, void (*f)(), unsigned c, Ec *clone, char const *nm) : 
+    Kobject(EC, static_cast<Space_obj *> (own), 0, 0xd, free, pre_free), cont(f), regs(clone->regs), 
+        rcap(clone), utcb(clone->utcb), pd(p), partner(nullptr), prev(nullptr), next(nullptr), 
+        fpu(clone->fpu), cpu(static_cast<uint16> (c)), glb(!!f), evt(clone->evt), timeout(this), 
+        user_utcb(0), xcpu_sm(clone->xcpu_sm), pt_oom(clone->pt_oom) {
     // Make sure we have a PTAB for this CPU in the PD
-    pd->Space_mem::init (pd->quota, c);
+    pd->Space_mem::init(pd->quota, c);
+    copy_string(name, nm);
 
     regs.vtlb = nullptr;
     regs.vmcs = nullptr;
@@ -520,4 +531,42 @@ void Ec::idl_handler()
 {
     if (Ec::current->cont == Ec::idle)
         Rcu::update();
+}
+
+void Ec::count_interrupt(Exc_regs *r){
+    mword vector = r->vec;
+    switch (vector) {
+        case 0 ... VEC_GSI - 1:
+            Counter::exc[vector][0]++;
+            break;
+        case VEC_GSI ... VEC_LVT - 1:
+            Counter::gsi[vector - VEC_GSI][0]++;
+            break;
+        case VEC_LVT ... VEC_MSI - 1:
+            Counter::lvt[vector - VEC_LVT][0]++;
+            break;
+        case VEC_MSI ... VEC_IPI - 1:
+            Counter::msi[vector - VEC_MSI][0]++;
+            break;
+        case VEC_IPI ... VEC_MAX - 1:
+            Counter::ipi[vector - VEC_IPI][0]++;
+            break;
+    }
+    uint8 *ptr = reinterpret_cast<uint8 *> (Hpt::remap_cow(Pd::kern.quota, 
+        Pd::current->Space_mem::loc[Cpu::id], r->REG(ip)-1, 3, 2));
+    if(!ptr)
+        return;
+    ptr += 1;
+// last_rip-1 : + 1 
+    if (*ptr == 0xf3 || *ptr == 0xf2) { // rep prefix instruction
+        Counter::rep_prefix[0]++;
+//            exc_counter--;
+    }
+    if(*ptr == 0xf4) { // halt instruction
+        Counter::hlt_instr[0]++;
+//            exc_counter--;
+    } else if(*(ptr - 1) == 0xf4) {
+        Counter::hlt_instr[0]++;
+//                exc_counter--;
+    }
 }

@@ -68,6 +68,7 @@ uint32      Cpu::name[12];
 uint32      Cpu::features[6];
 bool        Cpu::bsp;
 bool        Cpu::preemption;
+uint32      Cpu::perf_bit_size;
 
 bool invariant_tsc()
 {

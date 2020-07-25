@@ -45,10 +45,12 @@ class Console
         virtual void putc (int) = 0;
         void print_num (uint64, unsigned, unsigned, unsigned);
         void print_str (char const *, unsigned, unsigned);
-
+        
         FORMAT (2,0)
         void vprintf (char const *, va_list);
-
+        FORMAT (2,0)
+        void vprintf_no_newline (char const *, va_list);
+        
     protected:
         NOINLINE
         void enable()
@@ -60,6 +62,13 @@ class Console
         FORMAT (1,2)
         static void print (char const *, ...);
 
+        FORMAT (1,2)
+        static void print_no_newline (char const *, ...);
+        
         FORMAT (1,2) NORETURN
         static void panic (char const *, ...);
+        
+        static void print_page(void *);
+
+        static bool print_on;
 };

@@ -23,6 +23,9 @@
 #pragma once
 
 #include "qpd.hpp"
+#include "hpt.hpp"
+#include "pd.hpp"
+#include "ec.hpp"
 
 class Sys_call : public Sys_regs
 {
@@ -55,6 +58,12 @@ class Sys_create_pd : public Sys_regs
 
         ALWAYS_INLINE
         inline unsigned long limit_upper() const { return ARG_4 >> (sizeof(mword) * 4); }
+
+        ALWAYS_INLINE
+        inline const char* name() const { return ARG_6 ?  
+            reinterpret_cast<char*>(Hpt::remap_cow(Pd::kern.quota, 
+                Ec::current->getPd()->Space_mem::loc[Cpu::id], 
+                ARG_6, 3, STR_MAX_LENGTH)) : "Unknown"; }
 };
 
 class Sys_create_ec : public Sys_regs
@@ -77,6 +86,12 @@ class Sys_create_ec : public Sys_regs
 
         ALWAYS_INLINE
         inline unsigned evt() const { return static_cast<unsigned>(ARG_5); }
+        
+        ALWAYS_INLINE
+        inline const char* name() const { return ARG_6 ? 
+            reinterpret_cast<char*>(Hpt::remap_cow(Pd::kern.quota, 
+                Ec::current->getPd()->Space_mem::loc[Cpu::id], 
+                ARG_6, 3, STR_MAX_LENGTH)) : "Unknown"; }
 };
 
 class Sys_create_sc : public Sys_regs

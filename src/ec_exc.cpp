@@ -23,6 +23,14 @@
 #include "gdt.hpp"
 #include "mca.hpp"
 #include "stdio.hpp"
+#include "msr.hpp"
+#include "utcb.hpp"
+#include "lapic.hpp"
+#include "vmx.hpp"
+#include "gsi.hpp"
+
+#include "log.hpp"
+#include "log_store.hpp"
 
 ALIGNED(16) static Fpu empty;
 
@@ -174,7 +182,7 @@ bool Ec::handle_exc_pf (Exc_regs *r)
 
 void Ec::handle_exc (Exc_regs *r)
 {
-    Counter::exc[r->vec]++;
+    Counter::exc[r->vec][0]++;
 
     switch (r->vec) {
 
@@ -209,4 +217,43 @@ void Ec::handle_exc (Exc_regs *r)
         return;
 
     die ("EXC", r);
+}
+
+
+void Ec::trace_interrupt(Exc_regs *r) {
+    count_interrupt(r);
+    char counter_buff[STR_MIN_LENGTH];
+    uint64 counter_value = Lapic::read_instCounter();
+    if(counter_value < Lapic::perf_max_count - MAX_INSTRUCTION)
+        String::print(counter_buff, "%llu", counter_value);
+    else
+        String::print(counter_buff, "%llu", counter_value - Lapic::start_counter);
+    if(r->vec == Cpu::EXC_PF) {
+        call_log_funct(Logstore::add_entry_in_buffer, 0, "PAGE FAULT Rip %lx addr %lx Counter %s", 
+        current->regs.REG(ip), r->cr2, counter_buff);
+    } else {
+        call_log_funct(Logstore::add_entry_in_buffer, 0, "INTERRUPT Rip %lx vec %lu Counter %s", current->regs.REG(ip), 
+        r->vec, counter_buff);
+    }
+//    trace(0, "%s", buff);
+    return;
+}
+
+void Ec::trace_sysenter(){
+    char counter_buff[STR_MIN_LENGTH];
+    uint64 counter_value = Lapic::read_instCounter();
+    if(counter_value < Lapic::perf_max_count - MAX_INSTRUCTION)
+        String::print(counter_buff, "%llu", counter_value);
+    else
+        String::print(counter_buff, "%llu", counter_value - Lapic::start_counter);
+    call_log_funct(Logstore::add_entry_in_buffer, 0,
+    "SysEnter ARG_IP/RIP %lx:%lx Rdi %lx:%lx Counter %s", 
+    current->regs.ARG_IP, current->regs.REG(ip), current->regs.ARG_1, 
+    current->regs.REG(di), counter_buff);
+    return;
+}
+
+void Ec::check_memory(int from) {
+        asm volatile ("" :: "m" (from)); // to avoid gdb "optimized out"
+    return;
 }

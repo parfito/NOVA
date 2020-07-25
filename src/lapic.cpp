@@ -28,9 +28,11 @@
 #include "stdio.hpp"
 #include "timeout.hpp"
 #include "vectors.hpp"
+#include "vmx.hpp"
 
 unsigned    Lapic::freq_tsc;
 unsigned    Lapic::freq_bus;
+uint64 Lapic::perf_max_count, Lapic::counter_vmexit_value, Lapic::start_counter; 
 
 void Lapic::init_cpuid()
 {
@@ -82,8 +84,8 @@ void Lapic::init(bool invariant_tsc)
         /* read out tsc freq if supported */
         if (Cpu::vendor == Cpu::Vendor::INTEL && Cpu::family[Cpu::id] == 6) {
             unsigned const model = Cpu::model[Cpu::id];
-            if (model == 0x2a || model == 0x2d || /* Sandy Bridge */
-                model >= 0x3a) { /* Ivy Bridge and later */
+            if ((model == 0x2a || model == 0x2d || /* Sandy Bridge */
+                model >= 0x3a) && Msr::peek(Msr::MSR_PLATFORM_INFO) == ~0UL) { /* Ivy Bridge and later */
                 ratio = static_cast<unsigned>(Msr::read<uint64>(Msr::MSR_PLATFORM_INFO) >> 8) & 0xff;
                 freq_tsc = static_cast<unsigned>(ratio * 100000);
                 freq_bus = dl ? 0 : 100000;
@@ -139,7 +141,10 @@ void Lapic::init(bool invariant_tsc)
 
     write (LAPIC_TMR_ICR, 0);
 
-    trace (TRACE_APIC, "APIC:%#lx ID:%#x VER:%#x LVT:%#x (%s Mode)", apic_base & ~PAGE_MASK, id(), version(), lvt_max(), freq_bus ? "OS" : "DL");
+    perf_max_count = (1ull<<Cpu::perf_bit_size);
+
+    trace (TRACE_APIC, "APIC:%#lx ID:%#x VER:%#x LVT:%#x (%s Mode)", 
+            apic_base & ~PAGE_MASK, id(), version(), lvt_max(), freq_bus ? "OS" : "DL");
 }
 
 void Lapic::send_ipi (unsigned cpu, unsigned vector, Delivery_mode dlv, Shorthand dsh)
@@ -183,7 +188,7 @@ void Lapic::lvt_vector (unsigned vector)
 
     eoi();
 
-    Counter::print<1,16> (++Counter::lvt[lvt], Console_vga::COLOR_LIGHT_BLUE, lvt + SPN_LVT);
+    Counter::print<1,16> (Counter::lvt[lvt][0], Console_vga::COLOR_LIGHT_BLUE, lvt + SPN_LVT);  
 }
 
 void Lapic::ipi_vector (unsigned vector)
@@ -198,5 +203,10 @@ void Lapic::ipi_vector (unsigned vector)
 
     eoi();
 
-    Counter::print<1,16> (++Counter::ipi[ipi], Console_vga::COLOR_LIGHT_GREEN, ipi + SPN_IPI);
+    Counter::print<1,16> (Counter::ipi[ipi][0], Console_vga::COLOR_LIGHT_GREEN, ipi + SPN_IPI);
+}
+
+
+uint64 Lapic::read_instCounter() {
+    return Msr::read<uint64>(Msr::MSR_PERF_FIXED_CTR0); 
 }

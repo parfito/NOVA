@@ -83,9 +83,11 @@
 #define ARG_3           REG(dx)
 #define ARG_4           REG(ax)
 #define ARG_5           REG(8)
+#define ARG_6           REG(9)
 #define OFS_CR2         0x58
 #define OFS_VEC         0xa8
 #define OFS_CS          0xb8
+#define OFS_RIP         0xb0
 
 #define LOAD_KSP        mov     PREG(sp), PREG(11);     \
                         mov     tss_run + 4, PREG(sp)
@@ -127,9 +129,53 @@
                         pop     PREG(cx);               \
                         pop     PREG(ax);
 
-#define RET_USER_HYP    mov     PREG(11), PREG(sp);     \
-                        mov     $0x200, PREG(11);       \
+#define RET_USER_HYP    mov     PREG(11),   PREG(sp);   \
+                        mov     $0x200,     PREG(11);   \
+                        sysretq;
+//for single-steping after sysret
+#define RET_USER_HYP_SS mov     PREG(11),   PREG(sp);   \
+                        mov     $0x300,     PREG(11);   \
                         sysretq;
 
 #define RET_USER_EXC    iretq;
+
+// 0xb is the number of instrutions executed in the hypervisor in kernel mode
+#define LOAD_GPR_COUNT  mov %2, PREG(sp);               \
+                        SAVE_GPR                        \
+                        movb $0x0, %0;                  \
+                        lea %1, PREG(sp);               \
+                        LOAD_GPR                        \
+                        push PREG(ax);                  \
+                        push PREG(cx);                  \
+                        push PREG(dx);                  \
+                        mov $0x309, PREG(cx);           \
+                        rdmsr;                          \
+                        sub $0x9, PREG(ax);             \
+                        wrmsr;                          \
+                        mov $0x38d, PREG(cx);           \
+                        xor PREG(dx), PREG(dx);         \
+                        mov $0xb, PREG(ax);             \
+                        wrmsr;                          \
+                        pop PREG(dx);                   \
+                        pop PREG(cx);                   \
+                        pop PREG(ax);                   
+                        
+// 0x9 is the number of instructions counted as hypervisor's ones after vmresume failed
+#define RESET_COUNTER   mov $0x0, PREG(dx);             \
+                        mov $0x0, PREG(ax);             \
+                        mov $0x38d, PREG(cx);           \
+                        wrmsr;                          \
+                        mov $0x309, PREG(cx);           \
+                        rdmsr;                          \
+                        sub $0x26, PREG(ax);            \
+                        wrmsr;				\
+                        mov $0x38d, PREG(cx);           \
+                        xor PREG(dx), PREG(dx);         \
+                        mov $0xb, PREG(ax);             \
+                        wrmsr;                          \
+                        mov %3, PREG(sp);               \
+                        LOAD_GPR                        \
+                        movb $0x1, %0;                  \
+                        lea %1, PREG(sp);               \
+                        LOAD_GPR                        
 #endif

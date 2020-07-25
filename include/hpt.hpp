@@ -131,6 +131,11 @@ class Hpt : public Pte<Hpt, mword, PTE_LEV, PTE_BPL, false>
 
         static bool dest_loc (Paddr, mword v, unsigned l) { return v >= USER_ADDR && l >= 3; }
         static bool iter_loc_lev(unsigned l, mword) { return l > 3; }
+    static void *remap_cow(Quota &quota, Hpt, mword, uint8 = 0, uint8 = 1);
+    
+    static void *remap_cow(Quota &quota, Paddr, uint8 = 0, uint8 = 1);
+            
+    Paddr replace_cow(Quota &quota, mword, mword, mword, mword = 0);
 };
 
 class Hptp : public Hpt

@@ -23,6 +23,7 @@
 
 #include "compiler.hpp"
 #include "types.hpp"
+#include "arch.hpp"
 
 class Msr
 {
@@ -89,9 +90,21 @@ class Msr
             IA32_FMASK              = 0xc0000084,
             IA32_KERNEL_GS_BASE     = 0xc0000102,
 
+            IA32_PERF_CTL0          = 0xc0010000,
+            IA32_PERF_CTR0          = 0xc0010004,
+            IA32_PERFEVTSEL0        = 0x186,
+            IA32_PERFEVTSEL1        = 0x187,
+            IA32_PMC0               = 0xc1,
+            IA32_PMC1               = 0xc2,
+            IA32_PERF_GLOBAL_STATUS = 0x38e,
+            MSR_PERF_FIXED_CTRL     = 0x38d,
+            MSR_PERF_FIXED_CTR0     = 0x309,
+            MSR_PERF_GLOBAL_CTRL    = 0x38f,
+            MSR_PERF_GLOBAL_OVF_CTRL = 0x390,
+            
             AMD_IPMR                = 0xc0010055,
             AMD_SVM_VM_CR           = 0xc0010114,
-            AMD_SVM_HSAVE_PA        = 0xc0010117,
+            AMD_SVM_HSAVE_PA        = 0xc0010117,            
         };
 
         enum Feature_Control
@@ -115,5 +128,16 @@ class Msr
         static inline void write (Register msr, T val)
         {
             asm volatile ("wrmsr" : : "a" (static_cast<mword>(val)), "d" (static_cast<mword>(static_cast<uint64>(val) >> 32)), "c" (msr));
+        }
+
+        /* try to rdmsr */
+        ALWAYS_INLINE
+        static inline mword peek(Register msr)				
+        {
+            mword ret;
+            asm volatile("1: rdmsr ; or $-1, %0; 2:"
+                         ".section .fixup,\"a\"; .align 8;" EXPAND (WORD) " 1b,2b; .previous"
+                         : "=a" (ret) : "c" (msr));
+            return ret;
         }
 };

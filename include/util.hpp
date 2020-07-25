@@ -22,14 +22,45 @@
 
 template <typename T>
 ALWAYS_INLINE
-static inline T min (T v1, T v2)
-{
+static inline T min(T v1, T v2) {
     return v1 < v2 ? v1 : v2;
 }
 
 template <typename T>
 ALWAYS_INLINE
-static inline T max (T v1, T v2)
-{
+static inline T max(T v1, T v2) {
     return v1 > v2 ? v1 : v2;
+}
+
+template <typename T>
+ALWAYS_INLINE
+static inline T distance(T v1, T v2) {
+    return v1 > v2 ? v1 - v2 : v2 - v1;
+}
+
+
+template <typename T>
+inline uint32 log16(T num) {
+    uint32 log = 0;
+    while (num >= 16) {
+        num /= 16;
+        log += 1;
+    }
+    return log;
+}
+/**
+ * store a number as hexadecimal string format  
+ * @param number : the number to convert
+ * @param string : holds its hexadecimal form
+ */
+template <typename T>
+inline void to_string(T number, char *string) {
+    uint32 n = log16(number) + 1;
+    uint32 i;
+    for (i = 0; i < n; ++i, number /= 16) {
+        T mod = number%16;
+        uint32 shift = mod<10 ? '0' : 87; // 'a' - 10
+        string[n-i-1] = static_cast<char> ((number % 16) + shift);
+    }
+    string[n] = '\0';
 }

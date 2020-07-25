@@ -40,3 +40,39 @@
 #define SPN_LVT         7
 #define SPN_IPI         (SPN_LVT + NUM_LVT)
 #define SPN_GSI         (SPN_IPI + NUM_IPI)
+
+#define DEBUG           1
+#define MAX_INSTRUCTION 0x100000
+#define STR_MAX_LENGTH  120
+#define STR_MIN_LENGTH  20
+
+#define DEBUG_CMD_SHIFT          0
+#define DEBUG_CMD_KILL           1
+#define DEBUG_CMD_LOG            2
+#define DEBUG_CMD_BITS           2
+#define DEBUG_CMD_MASK           ((1 << DEBUG_CMD_BITS) - 1)
+
+#define DEBUG_SCOPE_SHIFT        DEBUG_CMD_BITS
+#define DEBUG_SCOPE_EC           0
+#define DEBUG_SCOPE_PD           1
+#define DEBUG_SCOPE_SYSTEM       2
+#define DEBUG_SCOPE_BITS         2
+#define DEBUG_SCOPE_MASK         ((1 << DEBUG_SCOPE_BITS) - 1)
+
+#define DEBUG_STATE_SHIFT        (DEBUG_CMD_BITS + DEBUG_SCOPE_BITS)
+#define DEBUG_STATE_OFF          0
+#define DEBUG_STATE_ON           1
+#define DEBUG_STATE_BITS         1
+#define DEBUG_STATE_MASK         ((1 << DEBUG_STATE_BITS) - 1)
+
+#define IN_PRODUCTION            0
+#define LOG_MAX                 70000
+#define LOG_PERCENT_TO_BE_LEFT  10
+#define LOG_ENTRY_MAX           1*LOG_MAX
+
+#define ENTRY_OFFSET                PAGE_SIZE
+#define BUFFER_ORDER                2
+
+#define FIELD_BITS                   16
+#define FIELD_SIZE                  (1 << FIELD_BITS)
+#define FIELD_MASK                   (FIELD_SIZE - 1)

@@ -82,6 +82,34 @@ INTRGATE                \DPL
                         jmp     entry_exc_error
 .endm
 
+.macro                  SAVE_REGS
+                        testb   $3, OFS_CS (%REG(bx))
+                        jz 2f
+                        SAVE_FLAGS
+                        SAVE_GPR
+                        mov     %REG(bx), %ARG_1
+                        call trace_interrupt
+                        LOAD_GPR
+                        LOAD_FLAGS
+2:
+.endm
+   
+.macro                  SAVE_FLAGS
+#ifdef __i386__
+                        pushfl;
+#else                        
+                        pushfq;
+#endif
+.endm
+                        
+.macro                  LOAD_FLAGS
+#ifdef __i386__
+                        popfl;
+#else                        
+                        popfq;
+#endif
+.endm
+        
 /*
  * Exception Entries
  */
@@ -89,13 +117,14 @@ entry_exc:              push    $0
 entry_exc_error:        SAVE_STATE
                         mov     %cr2, %REG(ax)
                         mov     %REG(ax), OFS_CR2 (%REG(bx))
+                        SAVE_REGS
                         mov     %REG(bx), %ARG_1
                         call    exc_handler
                         jmp     ret_from_interrupt
 
 EXCEPTION               0x0,    0
 EXCEPTION               0x1,    0
-TASKGATE
+EXCEPTION               0x2,    0
 EXCEPTION               0x3,    3
 EXCEPTION               0x4,    3
 EXCEPTION               0x5,    0
@@ -130,6 +159,7 @@ INTRGATE                0
 
 entry_gsi:              push    $0
                         SAVE_STATE
+                        SAVE_REGS
                         mov     OFS_VEC (%REG(bx)), %ARG_1
                         call    gsi_vector
                         jmp     ret_from_interrupt
@@ -146,6 +176,7 @@ INTRGATE                0
 
 entry_lvt:              push    $0
                         SAVE_STATE
+                        SAVE_REGS
                         mov     OFS_VEC (%REG(bx)), %ARG_1
                         call    lvt_vector
                         jmp     ret_from_interrupt
@@ -162,6 +193,7 @@ INTRGATE                0
 
 entry_msi:              push    $0
                         SAVE_STATE
+                        SAVE_REGS
                         mov     OFS_VEC (%REG(bx)), %ARG_1
                         call    msi_vector
                         jmp     ret_from_interrupt
@@ -178,6 +210,7 @@ INTRGATE                0
 
 entry_ipi:              push    $0
                         SAVE_STATE
+                        SAVE_REGS
                         mov     OFS_VEC (%REG(bx)), %ARG_1
                         call    ipi_vector
                         jmp     ret_from_interrupt
@@ -190,7 +223,7 @@ ret_from_interrupt:     testb   $3, OFS_CS (%REG(bx))
                         call    chk_kern_preempt
                         LOAD_GPR
                         add     $(6 * SIZE), %REG(sp)
-                        RET_USER_EXC
+                        RET_USER_EXC  // we don't need to care about this iret because it is not going out of the kernel. we reached here from a kernel fault
 
 #ifdef __i386__
 entry_sysenter_db:      mov     12(%esp), %esp
@@ -208,6 +241,13 @@ entry_sysenter:         LOAD_KSP
                         lea     -11*SIZE(%REG(sp)), %REG(sp)
                         SAVE_GPR
                         mov     $(CPU_LOCAL_STCK + PAGE_SIZE), %REG(sp)
+                        SAVE_FLAGS
+                        SAVE_GPR
+                        call    trace_sysenter
+                        mov     $3, %ARG_1              //PES_SYSENTER
+                        call    memory_checker
+                        LOAD_GPR
+                        LOAD_FLAGS
                         and     $0xf, %ARG_1
                         jmp     *syscall(,%ARG_1,SIZE)
 
@@ -216,7 +256,17 @@ entry_sysenter:         LOAD_KSP
  */
 .align                  4, 0x90
 .globl                  entry_vmx
-entry_vmx:              SAVE_GPR
+entry_vmx:              push    %REG(ax)
+                        push    %REG(cx)
+                        push    %REG(dx)
+                        xor     %REG(dx), %REG(dx)
+                        mov     $0x38d, %REG(cx)
+                        mov     $0x0, %REG(ax)
+                        wrmsr  
+                        pop %REG(dx)
+                        pop %REG(cx)
+                        pop %REG(ax)
+                        SAVE_GPR
                         mov     %cr2, %REG(ax)
                         mov     %REG(ax), OFS_CR2 (%REG(sp))
                         mov     $(CPU_LOCAL_STCK + PAGE_SIZE), %REG(sp)

@@ -107,6 +107,7 @@ Vtlb::Reason Vtlb::miss (Exc_regs *regs, mword virt, mword &error)
 {
     mword phys, attr = TLB_U | TLB_W | TLB_P;
     Paddr host;
+    char buff[STR_MAX_LENGTH];
 
     trace (TRACE_VTLB, "VTLB Miss CR3:%#010lx A:%#010lx E:%#lx", regs->cr3_shadow, virt, error);
 
@@ -116,6 +117,9 @@ Vtlb::Reason Vtlb::miss (Exc_regs *regs, mword virt, mword &error)
 
     if (EXPECT_FALSE (!gsize)) {
         Counter::vtlb_gpf++;
+        String::print(buff, "VTLB GLA_GPA Pe %llu virt %lx gpa %lx attr %lx err %lx", 
+            Counter::nb_pe, virt, phys, attr, error);
+        Logstore::add_entry_in_buffer(buff);
         return GLA_GPA;
     }
 
@@ -125,6 +129,9 @@ Vtlb::Reason Vtlb::miss (Exc_regs *regs, mword virt, mword &error)
         regs->nst_fault = phys;
         regs->nst_error = error;
         Counter::vtlb_hpf++;
+        String::print(buff, "VTLB GPA_HPA Pe %llu virt %lx gpa %lx hpa %lx attr %lx err %lx", 
+            Counter::nb_pe, virt, phys, host, attr, error);
+        Logstore::add_entry_in_buffer(buff);
         return GPA_HPA;
     }
 
@@ -167,7 +174,8 @@ Vtlb::Reason Vtlb::miss (Exc_regs *regs, mword virt, mword &error)
         }
 
         tlb->val = static_cast<typeof tlb->val>((host & ~((1UL << shift) - 1)) | attr | TLB_D | TLB_A);
-
+        call_log_funct(Logstore::add_entry_in_buffer, 0, "VTLB SUCCESS Pe %llu CR3:%#010lx vtlb %p virt %lx gpa %lx hpa %lx tlb %p tlb->val %llx err %lx", 
+            Counter::nb_pe, regs->cr3_shadow, regs->vtlb, virt, phys, host, tlb, tlb->val, error);
         return SUCCESS;
     }
 }

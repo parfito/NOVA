@@ -66,6 +66,14 @@ static inline uint64 rdtsc()
 }
 
 ALWAYS_INLINE
+static inline uint64 rdtscp(mword &rcx)
+{
+    mword h, l;
+    asm volatile ("rdtscp" : "=a" (l), "=d" (h), "=c" (rcx));
+    return static_cast<uint64>(h) << 32 | l;
+}
+
+ALWAYS_INLINE
 static inline mword get_cr0()
 {
     mword cr0;
@@ -105,4 +113,23 @@ ALWAYS_INLINE
 static inline void set_cr4 (mword cr4)
 {
     asm volatile ("mov %0, %%cr4" : : "r" (cr4));
+}
+
+ALWAYS_INLINE
+static inline mword get_dr6()
+{
+    mword dr6;
+    asm volatile ("mov %%dr6, %0" : "=r" (dr6));
+    return dr6;
+}
+
+ALWAYS_INLINE
+static inline mword hamming_weight(mword val){
+    mword result;
+    asm volatile ("popcnt %1, %0\n"
+        : "=r" (result)
+        : "mr" (val)
+        : "cc"                                                                                                                                       
+    );
+    return result;
 }

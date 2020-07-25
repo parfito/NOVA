@@ -6,6 +6,7 @@
  *
  * Copyright (C) 2012 Udo Steinberg, Intel Corporation.
  * Copyright (C) 2015 Alexander Boettcher, Genode Labs GmbH
+ * Copyright (C) 2016-2019 Parfait Tokponnon, UCLouvain.
  *
  * This file is part of the NOVA microhypervisor.
  *
@@ -27,10 +28,15 @@
 #include "space_obj.hpp"
 #include "space_pio.hpp"
 
+#define UNTRACED_PD_NUM                 1
+
 class Pd : public Kobject, public Refcount, public Space_mem, public Space_pio, public Space_obj
 {
     private:
+        char name[STR_MAX_LENGTH];
+    bool to_be_cowed = false, to_be_traced = false, debug = false;
         static Slab_cache cache;
+        static const char *untraced_pd_names[UNTRACED_PD_NUM];
 
         WARN_UNUSED_RESULT
         mword clamp (mword,   mword &, mword, mword);
@@ -106,8 +112,8 @@ class Pd : public Kobject, public Refcount, public Space_mem, public Space_pio, 
         Pd (Pd *);
         ~Pd();
 
-        Pd (Pd *own, mword sel, mword a);
-
+        Pd(Pd *own, mword sel, mword a, char const *s = "Unknown");
+        
         ALWAYS_INLINE HOT
         inline void make_current()
         {
@@ -181,4 +187,9 @@ class Pd : public Kobject, public Refcount, public Space_mem, public Space_pio, 
 
             cache.free (ptr, pd_to->quota);
         }
+    char *get_name() {return name;}  
+    void set_to_be_traced();
+    bool is_to_be_traced(){ return to_be_traced;}
+    bool is_debug() { return debug;}  
+    void set_debug(bool db) { debug = db;}
 };
