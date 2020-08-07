@@ -316,6 +316,7 @@ void Ec::ret_user_vmresume()
         handle_hazard (hzd, ret_user_vmresume);
 
     current->regs.vmcs->make_current();
+    Logstore::log_on = true;
 
     if (EXPECT_FALSE (Pd::current->gtlb.chk (Cpu::id))) {
         Pd::current->gtlb.clr (Cpu::id);

@@ -229,10 +229,12 @@ void Ec::trace_interrupt(Exc_regs *r) {
     else
         String::print(counter_buff, "%llu", counter_value - Lapic::start_counter);
     if(r->vec == Cpu::EXC_PF) {
-        call_log_funct(Logstore::add_entry_in_buffer, 0, "PAGE FAULT Rip %lx addr %lx Counter %s", 
+        call_log_funct(Logstore::add_entry_in_buffer, 0, "PAGE FAULT Pd %s Ec %s "
+            "Rip %lx addr %lx Counter %s", current->getPd()->get_name(), current->get_name(),
         current->regs.REG(ip), r->cr2, counter_buff);
     } else {
-        call_log_funct(Logstore::add_entry_in_buffer, 0, "INTERRUPT Rip %lx vec %lu Counter %s", current->regs.REG(ip), 
+        call_log_funct(Logstore::add_entry_in_buffer, 0, "INTERRUPT Pd %s Ec %s Rip %lx vec %lu "
+        "Counter %s", current->getPd()->get_name(), current->get_name(), current->regs.REG(ip), 
         r->vec, counter_buff);
     }
 //    trace(0, "%s", buff);
@@ -247,9 +249,9 @@ void Ec::trace_sysenter(){
     else
         String::print(counter_buff, "%llu", counter_value - Lapic::start_counter);
     call_log_funct(Logstore::add_entry_in_buffer, 0,
-    "SysEnter ARG_IP/RIP %lx:%lx Rdi %lx:%lx Counter %s", 
-    current->regs.ARG_IP, current->regs.REG(ip), current->regs.ARG_1, 
-    current->regs.REG(di), counter_buff);
+    "SysEnter Pd %s Ec %s ARG_IP/RIP %lx:%lx Rdi %lx:%lx Counter %s", 
+    current->getPd()->get_name(), current->get_name(), current->regs.ARG_IP, 
+    current->regs.REG(ip), current->regs.ARG_1, current->regs.REG(di), counter_buff);
     return;
 }
 

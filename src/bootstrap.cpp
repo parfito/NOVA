@@ -52,6 +52,6 @@ void bootstrap()
         root_sc->remote_enqueue();
     }
 
-    Logstore::log_on = true;
+//    Logstore::log_on = true;
     Sc::schedule();
 }
