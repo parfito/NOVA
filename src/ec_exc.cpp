@@ -178,6 +178,10 @@ void Ec::handle_exc (Exc_regs *r)
 
     switch (r->vec) {
 
+        case Cpu::EXC_UD:
+            trace(0, "Undefined OpCode");
+            return;
+            
         case Cpu::EXC_NM:
             handle_exc_nm();
             return;

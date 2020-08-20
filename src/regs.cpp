@@ -25,6 +25,7 @@
 #include "vmx.hpp"
 #include "vpid.hpp"
 #include "vtlb.hpp"
+#include "stdio.hpp"
 
 template <> mword Exc_regs::get_g_cs_dl<Vmcb>()         const { return static_cast<mword>(vmcb->cs.ar) >> 9 & 0x3; }
 template <> mword Exc_regs::get_g_flags<Vmcb>()         const { return static_cast<mword>(vmcb->rflags); }
@@ -56,7 +57,7 @@ template <> void Exc_regs::set_e_bmp<Vmcb> (uint32 v)   const { vmcb->intercept_
 template <> void Exc_regs::set_s_cr0<Vmcb> (mword v)          { cr0_shadow = v; }
 template <> void Exc_regs::set_s_cr4<Vmcb> (mword v)          { cr4_shadow = v; }
 
-template <> void Exc_regs::set_e_bmp<Vmcs> (uint32 v)   const { Vmcs::write (Vmcs::EXC_BITMAP, v); }
+template <> void Exc_regs::set_e_bmp<Vmcs> (uint32 v)   const { trace (0, "Vmcs::EXC_BITMAP %#x", v); Vmcs::write (Vmcs::EXC_BITMAP, v); }
 template <> void Exc_regs::set_s_cr0<Vmcs> (mword v)          { Vmcs::write (Vmcs::CR0_READ_SHADOW, cr0_shadow = v); }
 template <> void Exc_regs::set_s_cr4<Vmcs> (mword v)          { Vmcs::write (Vmcs::CR4_READ_SHADOW, cr4_shadow = v); }
 
@@ -207,7 +208,9 @@ void Exc_regs::set_exc() const
         msk |= 1UL << Cpu::EXC_PF;
     if (!fpu_on)
         msk |= 1UL << Cpu::EXC_NM;
-
+    msk |= 1UL << Cpu::EXC_UD;
+    msk |= 1UL << Cpu::EXC_DB;
+   
     set_e_bmp<T> (msk);
 }
 

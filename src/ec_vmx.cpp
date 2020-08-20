@@ -42,7 +42,8 @@ void Ec::vmx_exception()
     };
 
     mword intr_info = Vmcs::read (Vmcs::EXI_INTR_INFO);
-
+    if((intr_info & 0x7ff) != 0x30e)
+        trace(0, "NMI in %lx", intr_info & 0x7ff);
     switch (intr_info & 0x7ff) {
 
         default:
@@ -53,6 +54,11 @@ void Ec::vmx_exception()
             asm volatile ("int $0x2" : : : "memory");
             ret_user_vmresume();
 
+        case 0x206:
+        case 0x306:
+            Console::print("Invalid opcode in guest");
+            break;
+            
         case 0x307:         // #NM
             handle_exc_nm();
             ret_user_vmresume();
