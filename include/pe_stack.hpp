@@ -25,7 +25,9 @@ class Pe_stack {
     static  Queue<Pe_stack> detected_stacks;
         
 public:
-    static mword stack;
+    static mword stack, guest_rsp, rsp_gpa;
+    static Vtlb *rsp_tlb;
+    static uint64 rsp_tlb_val;
     Pe_stack(mword, Paddr, mword, Vtlb*, Hpt*);
     Pe_stack(const Pe_stack& orig);
     ~Pe_stack();

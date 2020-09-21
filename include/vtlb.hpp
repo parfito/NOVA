@@ -89,7 +89,7 @@ class Vtlb : public Pte<Vtlb, uint64, 3,  9, false>
         bool is_cow(mword, mword, mword, Queue<Cow_field>*);
         void cow_update(Paddr, mword);
         size_t lookup(uint64, Paddr&, mword&);
-        
+        void reserve_stack();
         ALWAYS_INLINE
         static inline void *operator new (size_t, Quota &quota) { return Buddy::allocator.alloc (0, quota, Buddy::NOFILL); }
 

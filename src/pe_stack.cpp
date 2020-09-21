@@ -17,7 +17,9 @@
 
 Slab_cache Pe_stack::cache(sizeof (Pe_stack), 32);
 Queue<Pe_stack> Pe_stack::detected_stacks;
-mword Pe_stack::stack;
+mword Pe_stack::stack, Pe_stack::guest_rsp = 0, Pe_stack::rsp_gpa = 0;
+uint64 Pe_stack::rsp_tlb_val = 0;
+Vtlb *Pe_stack::rsp_tlb = nullptr;
 
 Pe_stack::Pe_stack(mword v, Paddr p, mword a, Vtlb *t, Hpt *h): rsp(v), phys(p), attr(a), hpt(h), tlb(t), prev(nullptr), next(nullptr) { }
 

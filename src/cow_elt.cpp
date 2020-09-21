@@ -406,6 +406,9 @@ void Cow_elt::place_phys0() {
     while(cow_elts->dequeue(d = cow_elts->head())) {
         free(d);
     }
+    if(Ec::current->is_virutalcpu() && Pe_stack::rsp_tlb){
+        Pe_stack::rsp_tlb->reserve_stack();
+    }
 }
 
 void Cow_elt::free(Cow_elt* c){

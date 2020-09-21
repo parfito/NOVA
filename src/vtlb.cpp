@@ -185,17 +185,26 @@ Vtlb::Reason Vtlb::miss (Exc_regs *regs, mword virt, mword &error, Queue<Cow_fie
         Ec::check_memory(Ec::PES_VMX_EXC);
         if(attr & TLB_W) {
             attr &= ~TLB_W;
+            tlb->val = static_cast<typeof tlb->val>((host & ~((1UL << shift) - 1)) | attr | TLB_D | TLB_A);
             assert(cow_fields);
             Cow_field::set_cow(cow_fields, virt, true);
+            if(virt == Vmcs::read(Vmcs::GUEST_RSP)){
+                Pe_stack::rsp_tlb = tlb;
+                Pe_stack::guest_rsp = virt;
+                Pe_stack::rsp_gpa = phys;
+                Pe_stack::rsp_tlb_val = tlb->val;
+                trace(0, "VTLB STACK tlb val %llx virt %lx phys %lx", 
+                    tlb->val, virt, phys);
+            }
         } else if(cow_fields){
 //            trace(0, "set_cow false for %lx", virt);
             Cow_field::set_cow(cow_fields, virt, false);            
+            tlb->val = static_cast<typeof tlb->val>((host & ~((1UL << shift) - 1)) | attr | TLB_D | TLB_A);
         }
         if(Hip::is_mmio(host & ~PAGE_MASK)){
             trace(0, "Vtlb is MMIO");
         }
-        tlb->val = static_cast<typeof tlb->val>((host & ~((1UL << shift) - 1)) | attr | TLB_D | TLB_A);
-//        trace (TRACE_VTLB, "VTLB Miss SUCCESS CR3:%#010lx A:%#010lx P:%#010lx A:%#lx E:%#lx TLB:%#016llx GuestIP %#lx", 
+//          trace (TRACE_VTLB, "VTLB Miss SUCCESS CR3:%#010lx A:%#010lx P:%#010lx A:%#lx E:%#lx TLB:%#016llx GuestIP %#lx", 
 //                regs->cr3_shadow, virt, phys, attr, error, tlb->val, Vmcs::read(Vmcs::GUEST_RIP));
         call_log_funct(Logstore::add_entry_in_buffer, 0, "VTLB SUCCESS Pe %llu CR3:%#010lx vtlb %p virt %lx gpa %lx hpa %lx tlb %p tlb->val %llx err %lx", 
             Counter::nb_pe, regs->cr3_shadow, regs->vtlb, virt, phys, host, tlb, tlb->val, error);
@@ -316,4 +325,24 @@ size_t Vtlb::lookup(uint64 v, Paddr &p, mword &a) {
 
         return s;
     }
+}
+
+/**
+
+ */
+void Vtlb::reserve_stack(){
+    Pe_stack::stack = 0;
+    // The stack must always be checked except in debug_mode
+    if(Pe::in_debug_mode || Pe_stack::rsp_tlb_val != val)
+        return;
+    mword hpa, ept_attr;
+    size_t size = Pd::current->Space_mem::ept.lookup (Pe_stack::rsp_gpa, hpa, ept_attr);
+    if (size && (addr() == (hpa & ~PAGE_MASK))) { 
+        Cow_elt::resolve_cow_fault(this, nullptr, Pe_stack::guest_rsp, addr(), attr());  
+        call_log_funct(Logstore::add_entry_in_buffer, 1, "RESERVE_STACK Pe %llu rsp %lx "
+            "rsp_tlb_val %llx new val %llx", Counter::nb_pe, Pe_stack::guest_rsp, 
+            Pe_stack::rsp_tlb_val, val);
+    }
+//    flush(rsp);
+    return;
 }

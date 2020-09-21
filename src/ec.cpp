@@ -57,7 +57,7 @@ uint8 Ec::launch_state = 0, Ec::step_reason = 0, Ec::debug_nb = 0,
         Ec::debug_type = 0, Ec::replaced_int3_instruction, Ec::replaced_int3_instruction2;
 uint64 Ec::tsc1 = 0, Ec::tsc2 = 0;
 int Ec::run1_reason = 0, Ec::previous_ret = 0, Ec::nb_try = 0;
-const char* Ec::reg_names[24] = {"N/A", "RAX", "RDX", "RCX", "RBX", "RBP", "RSI", "RDI", "R8", 
+const char* Ec::reg_names[24] = {"N/A", "RAX", "RBX", "RCX", "RDX", "RBP", "RSI", "RDI", "R8", 
 "R9", "R10", "R11", "R12", "R13", "R14", "R15", "RIP", "RSP", "RFLAG", "GUEST_RIP", "GUEST_RSP", 
 "GUEST_RIP", "FPU_DATA", "FPU_STATE"};
 const char* Ec::pe_stop[27] = {"NUL", "PMI", "PAGE_FAULT", "SYS_ENTER", "VMX_EXIT", 
@@ -914,7 +914,9 @@ void Ec::vmx_save_state0() {
     memcpy(Vmcs::vmcs0, regs.vmcs, Vmcs::basic.size);
     regs.vmcs->make_current();
     Pe::guest_rip[0] = Vmcs::read(Vmcs::GUEST_RIP);   
-    Pe::guest_rsp[0] = Vmcs::read(Vmcs::GUEST_RSP);   
+    Pe::guest_rsp[0] = Vmcs::read(Vmcs::GUEST_RSP); 
+//    if(Pe_stack::rsp_tlb)
+//        current->regs.vtlb->flush(Pe_stack::guest_rsp);
 }
 
 void Ec::vmx_restore_state0() {
@@ -1232,12 +1234,14 @@ Ec::Register Ec::compare_regs(PE_stopby reason) {
         return RBP;
     }
     if (regs.REG(dx) != (Pe::inState1 ? regs_2.REG(dx) : regs_1.REG(dx))) {
+        trace(0, "EDX0 %lx EDX1 %lx EDX2 %lx", regs_0.REG(dx), regs_1.REG(dx), regs.REG(dx));
         return RDX;
     }
     if (regs.REG(cx) != (Pe::inState1 ? regs_2.REG(cx) : regs_1.REG(cx))) {
         return RCX;
     }
     if (regs.REG(bx) != (Pe::inState1 ? regs_2.REG(bx) : regs_1.REG(bx))) {
+        trace(0, "EBX0 %lx EBX1 %lx EBX2 %lx", regs_0.REG(bx), regs_1.REG(bx), regs.REG(bx));
         return RBX;
     }
     if (regs.REG(ax) != (Pe::inState1 ? regs_2.REG(ax) : regs_1.REG(ax))) {
