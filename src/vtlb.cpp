@@ -183,7 +183,7 @@ Vtlb::Reason Vtlb::miss (Exc_regs *regs, mword virt, mword &error, Queue<Cow_fie
         if((tlb->addr() == (host & ~PAGE_MASK)) && tlb->is_cow(virt, phys, error, cow_fields))
             return SUCCESS;
         Ec::check_memory(Ec::PES_VMX_EXC);
-        if(attr & TLB_W) {
+        if((attr & TLB_W) && (attr & TLB_P)) {
             attr &= ~TLB_W;
             tlb->val = static_cast<typeof tlb->val>((host & ~((1UL << shift) - 1)) | attr | TLB_D | TLB_A);
             assert(cow_fields);
@@ -308,10 +308,7 @@ size_t Vtlb::lookup(uint64 v, Paddr &p, mword &a) {
 //        Logstore::append_log_in_buffer(buff);
         unsigned shift = --l * b + PAGE_BITS;
         e += v >> shift & ((1UL << b) - 1);
-        if(!e)
-            return 0;
-        
-        if(EXPECT_FALSE(!e->val))
+        if(!e || EXPECT_FALSE(!e->val) || !e->present())
             return 0;
 
         if(EXPECT_FALSE(l && !e->super()))
@@ -325,24 +322,4 @@ size_t Vtlb::lookup(uint64 v, Paddr &p, mword &a) {
 
         return s;
     }
-}
-
-/**
-
- */
-void Vtlb::reserve_stack(){
-    Pe_stack::stack = 0;
-    // The stack must always be checked except in debug_mode
-    if(Pe::in_debug_mode || Pe_stack::rsp_tlb_val != val)
-        return;
-    mword hpa, ept_attr;
-    size_t size = Pd::current->Space_mem::ept.lookup (Pe_stack::rsp_gpa, hpa, ept_attr);
-    if (size && (addr() == (hpa & ~PAGE_MASK))) { 
-        Cow_elt::resolve_cow_fault(this, nullptr, Pe_stack::guest_rsp, addr(), attr());  
-        call_log_funct(Logstore::add_entry_in_buffer, 1, "RESERVE_STACK Pe %llu rsp %lx "
-            "rsp_tlb_val %llx new val %llx", Counter::nb_pe, Pe_stack::guest_rsp, 
-            Pe_stack::rsp_tlb_val, val);
-    }
-//    flush(rsp);
-    return;
 }

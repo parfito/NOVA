@@ -57,7 +57,7 @@ uint8 Ec::launch_state = 0, Ec::step_reason = 0, Ec::debug_nb = 0,
         Ec::debug_type = 0, Ec::replaced_int3_instruction, Ec::replaced_int3_instruction2;
 uint64 Ec::tsc1 = 0, Ec::tsc2 = 0;
 int Ec::run1_reason = 0, Ec::previous_ret = 0, Ec::nb_try = 0;
-const char* Ec::reg_names[24] = {"N/A", "RAX", "RBX", "RCX", "RDX", "RBP", "RSI", "RDI", "R8", 
+const char* Ec::reg_names[24] = {"N/A", "RAX", "RBX", "RCX", "RDX", "RBP", "RDI", "RSI", "R8", 
 "R9", "R10", "R11", "R12", "R13", "R14", "R15", "RIP", "RSP", "RFLAG", "GUEST_RIP", "GUEST_RSP", 
 "GUEST_RIP", "FPU_DATA", "FPU_STATE"};
 const char* Ec::pe_stop[27] = {"NUL", "PMI", "PAGE_FAULT", "SYS_ENTER", "VMX_EXIT", 
@@ -894,7 +894,7 @@ void Ec::restore_state0_data() {
 }
 
 void Ec::vmx_save_state0() {
-   //    save_vm_stack();
+    save_vm_stack();
     mword host_msr_area_phys = Vmcs::read(Vmcs::EXI_MSR_LD_ADDR);
     Msr_area *cur_host_msr_area = reinterpret_cast<Msr_area*> 
             (Buddy::phys_to_ptr(host_msr_area_phys));
@@ -1021,6 +1021,24 @@ void Ec::vmx_rollback() {
     Virtual_apic_page *cur_virtual_apic_page =
             reinterpret_cast<Virtual_apic_page*> (Buddy::phys_to_ptr(virtual_apic_page_phys));
     memcpy(cur_virtual_apic_page, virtual_apic_page0, PAGE_SIZE);
+}
+
+void Ec::save_vm_stack() {
+    if(!Pe_stack::rsp_tlb || Pe::in_debug_mode)
+        return;
+    mword vtlb_attr, ept_attr, stack_attr = Pe_stack::rsp_tlb_val & PAGE_MASK;
+    Paddr ept_hpa, vtlb_hpa, stack_addr = Pe_stack::rsp_tlb_val & ~PAGE_MASK;
+    size_t size_vtlb = Ec::current->vtlb_lookup(Pe_stack::guest_rsp, vtlb_hpa, vtlb_attr);
+    if(!size_vtlb)
+        return;
+    size_t size_ept = Ec::current->getPd()->Space_mem::ept.lookup (Pe_stack::rsp_gpa, ept_hpa, ept_attr);
+    if(!size_ept)
+        return;
+    if ((stack_addr == (ept_hpa & ~PAGE_MASK)) && (stack_attr == vtlb_attr) && 
+            ((ept_hpa & ~PAGE_MASK) == (vtlb_hpa & ~PAGE_MASK))) {
+        Cow_elt::resolve_cow_fault(Pe_stack::rsp_tlb, nullptr, Pe_stack::guest_rsp, 
+            stack_addr, stack_attr);  
+    }
 }
 
 mword Ec::get_regsRIP() {
@@ -1234,14 +1252,12 @@ Ec::Register Ec::compare_regs(PE_stopby reason) {
         return RBP;
     }
     if (regs.REG(dx) != (Pe::inState1 ? regs_2.REG(dx) : regs_1.REG(dx))) {
-        trace(0, "EDX0 %lx EDX1 %lx EDX2 %lx", regs_0.REG(dx), regs_1.REG(dx), regs.REG(dx));
         return RDX;
     }
     if (regs.REG(cx) != (Pe::inState1 ? regs_2.REG(cx) : regs_1.REG(cx))) {
         return RCX;
     }
     if (regs.REG(bx) != (Pe::inState1 ? regs_2.REG(bx) : regs_1.REG(bx))) {
-        trace(0, "EBX0 %lx EBX1 %lx EBX2 %lx", regs_0.REG(bx), regs_1.REG(bx), regs.REG(bx));
         return RBX;
     }
     if (regs.REG(ax) != (Pe::inState1 ? regs_2.REG(ax) : regs_1.REG(ax))) {
