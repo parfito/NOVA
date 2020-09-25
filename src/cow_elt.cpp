@@ -76,20 +76,28 @@ type(t), page_addr(addr), attr(a), prev(nullptr), next(nullptr) {
     ec_rsp = Ec::current->get_reg(Ec::RSP);
     Paddr hpa_rip;
     mword attrib;
+    mword *rip_ptr; 
     if (Ec::current->is_virutalcpu()) {
-        Ec::current->vtlb_lookup(static_cast<uint64>(ec_rip), hpa_rip, attrib);
+        if(Ec::current->vtlb_lookup(static_cast<uint64>(ec_rip), hpa_rip, attrib)){
+            rip_ptr = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, 
+                hpa_rip, 3, sizeof(mword)));
+            assert(rip_ptr);
+            instruction_in_hex(*rip_ptr, ec_rip_content);
+        } else {
+            String::print(ec_rip_content, "VM RIP NOT MAPPED");
+        }
         ec_es = Vmcs::read(Vmcs::GUEST_SEL_ES);
         ec_ss = Vmcs::read(Vmcs::GUEST_SEL_SS);
     } else {
         Pd::current->Space_mem::loc[Cpu::id].lookup(ec_rip, hpa_rip, attrib);
+        rip_ptr = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, 
+                hpa_rip, 3, sizeof(mword)));
+        assert(rip_ptr);
+        instruction_in_hex(*rip_ptr, ec_rip_content);
         ec_es = Ec::current->get_regsES();
         ec_ss = Ec::current->get_regsSS();
     }
-    mword *rip_ptr = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, 
-                hpa_rip, 3, sizeof(mword)));
-    assert(rip_ptr);
-    instruction_in_hex(*rip_ptr, ec_rip_content);
-    //=============================================================================
+     //=============================================================================
 }
 
 /**

@@ -47,6 +47,7 @@ mword       Cpu::boot_lock;
 
 // Order of these matters
 unsigned    Cpu::online;
+unsigned    Cpu::nb_instruction_after_vmresume, Cpu::nb_instruction_before_vmresume;
 uint8       Cpu::acpi_id[NUM_CPU];
 uint8       Cpu::apic_id[NUM_CPU];
 
@@ -260,9 +261,22 @@ void Cpu::init()
     Vmcb::init();
 
     Mca::init();
-
-    trace (TRACE_CPU, "CORE:%x:%x:%x %x:%x:%x:%x [%x] %.48s", package[Cpu::id], core[Cpu::id], thread[Cpu::id], family[Cpu::id], model[Cpu::id], stepping[Cpu::id], platform[Cpu::id], patch[Cpu::id], reinterpret_cast<char *>(name));
-
+    char buff[STR_MIN_LENGTH];
+    if(family[Cpu::id] == 0x6 && model[Cpu::id] == 0x1a && stepping[Cpu::id] == 0x4) { // Simics on my Dell core i7
+        nb_instruction_before_vmresume = 0xc;
+        nb_instruction_after_vmresume = 0x26;
+        String::print(buff, "Simics on Dell i7");
+    } else if(family[Cpu::id] == 0x6 && model[Cpu::id] == 0x45 && stepping[Cpu::id] == 0x1){ // Qemu on my Dell core i5
+        nb_instruction_before_vmresume = 0x9;
+        nb_instruction_after_vmresume = 0x26;
+        String::print(buff, "Qemu on Dell i5");
+    } else { // Lenovo
+        nb_instruction_before_vmresume = 0xa;
+        nb_instruction_after_vmresume = 0x28;
+        String::print(buff, "Lenovo");
+    }
+    trace (TRACE_CPU, "%s CORE:%x:%x:%x %x:%x:%x:%x [%x] %.48s", buff, package[Cpu::id], core[Cpu::id], thread[Cpu::id], family[Cpu::id], model[Cpu::id], stepping[Cpu::id], platform[Cpu::id], patch[Cpu::id], reinterpret_cast<char *>(name));
+    
     Hip::add_cpu();
 
     boot_lock++;

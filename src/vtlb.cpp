@@ -188,14 +188,6 @@ Vtlb::Reason Vtlb::miss (Exc_regs *regs, mword virt, mword &error, Queue<Cow_fie
             tlb->val = static_cast<typeof tlb->val>((host & ~((1UL << shift) - 1)) | attr | TLB_D | TLB_A);
             assert(cow_fields);
             Cow_field::set_cow(cow_fields, virt, true);
-            if(virt == Vmcs::read(Vmcs::GUEST_RSP)){
-                Pe_stack::rsp_tlb = tlb;
-                Pe_stack::guest_rsp = virt;
-                Pe_stack::rsp_gpa = phys;
-                Pe_stack::rsp_tlb_val = tlb->val;
-                trace(0, "VTLB STACK tlb val %llx virt %lx phys %lx", 
-                    tlb->val, virt, phys);
-            }
         } else if(cow_fields){
 //            trace(0, "set_cow false for %lx", virt);
             Cow_field::set_cow(cow_fields, virt, false);            
@@ -298,7 +290,7 @@ void Vtlb::cow_update(Paddr phys, mword attr){
     val = phys | attr;
 }
 
-size_t Vtlb::lookup(uint64 v, Paddr &p, mword &a) {
+size_t Vtlb::lookup(uint64 v, Paddr &p, mword &a, Vtlb* &tlb) {
     unsigned l = max();
     unsigned b = bpl();
 
@@ -313,13 +305,31 @@ size_t Vtlb::lookup(uint64 v, Paddr &p, mword &a) {
 
         if(EXPECT_FALSE(l && !e->super()))
             continue;
-
+        
         size_t s = 1UL << (l * b + e->order());
 
         p = static_cast<Paddr> (e->addr() | (v & (s - 1)));
 
         a = e->attr();
+        
+        tlb = e;
 
         return s;
     }
+}
+
+void Vtlb::reserve_stack(Queue<Cow_field> *cow_fields){
+    if(Pe::in_debug_mode)
+        return;
+    mword guest_rsp = Vmcs::read(Vmcs::GUEST_RSP), vtlb_attr;
+    Paddr vtlb_hpa;
+    Vtlb* tlb = nullptr;
+    size_t size_vtlb = lookup(guest_rsp, vtlb_hpa, vtlb_attr, tlb);
+    if(!size_vtlb)
+        return;
+    if(!Cow_field::is_cowed(cow_fields, guest_rsp) || !(vtlb_attr & TLB_P) || (vtlb_attr & TLB_W))
+        return;
+    //        trace(0, "VTLB STACK tlb val %llx vtlb_attr %lx virt %lx PE %llu", 
+//            tlb->val, vtlb_attr, guest_rsp, Counter::nb_pe);
+        Cow_elt::resolve_cow_fault(tlb, nullptr, guest_rsp, vtlb_hpa, vtlb_attr);
 }

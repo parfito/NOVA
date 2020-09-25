@@ -1024,21 +1024,7 @@ void Ec::vmx_rollback() {
 }
 
 void Ec::save_vm_stack() {
-    if(!Pe_stack::rsp_tlb || Pe::in_debug_mode)
-        return;
-    mword vtlb_attr, ept_attr, stack_attr = Pe_stack::rsp_tlb_val & PAGE_MASK;
-    Paddr ept_hpa, vtlb_hpa, stack_addr = Pe_stack::rsp_tlb_val & ~PAGE_MASK;
-    size_t size_vtlb = Ec::current->vtlb_lookup(Pe_stack::guest_rsp, vtlb_hpa, vtlb_attr);
-    if(!size_vtlb)
-        return;
-    size_t size_ept = Ec::current->getPd()->Space_mem::ept.lookup (Pe_stack::rsp_gpa, ept_hpa, ept_attr);
-    if(!size_ept)
-        return;
-    if ((stack_addr == (ept_hpa & ~PAGE_MASK)) && (stack_attr == vtlb_attr) && 
-            ((ept_hpa & ~PAGE_MASK) == (vtlb_hpa & ~PAGE_MASK))) {
-        Cow_elt::resolve_cow_fault(Pe_stack::rsp_tlb, nullptr, Pe_stack::guest_rsp, 
-            stack_addr, stack_attr);  
-    }
+    current->regs.vtlb->reserve_stack(&current->cow_fields);
 }
 
 mword Ec::get_regsRIP() {
@@ -1379,5 +1365,6 @@ void Ec::step_debug(){
 }
 
 size_t Ec::vtlb_lookup(uint64 v, Paddr &p, mword &a){
-    return regs.vtlb->lookup(v, p, a);    
+    Vtlb* tlb = nullptr;
+    return regs.vtlb->lookup(v, p, a, tlb);    
 }

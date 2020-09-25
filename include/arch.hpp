@@ -139,7 +139,8 @@
 
 #define RET_USER_EXC    iretq;
 
-// 0xb is the number of instrutions executed in the hypervisor in kernel mode
+// 0xa is the number of instrutions executed in the hypervisor in kernel mode on
+// the machine Lenovo (0x9 for Qemu, 0xc for Simics)
 #define LOAD_GPR_COUNT  mov %2, PREG(sp);               \
                         SAVE_GPR                        \
                         movb $0x0, %0;                  \
@@ -150,7 +151,7 @@
                         push PREG(dx);                  \
                         mov $0x309, PREG(cx);           \
                         rdmsr;                          \
-                        sub $0x9, PREG(ax);             \
+                        sub $0xc, PREG(ax);             \
                         wrmsr;                          \
                         mov $0x38d, PREG(cx);           \
                         xor PREG(dx), PREG(dx);         \
@@ -160,7 +161,10 @@
                         pop PREG(cx);                   \
                         pop PREG(ax);                   
                         
-// 0x9 is the number of instructions counted as hypervisor's ones after vmresume failed
+// 0x28 is the number of instructions counted as hypervisor's ones after vmresume 
+// 0x26 for qemu, 0x28 for simics (In the case of simics, 0x28 does not work all 
+// the time, especially at the beginning when guest's EIP is still 0x100 etc, so
+// we choose to let it be 0x26
 #define RESET_COUNTER   mov $0x0, PREG(dx);             \
                         mov $0x0, PREG(ax);             \
                         mov $0x38d, PREG(cx);           \
