@@ -144,22 +144,16 @@
 #define LOAD_GPR_COUNT  mov %2, PREG(sp);               \
                         SAVE_GPR                        \
                         movb $0x0, %0;                  \
-                        lea %1, PREG(sp);               \
-                        LOAD_GPR                        \
-                        push PREG(ax);                  \
-                        push PREG(cx);                  \
-                        push PREG(dx);                  \
                         mov $0x309, PREG(cx);           \
                         rdmsr;                          \
-                        sub $0xc, PREG(ax);             \
+                        sub %4, PREG(ax);               \
                         wrmsr;                          \
                         mov $0x38d, PREG(cx);           \
                         xor PREG(dx), PREG(dx);         \
                         mov $0xb, PREG(ax);             \
                         wrmsr;                          \
-                        pop PREG(dx);                   \
-                        pop PREG(cx);                   \
-                        pop PREG(ax);                   
+                        lea %1, PREG(sp);               \
+                        LOAD_GPR                        \
                         
 // 0x28 is the number of instructions counted as hypervisor's ones after vmresume 
 // 0x26 for qemu, 0x28 for simics (In the case of simics, 0x28 does not work all 
@@ -169,17 +163,17 @@
                         mov $0x0, PREG(ax);             \
                         mov $0x38d, PREG(cx);           \
                         wrmsr;                          \
+                        mov %3, PREG(sp);               \
+                        LOAD_GPR                        \
+                        movb $0x1, %0;                  \
                         mov $0x309, PREG(cx);           \
                         rdmsr;                          \
-                        sub $0x26, PREG(ax);            \
+                        sub %5, PREG(ax);               \
                         wrmsr;				\
                         mov $0x38d, PREG(cx);           \
                         xor PREG(dx), PREG(dx);         \
                         mov $0xb, PREG(ax);             \
                         wrmsr;                          \
-                        mov %3, PREG(sp);               \
-                        LOAD_GPR                        \
-                        movb $0x1, %0;                  \
                         lea %1, PREG(sp);               \
                         LOAD_GPR                        
 #endif

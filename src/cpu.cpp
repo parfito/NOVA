@@ -262,17 +262,22 @@ void Cpu::init()
 
     Mca::init();
     char buff[STR_MIN_LENGTH];
+    // 0x28 is the number of instructions counted as hypervisor's ones after vmresume 
+// 0x26 for qemu, 0x28 for simics (In the case of simics, 0x28 does not work all 
+// the time, especially at the beginning when guest's EIP is still 0x100 etc, so
+// we choose to let it be 0x26
+
     if(family[Cpu::id] == 0x6 && model[Cpu::id] == 0x1a && stepping[Cpu::id] == 0x4) { // Simics on my Dell core i7
-        nb_instruction_before_vmresume = 0xc;
-        nb_instruction_after_vmresume = 0x26;
+        nb_instruction_before_vmresume = 0x1a;
+        nb_instruction_after_vmresume = 0x16;
         String::print(buff, "Simics on Dell i7");
     } else if(family[Cpu::id] == 0x6 && model[Cpu::id] == 0x45 && stepping[Cpu::id] == 0x1){ // Qemu on my Dell core i5
-        nb_instruction_before_vmresume = 0x9;
-        nb_instruction_after_vmresume = 0x26;
+        nb_instruction_before_vmresume = 0x17;
+        nb_instruction_after_vmresume = 0x14;
         String::print(buff, "Qemu on Dell i5");
     } else { // Lenovo
-        nb_instruction_before_vmresume = 0xa;
-        nb_instruction_after_vmresume = 0x28;
+        nb_instruction_before_vmresume = 0x18;
+        nb_instruction_after_vmresume = 0x16;
         String::print(buff, "Lenovo");
     }
     trace (TRACE_CPU, "%s CORE:%x:%x:%x %x:%x:%x:%x [%x] %.48s", buff, package[Cpu::id], core[Cpu::id], thread[Cpu::id], family[Cpu::id], model[Cpu::id], stepping[Cpu::id], platform[Cpu::id], patch[Cpu::id], reinterpret_cast<char *>(name));

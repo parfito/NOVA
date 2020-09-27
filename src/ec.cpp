@@ -435,8 +435,11 @@ void Ec::ret_user_vmresume() {
                 EXPAND(RESET_COUNTER)
                 "vmlaunch;"
                 "mov %2," EXPAND(PREG(sp);)
-                : "=m" (vmlaunch) : "m" (current->regs), "i" (CPU_LOCAL_STCK + PAGE_SIZE), "i" 
-                (CPU_LOCAL_STCK + PAGE_SIZE - 0x80) : "memory");
+                : "=m" (vmlaunch) : "m" (current->regs), "i" (CPU_LOCAL_STCK + PAGE_SIZE), 
+                "i" (CPU_LOCAL_STCK + PAGE_SIZE - 0x80),
+                "m" (Cpu::nb_instruction_before_vmresume),
+                "m" (Cpu::nb_instruction_after_vmresume) : EXPAND(REG(ax)), 
+                EXPAND(REG(bx)), EXPAND(REG(cx)), EXPAND(REG(dx)), "memory");
 
     trace(0, "VM entry failed with error %#lx", Vmcs::read(Vmcs::VMX_INST_ERROR));
 
