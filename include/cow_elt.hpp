@@ -96,7 +96,7 @@ public:
     static void restore_state1();
     static void restore_state2();
     static void rollback();
-    static void place_phys0();
+    static void free_current_pd_cowelts();
     static void free(Cow_elt*);    
     static void debug_rollback();
 };

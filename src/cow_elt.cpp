@@ -76,20 +76,28 @@ type(t), page_addr(addr), attr(a), prev(nullptr), next(nullptr) {
     ec_rsp = Ec::current->get_reg(Ec::RSP);
     Paddr hpa_rip;
     mword attrib;
+    mword *rip_ptr; 
     if (Ec::current->is_virutalcpu()) {
-        Ec::current->vtlb_lookup(static_cast<uint64>(ec_rip), hpa_rip, attrib);
+        if(Ec::current->vtlb_lookup(static_cast<uint64>(ec_rip), hpa_rip, attrib)){
+            rip_ptr = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, 
+                hpa_rip, 3, sizeof(mword)));
+            assert(rip_ptr);
+            instruction_in_hex(*rip_ptr, ec_rip_content);
+        } else {
+            String::print(ec_rip_content, "VM RIP NOT MAPPED");
+        }
         ec_es = Vmcs::read(Vmcs::GUEST_SEL_ES);
         ec_ss = Vmcs::read(Vmcs::GUEST_SEL_SS);
     } else {
         Pd::current->Space_mem::loc[Cpu::id].lookup(ec_rip, hpa_rip, attrib);
+        rip_ptr = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, 
+                hpa_rip, 3, sizeof(mword)));
+        assert(rip_ptr);
+        instruction_in_hex(*rip_ptr, ec_rip_content);
         ec_es = Ec::current->get_regsES();
         ec_ss = Ec::current->get_regsSS();
     }
-    mword *rip_ptr = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, 
-                hpa_rip, 3, sizeof(mword)));
-    assert(rip_ptr);
-    instruction_in_hex(*rip_ptr, ec_rip_content);
-    //=============================================================================
+     //=============================================================================
 }
 
 /**
@@ -257,32 +265,33 @@ bool Cow_elt::compare() {
             mword val0 = *(reinterpret_cast<mword*>(ptr0) + index);
             Pe::missmatch_addr = c->page_addr + missmatch_addr;
 
-            void *rip_ptr;
+            Paddr phys;
+            mword attr;
+            mword *rip_ptr;
+            bool to_continue = false;
             if(Ec::current->is_virutalcpu()){
-                Paddr hpa_guest_rip;
-                mword attr;
-                Ec::current->vtlb_lookup(c->ec_rip, hpa_guest_rip, attr);
-                rip_ptr = reinterpret_cast<char*>(Hpt::remap_cow(Pd::kern.quota, 
-                        hpa_guest_rip, 3, sizeof(mword)));                
+                Ec::current->vtlb_lookup(static_cast<uint64>(c->ec_rip), phys, attr);
+                rip_ptr = reinterpret_cast<mword*>(Hpt::remap_cow(Pd::kern.quota, phys, 3, sizeof(mword)));
+                *(reinterpret_cast<mword*>(ptr1) + index) = *(reinterpret_cast<mword*>(ptr2) + index);
+                crc1 = Crc::compute(0, ptr1, PAGE_SIZE);
+//                if(crc1 == crc2)
+                    to_continue = true;
             }else{
-                rip_ptr = reinterpret_cast<char*>(Hpt::remap_cow(Pd::kern.quota, 
-                    Pd::current->Space_mem::loc[Cpu::id], c->ec_rip, 3, sizeof(mword)));
-                assert(rip_ptr);
-            }
-            
+                rip_ptr = reinterpret_cast<mword*>(Hpt::remap_cow(Pd::kern.quota, 
+                Pd::current->Space_mem::loc[Cpu::id], c->ec_rip, 3, sizeof(mword)));
+            }            
+            assert(rip_ptr);
             char instr_buff[STR_MIN_LENGTH];
-            instruction_in_hex(*reinterpret_cast<mword*> (rip_ptr), instr_buff);
-            String *s = new String(2*STR_MAX_LENGTH);
-            String::print(s->get_string(), "MISSMATCH Pd: %s PE %llu virt %lx: phys0:%lx phys1 %lx phys2 %lx "
+            instruction_in_hex(*rip_ptr, instr_buff);
+            call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 1, "MISSMATCH Pd: %s PE %llu virt %lx: phys0:%lx phys1 %lx phys2 %lx "
                 "rip %lx:%s rcx %lx rsp %lx:%lx MM %lx index %lu %lx val0: 0x%lx  val1: 0x%lx "
                 "val2 0x%lx", Pd::current->get_name(), Counter::nb_pe, c->m_fault_addr, c->phys_addr[0], 
                 c->phys_addr[1], c->phys_addr[2], c->ec_rip, instr_buff, c->ec_rcx, c->ec_rsp, 
                 c->ec_rsp_content, Pe::missmatch_addr, index, reinterpret_cast<mword>(reinterpret_cast<mword*>(c->page_addr) + index), val0, val1, val2);
-            Logstore::add_entry_in_buffer(s->get_string());
-            trace(0, "%s", s->get_string());
-            delete s;
-                // if in development, we got a real bug, print info, 
-                // if in production, we got an SEU, just return true
+            if(to_continue)
+                continue;
+            // if in development, we got a real bug, print info, 
+            // if in production, we got an SEU, just return true
             c = cow_elts->head(), n = nullptr, h = c;
             while (c) {
                 trace(0, "Cow v: %lx  phys: %lx phys1: %lx  phys2: %lx", c->page_addr, c->phys_addr[0],
@@ -290,9 +299,9 @@ bool Cow_elt::compare() {
                 n = c->next;
                 c = (n == h) ? nullptr : n;
             }
-//            Console::print_page(ptr0);
-//            Console::print_page(ptr1);
-//            Console::print_page(ptr2);
+            Console::print_page(ptr0);
+            Console::print_page(ptr1);
+            Console::print_page(ptr2);
             return true;
         }        
         n = c->next;
@@ -399,7 +408,7 @@ void Cow_elt::debug_rollback() {
 /**
  * reset pages to their original frames
  */
-void Cow_elt::place_phys0() {
+void Cow_elt::free_current_pd_cowelts() {
     cow_elts = &Pd::current->cow_elts;
     Cow_elt *d = nullptr;
     while(cow_elts->dequeue(d = cow_elts->head())) {

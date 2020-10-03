@@ -88,8 +88,8 @@ class Vtlb : public Pte<Vtlb, uint64, 3,  9, false>
         static Reason miss (Exc_regs *, mword, mword&, Queue<Cow_field>* = nullptr);
         bool is_cow(mword, mword, mword, Queue<Cow_field>*);
         void cow_update(Paddr, mword);
-        size_t lookup(uint64, Paddr&, mword&);
-        
+        size_t lookup(uint64, Paddr&, mword&, Vtlb* &);
+        void reserve_stack(Queue<Cow_field> *);
         ALWAYS_INLINE
         static inline void *operator new (size_t, Quota &quota) { return Buddy::allocator.alloc (0, quota, Buddy::NOFILL); }
 

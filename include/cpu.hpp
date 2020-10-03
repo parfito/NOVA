@@ -144,7 +144,7 @@ public:
     };
 
     static mword boot_lock asm ("boot_lock");
-
+    static unsigned nb_instruction_before_vmresume, nb_instruction_after_vmresume;
     static unsigned online;
     static uint8 acpi_id[NUM_CPU];
     static uint8 apic_id[NUM_CPU];

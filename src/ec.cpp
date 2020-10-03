@@ -43,7 +43,7 @@
 #include "log_store.hpp"
 #include "pending_int.hpp"
 
-mword Ec::prev_rip = 0, Ec::tscp_rcx1 = 0, Ec::tscp_rcx2 = 0, Ec::is_vmlaunched;
+mword Ec::prev_rip = 0, Ec::tscp_rcx1 = 0, Ec::tscp_rcx2 = 0, Ec::vmlaunch;
 bool Ec::hardening_started = false, Ec::in_rep_instruction = false, Ec::not_nul_cowlist = false, 
         Ec::no_further_check = false, Ec::run_switched = false, Ec::keep_cow = false, 
         Ec::single_stepped = false;
@@ -57,7 +57,7 @@ uint8 Ec::launch_state = 0, Ec::step_reason = 0, Ec::debug_nb = 0,
         Ec::debug_type = 0, Ec::replaced_int3_instruction, Ec::replaced_int3_instruction2;
 uint64 Ec::tsc1 = 0, Ec::tsc2 = 0;
 int Ec::run1_reason = 0, Ec::previous_ret = 0, Ec::nb_try = 0;
-const char* Ec::reg_names[24] = {"N/A", "RAX", "RDX", "RCX", "RBX", "RBP", "RSI", "RDI", "R8", 
+const char* Ec::reg_names[24] = {"N/A", "RAX", "RBX", "RCX", "RDX", "RBP", "RDI", "RSI", "R8", 
 "R9", "R10", "R11", "R12", "R13", "R14", "R15", "RIP", "RSP", "RFLAG", "GUEST_RIP", "GUEST_RSP", 
 "GUEST_RIP", "FPU_DATA", "FPU_STATE"};
 const char* Ec::pe_stop[27] = {"NUL", "PMI", "PAGE_FAULT", "SYS_ENTER", "VMX_EXIT", 
@@ -432,11 +432,14 @@ void Ec::ret_user_vmresume() {
         enable_mtf();
     asm volatile (EXPAND(LOAD_GPR_COUNT)
                 "vmresume;" // VMRESUME is not counted as instruction; we don't know why
-                  EXPAND(RESET_COUNTER)
-                  "vmlaunch;"
+                EXPAND(RESET_COUNTER)
+                "vmlaunch;"
                 "mov %2," EXPAND(PREG(sp);)
-                : "=m" (is_vmlaunched) : "m" (current->regs), "i" (CPU_LOCAL_STCK + PAGE_SIZE), "i" 
-                (CPU_LOCAL_STCK + PAGE_SIZE - 0x80) : "memory");
+                : "=m" (vmlaunch) : "m" (current->regs), "i" (CPU_LOCAL_STCK + PAGE_SIZE), 
+                "i" (CPU_LOCAL_STCK + PAGE_SIZE - 0x80),
+                "m" (Cpu::nb_instruction_before_vmresume),
+                "m" (Cpu::nb_instruction_after_vmresume) : EXPAND(REG(ax)), 
+                EXPAND(REG(bx)), EXPAND(REG(cx)), EXPAND(REG(dx)), "memory");
 
     trace(0, "VM entry failed with error %#lx", Vmcs::read(Vmcs::VMX_INST_ERROR));
 
@@ -851,7 +854,7 @@ void Ec::save_state0() {
     regs_0 = regs;
     call_log_funct(Logstore::add_log_in_buffer, 0, "PE %llu Pd %s Ec %s Rip0 %lx:%lx", Counter::nb_pe, 
     getPd()->get_name(), get_name(), regs.ARG_IP, get_reg(RIP));
-    Cow_elt::place_phys0();
+    Cow_elt::free_current_pd_cowelts();
     Fpu::dwc_save(); // If FPU activated, save fpu state
     if (fpu)         // If fpu defined, save it 
         fpu->save_data();
@@ -894,7 +897,7 @@ void Ec::restore_state0_data() {
 }
 
 void Ec::vmx_save_state0() {
-   //    save_vm_stack();
+    save_vm_stack();
     mword host_msr_area_phys = Vmcs::read(Vmcs::EXI_MSR_LD_ADDR);
     Msr_area *cur_host_msr_area = reinterpret_cast<Msr_area*> 
             (Buddy::phys_to_ptr(host_msr_area_phys));
@@ -914,7 +917,9 @@ void Ec::vmx_save_state0() {
     memcpy(Vmcs::vmcs0, regs.vmcs, Vmcs::basic.size);
     regs.vmcs->make_current();
     Pe::guest_rip[0] = Vmcs::read(Vmcs::GUEST_RIP);   
-    Pe::guest_rsp[0] = Vmcs::read(Vmcs::GUEST_RSP);   
+    Pe::guest_rsp[0] = Vmcs::read(Vmcs::GUEST_RSP); 
+//    if(Pe_stack::rsp_tlb)
+//        current->regs.vtlb->flush(Pe_stack::guest_rsp);
 }
 
 void Ec::vmx_restore_state0() {
@@ -1019,6 +1024,10 @@ void Ec::vmx_rollback() {
     Virtual_apic_page *cur_virtual_apic_page =
             reinterpret_cast<Virtual_apic_page*> (Buddy::phys_to_ptr(virtual_apic_page_phys));
     memcpy(cur_virtual_apic_page, virtual_apic_page0, PAGE_SIZE);
+}
+
+void Ec::save_vm_stack() {
+    current->regs.vtlb->reserve_stack(&current->cow_fields);
 }
 
 mword Ec::get_regsRIP() {
@@ -1359,5 +1368,6 @@ void Ec::step_debug(){
 }
 
 size_t Ec::vtlb_lookup(uint64 v, Paddr &p, mword &a){
-    return regs.vtlb->lookup(v, p, a);    
+    Vtlb* tlb = nullptr;
+    return regs.vtlb->lookup(v, p, a, tlb);    
 }

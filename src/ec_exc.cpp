@@ -723,21 +723,26 @@ void Ec::check_memory(PE_stopby from) {
                 }
             }
         {
-            int reg_diff = ec->compare_regs(from);
+            Register reg_diff = ec->compare_regs(from);
             call_log_funct(Logstore::append_log_in_buffer, 0, "rip2 %lx", ec->utcb ? from == PES_SYS_ENTER ? 
                 ec->regs.ARG_IP : ec->regs_2.REG(ip) : Vmcs::read(Vmcs::GUEST_RIP));
             if (Cow_elt::compare() || reg_diff) {
                 if(IN_PRODUCTION){
-                    Logstore::commit_buffer();
+//                    Logstore::commit_buffer();
                     ec->rollback();
                     ec->reset_all();
                     ec->restore_state0_data();
                     check_exit();
                 } else {
                     Pd *pd = ec->getPd();
+                    char out_buff[STR_MAX_LENGTH];
+                    if(reg_diff)
+                        String::print(out_buff, "%s 0: %lx 1: %lx 2: %lx", reg_names[reg_diff],
+                            ec->get_reg(reg_diff, 0), ec->get_reg(reg_diff, 1), ec->get_reg(reg_diff, 3));
+                    else
+                        String::print(out_buff, "%s", "memory");
                     call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 1, "Checking failed by %s : Ec %s  Pd: %s From: %s:%s launch_state: %s "
-                        "nb_cow_fault %u counter1 %llx counter2 %llx Nb_pe %llu is_saved %d", reg_diff ? 
-                        reg_names[reg_diff] : "memory", ec->get_name(), pd->get_name(), pe_stop[run1_reason], 
+                        "nb_cow_fault %u counter1 %llx counter2 %llx Nb_pe %llu is_saved %d", out_buff, ec->get_name(), pd->get_name(), pe_stop[run1_reason], 
                         pe_stop[from], launches[launch_state], Counter::cow_fault, counter1, counter2 ? counter2 : 
                         Lapic::read_instCounter(),  Counter::nb_pe, Fpu::is_saved());
                     Logstore::dump("check_memory 2", true);
@@ -755,7 +760,7 @@ void Ec::check_memory(PE_stopby from) {
     //                Console::debug_started = true;
     //                int from_value = from;
     //                int prev_reason_value = prev_reason;
-                    Logstore::commit_buffer();
+//                    Logstore::commit_buffer();
                     ec->debug_rollback();
                     ec->reset_all();
                     ec->save_state0();
@@ -807,7 +812,7 @@ void Ec::check_memory(PE_stopby from) {
                     Cpu::enable_fast_string();                    
                 }
                 launch_state = UNLAUNCHED;
-                Logstore::commit_buffer();
+//                Logstore::commit_buffer();
                 reset_all();
                 return;
             }
@@ -862,6 +867,7 @@ void Ec::reset_all() {
     no_further_check = false;
     run_switched = false;
     Pending_int::exec_pending_interrupt();
+    Logstore::commit_buffer();
 }
 
 /**

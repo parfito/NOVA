@@ -183,19 +183,20 @@ Vtlb::Reason Vtlb::miss (Exc_regs *regs, mword virt, mword &error, Queue<Cow_fie
         if((tlb->addr() == (host & ~PAGE_MASK)) && tlb->is_cow(virt, phys, error, cow_fields))
             return SUCCESS;
         Ec::check_memory(Ec::PES_VMX_EXC);
-        if(attr & TLB_W) {
+        if((attr & TLB_W) && (attr & TLB_P)) {
             attr &= ~TLB_W;
+            tlb->val = static_cast<typeof tlb->val>((host & ~((1UL << shift) - 1)) | attr | TLB_D | TLB_A);
             assert(cow_fields);
             Cow_field::set_cow(cow_fields, virt, true);
         } else if(cow_fields){
 //            trace(0, "set_cow false for %lx", virt);
             Cow_field::set_cow(cow_fields, virt, false);            
+            tlb->val = static_cast<typeof tlb->val>((host & ~((1UL << shift) - 1)) | attr | TLB_D | TLB_A);
         }
         if(Hip::is_mmio(host & ~PAGE_MASK)){
             trace(0, "Vtlb is MMIO");
         }
-        tlb->val = static_cast<typeof tlb->val>((host & ~((1UL << shift) - 1)) | attr | TLB_D | TLB_A);
-//        trace (TRACE_VTLB, "VTLB Miss SUCCESS CR3:%#010lx A:%#010lx P:%#010lx A:%#lx E:%#lx TLB:%#016llx GuestIP %#lx", 
+//          trace (TRACE_VTLB, "VTLB Miss SUCCESS CR3:%#010lx A:%#010lx P:%#010lx A:%#lx E:%#lx TLB:%#016llx GuestIP %#lx", 
 //                regs->cr3_shadow, virt, phys, attr, error, tlb->val, Vmcs::read(Vmcs::GUEST_RIP));
         call_log_funct(Logstore::add_entry_in_buffer, 0, "VTLB SUCCESS Pe %llu CR3:%#010lx vtlb %p virt %lx gpa %lx hpa %lx tlb %p tlb->val %llx err %lx", 
             Counter::nb_pe, regs->cr3_shadow, regs->vtlb, virt, phys, host, tlb, tlb->val, error);
@@ -289,7 +290,7 @@ void Vtlb::cow_update(Paddr phys, mword attr){
     val = phys | attr;
 }
 
-size_t Vtlb::lookup(uint64 v, Paddr &p, mword &a) {
+size_t Vtlb::lookup(uint64 v, Paddr &p, mword &a, Vtlb* &tlb) {
     unsigned l = max();
     unsigned b = bpl();
 
@@ -299,21 +300,36 @@ size_t Vtlb::lookup(uint64 v, Paddr &p, mword &a) {
 //        Logstore::append_log_in_buffer(buff);
         unsigned shift = --l * b + PAGE_BITS;
         e += v >> shift & ((1UL << b) - 1);
-        if(!e)
-            return 0;
-        
-        if(EXPECT_FALSE(!e->val))
+        if(!e || EXPECT_FALSE(!e->val) || !e->present())
             return 0;
 
         if(EXPECT_FALSE(l && !e->super()))
             continue;
-
+        
         size_t s = 1UL << (l * b + e->order());
 
         p = static_cast<Paddr> (e->addr() | (v & (s - 1)));
 
         a = e->attr();
+        
+        tlb = e;
 
         return s;
     }
+}
+
+void Vtlb::reserve_stack(Queue<Cow_field> *cow_fields){
+    if(Pe::in_debug_mode)
+        return;
+    mword guest_rsp = Vmcs::read(Vmcs::GUEST_RSP), vtlb_attr;
+    Paddr vtlb_hpa;
+    Vtlb* tlb = nullptr;
+    size_t size_vtlb = lookup(guest_rsp, vtlb_hpa, vtlb_attr, tlb);
+    if(!size_vtlb)
+        return;
+    if(!Cow_field::is_cowed(cow_fields, guest_rsp) || !(vtlb_attr & TLB_P) || (vtlb_attr & TLB_W))
+        return;
+    //        trace(0, "VTLB STACK tlb val %llx vtlb_attr %lx virt %lx PE %llu", 
+//            tlb->val, vtlb_attr, guest_rsp, Counter::nb_pe);
+        Cow_elt::resolve_cow_fault(tlb, nullptr, guest_rsp, vtlb_hpa, vtlb_attr);
 }
