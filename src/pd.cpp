@@ -45,7 +45,7 @@ const char *Pd::unprotected_pd_names[UNPROTECTED_PD_NUM] = {"root", "init", "ini
     "init -> usb_drv", "init -> usb_report_filter", "init -> usb_config_rom", "init -> usb_config_fs",
     "init -> top", "init -> cpu_load_display", "init -> trace_subject_reporter", "init -> overlay_from_disk",
     "init -> ram_fs", "init -> rump_fs", "init -> log_kernel", "init -> part_block", "init -> ahci_drv",
-    "init -> vbox1 -> VM", "nullptr"};//Never forget to terminate this by nullptr
+    "init -> vbox1 -> VM", "Unknown", "nullptr"};//Never forget to terminate this by nullptr
 
 //const char *Pd::unprotected_pd_names[UNPROTECTED_PD_NUM] = {"nullptr"};//Never forget to terminate this by nullptr
 

@@ -854,7 +854,7 @@ void Ec::save_state0() {
     regs_0 = regs;
     call_log_funct(Logstore::add_log_in_buffer, 0, "PE %llu Pd %s Ec %s Rip0 %lx:%lx", Counter::nb_pe, 
     getPd()->get_name(), get_name(), regs.ARG_IP, get_reg(RIP));
-    Cow_elt::place_phys0();
+    Cow_elt::free_current_pd_cowelts();
     Fpu::dwc_save(); // If FPU activated, save fpu state
     if (fpu)         // If fpu defined, save it 
         fpu->save_data();

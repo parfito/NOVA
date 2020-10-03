@@ -408,15 +408,12 @@ void Cow_elt::debug_rollback() {
 /**
  * reset pages to their original frames
  */
-void Cow_elt::place_phys0() {
+void Cow_elt::free_current_pd_cowelts() {
     cow_elts = &Pd::current->cow_elts;
     Cow_elt *d = nullptr;
     while(cow_elts->dequeue(d = cow_elts->head())) {
         free(d);
     }
-//    if(Ec::current->is_virutalcpu() && Pe_stack::rsp_tlb){
-//        Pe_stack::rsp_tlb->reserve_stack();
-//    }
 }
 
 void Cow_elt::free(Cow_elt* c){

@@ -200,9 +200,9 @@ void Ec::handle_vmx()
 
     mword reason = Vmcs::read (Vmcs::EXI_REASON) & 0xff;
     keep_cow = false;    
-    unsigned reason_vec = 0;
     Counter::vmi[reason][Pe::run_number]++;
 
+    unsigned reason_vec = 0;
     String *buff = new String(2*STR_MAX_LENGTH);
     char counter_buff[STR_MIN_LENGTH];
     uint64 counter_value = Lapic::read_instCounter();
@@ -210,9 +210,11 @@ void Ec::handle_vmx()
         String::print(counter_buff, "%#llx", counter_value);
     else
         String::print(counter_buff, "%llu", counter_value);
-    size_t n = String::print(buff->get_string(), "VMEXIT PE %llu guest rip %lx rsp %lx flags %lx CS %lx run_num %u counter %s reason %s", 
-            Counter::nb_pe, Vmcs::read(Vmcs::GUEST_RIP), Vmcs::read(Vmcs::GUEST_RSP), Vmcs::read(Vmcs::GUEST_RFLAGS), 
-            Vmcs::read(Vmcs::GUEST_SEL_CS), Pe::run_number, counter_buff, Vmcs::reason[reason]);
+    size_t n = String::print(buff->get_string(), "VMEXIT PE %llu guest rip %lx "
+            "rsp %lx flags %lx CS %lx run_num %u counter %s reason %s", 
+            Counter::nb_pe, Vmcs::read(Vmcs::GUEST_RIP), Vmcs::read(Vmcs::GUEST_RSP), 
+            Vmcs::read(Vmcs::GUEST_RFLAGS), Vmcs::read(Vmcs::GUEST_SEL_CS), 
+            Pe::run_number, counter_buff, Vmcs::reason[reason]);
     if(reason == Vmcs::VMX_EXTINT) {
         reason_vec = Vmcs::read (Vmcs::EXI_INTR_INFO) & 0xff;
         String::print(buff->get_string()+n, " vec %u", reason_vec);
@@ -226,21 +228,27 @@ void Ec::handle_vmx()
                 copy_string(buff->get_string()+n, " NM", STR_MAX_LENGTH + 50 - n);
                 break;
             case 0x30e: // #PF
-                String::print(buff->get_string()+n, " PF %lx:%lx ", Vmcs::read (Vmcs::EXI_QUALIFICATION), 
-                        Vmcs::read (Vmcs::EXI_INTR_ERROR));    
+                String::print(buff->get_string()+n, " PF %lx:%lx ", 
+                    Vmcs::read (Vmcs::EXI_QUALIFICATION), Vmcs::read (Vmcs::EXI_INTR_ERROR));    
                 break;
             default:
-                String::print(buff->get_string()+n, " Don't know this VMX_EXTINT %lx", intr_info & 0x7ff);
+                String::print(buff->get_string()+n, " Don't know this VMX_EXTINT %lx", 
+                    intr_info & 0x7ff);
         } 
     } else if (reason == Vmcs::VMX_MTF) {
         copy_string(buff->get_string()+n, " VMX_MTF", STR_MAX_LENGTH + 50 - n);
     }
-    call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 0, "%s %s", buff->get_string(), vmlaunch ? "VMLAUNCH" : "VMRESUME");
+    call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 0, "%s %s", 
+            buff->get_string(), vmlaunch ? "VMLAUNCH" : "VMRESUME");
     delete buff;
 
-    if(Pe::run_number == 1 && step_reason == SR_NIL && run1_reason == PES_PMI && reason_vec != 164) {
+    if(Pe::run_number == 1 && step_reason == SR_NIL && run1_reason == PES_PMI && 
+        reason != Vmcs::VMX_EXTINT) {
 // What are your doing here? Actually, it means 2nd run exceeds 1st run and trigger exception
 // In this case, PMI must be pending and should be served just after IRET
+        call_log_funct(Logstore::add_entry_in_buffer, 1, "Warning : An interrupt "
+                "(other VMX_EXTINT  - than PMI or Timer - ) happens in 2nd run "
+                "when 1st run was stopped by PMI");
         ret_user_vmresume();
     }
 
@@ -292,9 +300,12 @@ void Ec::vmx_disable_single_step() {
             nb_inst_single_step++;
             mword current_rip = Vmcs::read(Vmcs::GUEST_RIP);
             if(nb_inst_single_step > nbInstr_to_execute + 5) {
-                call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 2, "SR_PMI Run %d Lost in Single stepping nb_inst_single_step %llu "
-                "nbInstr_to_execute %llu first_run_instr_number %llu second_run_instr_number %llu Pd %s Ec %s", Pe::run_number, nb_inst_single_step, 
-                nbInstr_to_execute, first_run_instr_number, second_run_instr_number, Pd::current->get_name(), Ec::current->get_name());
+                call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 2, 
+                    "SR_PMI Run %d Lost in Single stepping nb_inst_single_step %llu "
+                    "nbInstr_to_execute %llu first_run_instr_number %llu "
+                    "second_run_instr_number %llu Pd %s Ec %s", Pe::run_number, 
+                    nb_inst_single_step, nbInstr_to_execute, first_run_instr_number, 
+                    second_run_instr_number, Pd::current->get_name(), Ec::current->get_name());
             }
 //            if (nbInstr_to_execute > 0)
 //                nbInstr_to_execute--;
@@ -305,9 +316,13 @@ void Ec::vmx_disable_single_step() {
                 Register cmp = current->compare_regs();
                 // It may happen that this is the final instruction
                 if (cmp) {
-                    call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 0, "SR_PMI Run %d REP_PREF %s is different %lx:%lx:%lx:%lx nbSS %llu nbInstToExec %llu Pd %s Ec %s", Pe::run_number, 
-                    reg_names[cmp], current->get_reg(cmp, 0), current->get_reg(cmp, 1), current->get_reg(cmp, 2), current->get_reg(cmp), 
-                    nb_inst_single_step, nbInstr_to_execute, Pd::current->get_name(), Ec::current->get_name());
+                    call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 0, 
+                    "SR_PMI Run %d REP_PREF %s is different %lx:%lx:%lx:%lx nbSS "
+                    "%llu nbInstToExec %llu Pd %s Ec %s", Pe::run_number, 
+                    reg_names[cmp], current->get_reg(cmp, 0), current->get_reg(cmp, 1), 
+                    current->get_reg(cmp, 2), current->get_reg(cmp), 
+                    nb_inst_single_step, nbInstr_to_execute, Pd::current->get_name(), 
+                    Ec::current->get_name());
                 } else {
                     disable_mtf();
                     if(Pe::inState1) {
@@ -325,9 +340,13 @@ void Ec::vmx_disable_single_step() {
             } else {
                 Register cmp = current->compare_regs();
                 if (cmp) {
-                    call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 0, "SR_PMI Run %d : %s is different %lx:%lx:%lx:%lx nbSS %llu nbInstToExec %llu Pd %s Ec %s", Pe::run_number, 
-                    reg_names[cmp], current->get_reg(cmp, 0), current->get_reg(cmp, 1), current->get_reg(cmp, 2), current->get_reg(cmp), 
-                    nb_inst_single_step, nbInstr_to_execute, Pd::current->get_name(), Ec::current->get_name());
+                    call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 0, 
+                    "SR_PMI Run %d : %s is different %lx:%lx:%lx:%lx nbSS %llu "
+                    "nbInstToExec %llu Pd %s Ec %s", Pe::run_number, 
+                    reg_names[cmp], current->get_reg(cmp, 0), current->get_reg(cmp, 1), 
+                    current->get_reg(cmp, 2), current->get_reg(cmp), 
+                    nb_inst_single_step, nbInstr_to_execute, Pd::current->get_name(), 
+                    Ec::current->get_name());
                     vmx_enable_single_step(SR_PMI);
 //                    nbInstr_to_execute = 1;
                     ret_user_vmresume();
@@ -365,9 +384,13 @@ void Ec::vmx_disable_single_step() {
             nb_inst_single_step++;
             mword current_rip = Vmcs::read(Vmcs::GUEST_RIP);
             if(nb_inst_single_step > nbInstr_to_execute) {
-                call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 2, "SR_EQU Run %d Lost in Single stepping nb_inst_single_step %llu nbInstr_to_execute %llu "
-                "first_run_instr_number %llu second_run_instr_number %llu Pd %s Ec %s", Pe::run_number, nb_inst_single_step, nbInstr_to_execute, 
-                first_run_instr_number, second_run_instr_number, Pd::current->get_name(), Ec::current->get_name());
+                call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 2, 
+                "SR_EQU Run %d Lost in Single stepping nb_inst_single_step %llu "
+                "nbInstr_to_execute %llu first_run_instr_number %llu "
+                "second_run_instr_number %llu Pd %s Ec %s", Pe::run_number, 
+                nb_inst_single_step, nbInstr_to_execute, first_run_instr_number, 
+                second_run_instr_number, Pd::current->get_name(), 
+                Ec::current->get_name());
             }
             nb_inst_single_step++;
 //            if (nbInstr_to_execute > 0)
@@ -379,9 +402,13 @@ void Ec::vmx_disable_single_step() {
                 // It may happen that this is the final instruction
                 Register cmp = current->compare_regs();
                 if (cmp) {
-                    call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 0, "SR_EQU && REP_PREF Run %d %s is different %lx:%lx:%lx:%lx nbSS %llu nbInstToExec %llu Pd %s Ec %s", 
-                    Pe::run_number, reg_names[cmp], current->get_reg(cmp, 0), current->get_reg(cmp, 1), current->get_reg(cmp, 2), 
-                    current->get_reg(cmp), nb_inst_single_step, nbInstr_to_execute, Pd::current->get_name(), Ec::current->get_name());
+                    call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 0, 
+                    "SR_EQU && REP_PREF Run %d %s is different %lx:%lx:%lx:%lx "
+                    "nbSS %llu nbInstToExec %llu Pd %s Ec %s", Pe::run_number, 
+                    reg_names[cmp], current->get_reg(cmp, 0), current->get_reg(cmp, 1), 
+                    current->get_reg(cmp, 2), current->get_reg(cmp), 
+                    nb_inst_single_step, nbInstr_to_execute, Pd::current->get_name(), 
+                    Ec::current->get_name());
                  } else {
                     disable_mtf();
                     if(Pe::inState1) {
@@ -394,9 +421,12 @@ void Ec::vmx_disable_single_step() {
             //here, single stepping 2nd run should be ok
             Register cmp = current->compare_regs();
             if (cmp) {
-                call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 0, "SR_EQU Run %d %s is different %lx:%lx:%lx:%lx nbSS %llu nbInstToExec %llu Pd %s Ec %s", 
-                Pe::run_number, reg_names[cmp], current->get_reg(cmp, 0), current->get_reg(cmp, 1), current->get_reg(cmp, 2), 
-                current->get_reg(cmp), nb_inst_single_step, nbInstr_to_execute, Pd::current->get_name(), Ec::current->get_name());
+                call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 0, 
+                "SR_EQU Run %d %s is different %lx:%lx:%lx:%lx nbSS %llu "
+                "nbInstToExec %llu Pd %s Ec %s", Pe::run_number, reg_names[cmp], 
+                current->get_reg(cmp, 0), current->get_reg(cmp, 1), current->get_reg(cmp, 2), 
+                current->get_reg(cmp), nb_inst_single_step, nbInstr_to_execute, 
+                Pd::current->get_name(), Ec::current->get_name());
                 // single stepping the first run with 2 credits instructions
                 if (nb_inst_single_step == nbInstr_to_execute) { 
                     if(!run_switched) {
@@ -411,11 +441,16 @@ void Ec::vmx_disable_single_step() {
                         run_switched = true;
                         enable_mtf();
                     } else {
-                        call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 2, "SR_EQU Run %d run_switched but %s is different %lx:%lx:%lx:%lx nb_inst_single_step %llu "
-                        "nbInstr_to_execute %llu first_run_instr_number %llu second_run_instr_number %llu Pd %s Ec %s", 
-                        Pe::run_number, reg_names[cmp], current->get_reg(cmp, 0), current->get_reg(cmp, 1), current->get_reg(cmp, 1),
-                        current->get_reg(cmp), nb_inst_single_step, nbInstr_to_execute, first_run_instr_number, second_run_instr_number, 
-                        Pd::current->get_name(), Ec::current->get_name());                      
+                        call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 2, 
+                        "SR_EQU Run %d run_switched but %s is different %lx:%lx:%lx:%lx "
+                        "nb_inst_single_step %llu nbInstr_to_execute %llu "
+                        "first_run_instr_number %llu second_run_instr_number %llu "
+                        "Pd %s Ec %s", Pe::run_number, reg_names[cmp], 
+                        current->get_reg(cmp, 0), current->get_reg(cmp, 1), 
+                        current->get_reg(cmp, 1), current->get_reg(cmp), 
+                        nb_inst_single_step, nbInstr_to_execute, first_run_instr_number, 
+                        second_run_instr_number, Pd::current->get_name(),
+                        Ec::current->get_name());                      
                     }
                     ret_user_vmresume();
                 } else { // relaunch the first run without restoring the second execution state
