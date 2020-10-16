@@ -128,7 +128,7 @@ void Vmcs::init()
             return;
         }
     }
-    
+//    assert(has_mtf());
     fix_cr0_set =  Msr::read<mword>(Msr::IA32_VMX_CR0_FIXED0);
     fix_cr0_clr = ~Msr::read<mword>(Msr::IA32_VMX_CR0_FIXED1);
     fix_cr4_set =  Msr::read<mword>(Msr::IA32_VMX_CR4_FIXED0);

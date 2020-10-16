@@ -31,6 +31,7 @@
 #include "pe.hpp"
 #include "hip.hpp"
 
+bool Vtlb::sysenter_eip_is_cowed = false, Vtlb::sysenter_eip1_is_cowed = false;
 size_t Vtlb::gwalk (Exc_regs *regs, mword gla, mword &gpa, mword &attr, mword &error)
 {
     if (EXPECT_FALSE (!(regs->cr0_shadow & Cpu::CR0_PG))) {
@@ -112,6 +113,7 @@ size_t Vtlb::hwalk (mword gpa, mword &hpa, mword &attr, mword &error)
 
 Vtlb::Reason Vtlb::miss (Exc_regs *regs, mword virt, mword &error, Queue<Cow_field> *cow_fields)
 {
+    assert(cow_fields);
     mword phys, attr = TLB_U | TLB_W | TLB_P;
     Paddr host;
     char buff[STR_MAX_LENGTH];
@@ -180,26 +182,72 @@ Vtlb::Reason Vtlb::miss (Exc_regs *regs, mword virt, mword &error, Queue<Cow_fie
 
             attr |= TLB_S;
         }
-        if((tlb->addr() == (host & ~PAGE_MASK)) && tlb->is_cow(virt, phys, error, cow_fields))
+        if((tlb->addr() == (host & ~PAGE_MASK)) && tlb->is_cow(virt, phys, error, cow_fields)){
+            if(virt == Vmcs::read(Vmcs::GUEST_RSP)) {
+                Ec::remove_resume_flag();
+                Ec::guest_single_step_rsp = virt;
+                Ec::guest_rsp_phys = host;
+            }
             return SUCCESS;
+        }
         Ec::check_memory(Ec::PES_VMX_EXC);
+        mword guest_idt = Vmcs::read(Vmcs::GUEST_BASE_IDTR);
+        if(guest_idt && (virt & ~PAGE_MASK) == guest_idt) {
+            mword guest_rip = Vmcs::read(Vmcs::GUEST_RIP);
+            Paddr hpa_rip;
+            mword attrib;
+            mword *rip_ptr; 
+            Vtlb* vtlb = nullptr;
+            char instruction[STR_MIN_LENGTH];
+            if(regs->vtlb->lookup(static_cast<uint64>(guest_rip), hpa_rip, attrib, vtlb)){
+                rip_ptr = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, 
+                    hpa_rip, 3, sizeof(mword)));
+                assert(rip_ptr);
+                instruction_in_hex(*rip_ptr, instruction);
+            } else {
+                String::print(instruction, "VM RIP NOT MAPPED");
+            }
+            call_log_funct(Logstore::add_entry_in_buffer, 0, "Page fault on Guest IDT"
+                " %lx tlb_val %llx err %lx rip %lx instr %s PE %llu", guest_idt, tlb->val, 
+                error, guest_rip, instruction, Counter::nb_pe);
+        }
+        mword guest_sysenter_eip = Vmcs::read(Vmcs::GUEST_SYSENTER_EIP);
+        if(guest_sysenter_eip && ((virt & ~PAGE_MASK) == (guest_sysenter_eip & ~PAGE_MASK))){
+            if(sysenter_eip_is_cowed && (virt == guest_sysenter_eip)) {
+                call_log_funct(Logstore::add_entry_in_buffer, 0, "Page fault on Guest SYSENTER EIP"
+                    " %lx tlb_val %llx err %lx PE %llu", guest_sysenter_eip, tlb->val, 
+                    error, Counter::nb_pe);
+            } 
+            tlb->val |= TLB_P;
+        }
+        guest_sysenter_eip = Vmcs::read(Vmcs::GUEST_SYSENTER_EIP) + 0x1000;
+        if(guest_sysenter_eip && ((virt & ~PAGE_MASK) == (guest_sysenter_eip & ~PAGE_MASK))){
+            if(sysenter_eip1_is_cowed && (virt == guest_sysenter_eip)) {
+                call_log_funct(Logstore::add_entry_in_buffer, 0, "Page fault on Guest SYSENTER EIP"
+                    " %lx tlb_val %llx err %lx PE %llu", guest_sysenter_eip, tlb->val, 
+                    error, Counter::nb_pe);
+            } 
+            tlb->val |= TLB_P;
+        }
+        bool cowed = false;
         if((attr & TLB_W) && (attr & TLB_P)) {
             attr &= ~TLB_W;
             tlb->val = static_cast<typeof tlb->val>((host & ~((1UL << shift) - 1)) | attr | TLB_D | TLB_A);
-            assert(cow_fields);
             Cow_field::set_cow(cow_fields, virt, true);
-        } else if(cow_fields){
-//            trace(0, "set_cow false for %lx", virt);
+            cowed = true;
+        } else {
             Cow_field::set_cow(cow_fields, virt, false);            
             tlb->val = static_cast<typeof tlb->val>((host & ~((1UL << shift) - 1)) | attr | TLB_D | TLB_A);
         }
         if(Hip::is_mmio(host & ~PAGE_MASK)){
             trace(0, "Vtlb is MMIO");
         }
-//          trace (TRACE_VTLB, "VTLB Miss SUCCESS CR3:%#010lx A:%#010lx P:%#010lx A:%#lx E:%#lx TLB:%#016llx GuestIP %#lx", 
-//                regs->cr3_shadow, virt, phys, attr, error, tlb->val, Vmcs::read(Vmcs::GUEST_RIP));
-        call_log_funct(Logstore::add_entry_in_buffer, 0, "VTLB SUCCESS Pe %llu CR3:%#010lx vtlb %p virt %lx gpa %lx hpa %lx tlb %p tlb->val %llx err %lx", 
-            Counter::nb_pe, regs->cr3_shadow, regs->vtlb, virt, phys, host, tlb, tlb->val, error);
+        trace (TRACE_VTLB, "VTLB Miss SUCCESS CR3:%#010lx A:%#010lx P:%#010lx A:%#lx "
+                "E:%#lx", regs->cr3_shadow, virt, phys, attr, error);
+        call_log_funct(Logstore::add_entry_in_buffer, 0, "VTLB SUCCESS Pe %llu "
+            "CR3:%#010lx virt %lx gpa %lx hpa %lx tlb->val %llx err %lx %s", 
+            Counter::nb_pe, regs->cr3_shadow, virt, phys, host, tlb->val, error,
+            cowed ? "Cowed" : "DeCowed");
         return SUCCESS;
     }
 }
@@ -261,18 +309,17 @@ bool Vtlb::is_cow(mword virt, mword gpa, mword error, Queue<Cow_field> *cow_fiel
     if(Cow_field::is_cowed(cow_fields, virt) && (tlb_attr & TLB_P) && !(tlb_attr & TLB_W)) {
         mword hpa, ept_attr;
         size_t size = Pd::current->Space_mem::ept.lookup (gpa, hpa, ept_attr);
-        char buff[STR_MAX_LENGTH + 50];
-        size_t n = String::print(buff, "TLB_COW Pe %llu v: %lx tlb->addr: %lx attr %lx gpa %lx hpa %lx size %lx", 
-            Counter::nb_pe, virt, addr(), tlb_attr, gpa, hpa, size);
+        call_log_funct(Logstore::add_entry_in_buffer, 0, "TLB_COW Pe %llu v: %lx "
+            "tlb->addr: %lx attr %lx gpa %lx hpa %lx size %lx", Counter::nb_pe, 
+            virt, addr(), tlb_attr, gpa, hpa, size);
         if (size && (addr() == (hpa & ~PAGE_MASK))) { 
             Counter::vtlb_cow_fault++;   
             assert(virt != Pe_stack::stack); 
             Cow_elt::resolve_cow_fault(this, nullptr, virt, addr(), tlb_attr);
-            String::print(buff+n, " IS_COW new tlb->val %llx", val);
-            Logstore::add_entry_in_buffer(buff);
+            call_log_funct(Logstore::append_entry_in_buffer, 0, " IS_COW new "
+            "tlb->val %llx", val);
             return true;            
         } else {
-            Logstore::add_entry_in_buffer(buff);
             return false;
         }
     } else {
@@ -329,27 +376,98 @@ void Vtlb::reserve_stack(Queue<Cow_field> *cow_fields){
         (vtlb_attr & TLB_P) && !(vtlb_attr & TLB_W))
         Cow_elt::resolve_cow_fault(tlb, nullptr, guest_rsp, vtlb_hpa, vtlb_attr);
     
-    mword guest_rip = Vmcs::read(Vmcs::GUEST_RIP);
-    
-    if(guest_rip != 0xc06b014a)
-        return;
+    vtlb_hpa = vtlb_attr = 0;
+    tlb = nullptr;
     mword guest_idt = Vmcs::read(Vmcs::GUEST_BASE_IDTR);
-    size_vtlb = lookup(guest_idt, vtlb_hpa, vtlb_attr, tlb);
-    if(size_vtlb && Cow_field::is_cowed(cow_fields, guest_idt) && 
+    if(guest_idt && lookup(guest_idt, vtlb_hpa, vtlb_attr, tlb) && 
+            Cow_field::is_cowed(cow_fields, guest_idt) && 
             (vtlb_attr & TLB_P) && !(vtlb_attr & TLB_W)) {
-//        call_log_funct(Logstore::add_entry_in_buffer, 1, "VTLB GUEST_IDT tlb "
-//            "val %llx vtlb_attr %lx guest_idt %lx PE %llu", tlb->val, vtlb_attr, 
-//            guest_idt, Counter::nb_pe);
+        uint64 prev_val = tlb->val;
         Cow_elt::resolve_cow_fault(tlb, nullptr, guest_idt, vtlb_hpa, vtlb_attr);
+        call_log_funct(Logstore::add_entry_in_buffer, 0, "VTLB GUEST_IDT tlb "
+            "val %llx:%llx vtlb_attr %lx guest_idt %lx PE %llu", prev_val, tlb->val, vtlb_attr, 
+            guest_idt, Counter::nb_pe);
+//        tlb->val &= ~TLB_P;
     }
+    
+    vtlb_hpa = vtlb_attr = 0;
+    tlb = nullptr;
+    mword guest_sysenter_esp = Vmcs::read(Vmcs::GUEST_SYSENTER_ESP);
+    if(guest_sysenter_esp && (guest_sysenter_esp != guest_rsp) && 
+        lookup(guest_sysenter_esp, vtlb_hpa, vtlb_attr, tlb) && 
+        Cow_field::is_cowed(cow_fields, guest_sysenter_esp) && 
+        (vtlb_attr & TLB_P) && !(vtlb_attr & TLB_W)) {
+        uint64 prev_val = tlb->val;
+        Cow_elt::resolve_cow_fault(tlb, nullptr, guest_sysenter_esp, vtlb_hpa, vtlb_attr);
+        call_log_funct(Logstore::add_entry_in_buffer, 0, "VTLB GUEST_SYSENTER_ESP tlb "
+            "val %llx:%llx vtlb_attr %lx guest_sysenter_esp %lx PE %llu", prev_val, tlb->val, vtlb_attr, 
+            guest_sysenter_esp, Counter::nb_pe);
+    }
+    
+    vtlb_hpa = vtlb_attr = 0;
+    tlb = nullptr;
+    mword guest_sysenter_eip = Vmcs::read(Vmcs::GUEST_SYSENTER_EIP);
+    if(guest_sysenter_eip && lookup(guest_sysenter_eip, vtlb_hpa, vtlb_attr, tlb)
+            && (vtlb_attr & TLB_P)) {
+        if(sysenter_eip_is_cowed) {
+            sysenter_eip_is_cowed = false;
+        } else { 
+            tlb->val &= ~TLB_P ;
+            sysenter_eip_is_cowed = true;
+            call_log_funct(Logstore::add_entry_in_buffer, 0, "VTLB GUEST_SYSENTER_EIP tlb "
+                "val %llx vtlb_attr %lx guest_sysenter_eip %lx PE %llu", tlb->val, vtlb_attr, 
+                guest_sysenter_eip, Counter::nb_pe);            
+        }
+    }
+    
+    vtlb_hpa = vtlb_attr = 0;
+    tlb = nullptr;
+    guest_sysenter_eip = Vmcs::read(Vmcs::GUEST_SYSENTER_EIP) + 0x1000;
+    if(guest_sysenter_eip && lookup(guest_sysenter_eip, vtlb_hpa, vtlb_attr, tlb)
+            && (vtlb_attr & TLB_P)) {
+        if(sysenter_eip1_is_cowed) {
+            sysenter_eip1_is_cowed = false;
+        } else { 
+            tlb->val &= ~TLB_P ;
+            sysenter_eip1_is_cowed = true;
+            call_log_funct(Logstore::add_entry_in_buffer, 0, "VTLB GUEST_SYSENTER_EIP tlb "
+                "val %llx vtlb_attr %lx guest_sysenter_eip %lx PE %llu", tlb->val, vtlb_attr, 
+                guest_sysenter_eip, Counter::nb_pe);            
+        }
+    }
+    
+    if(Vmcs::read(Vmcs::GUEST_RIP) != 0xc06b014a)
+        return;
+   
+    vtlb_hpa = vtlb_attr = 0;
+    tlb = nullptr;
     mword guest_gdt = Vmcs::read(Vmcs::GUEST_BASE_GDTR);
     size_vtlb = lookup(guest_gdt, vtlb_hpa, vtlb_attr, tlb);
     if(size_vtlb && Cow_field::is_cowed(cow_fields, guest_gdt) && 
-            (vtlb_attr & TLB_P) && !(vtlb_attr & TLB_W)) {
+           tlb && (vtlb_attr & TLB_P) && !(vtlb_attr & TLB_W)) {
 //        call_log_funct(Logstore::add_entry_in_buffer, 1, "VTLB GUEST_GDT tlb "
 //            "val %llx vtlb_attr %lx guest_gdt %lx PE %llu", tlb->val, vtlb_attr, 
 //            guest_gdt, Counter::nb_pe);
         Cow_elt::resolve_cow_fault(tlb, nullptr, guest_gdt, vtlb_hpa, vtlb_attr);
     }
         
+}
+
+void Vtlb::map_address(mword virt, Queue<Cow_field> *cow_fields) {
+    Paddr vtlb_hpa;
+    mword vtlb_attr;
+    Vtlb *tlb = nullptr;
+    if(virt && lookup(virt, vtlb_hpa, vtlb_attr, tlb) && 
+            (vtlb_attr & TLB_P)) {
+        uint64 prev_val = tlb->val;
+        if(cow_fields){
+            if(!(vtlb_attr & TLB_W) && Cow_field::is_cowed(cow_fields, virt))
+                Cow_elt::resolve_cow_fault(tlb, nullptr, virt, vtlb_hpa, vtlb_attr);
+        } else {
+            tlb->val &= ~TLB_P;
+        }
+        call_log_funct(Logstore::add_entry_in_buffer, 0, "VTLB GUEST_IDT tlb "
+            "val %llx:%llx vtlb_attr %lx guest_idt %lx PE %llu", prev_val, tlb->val, vtlb_attr, 
+            virt, Counter::nb_pe);
+    }
 }

@@ -261,6 +261,7 @@ public:
         SR_EQU      = 7,
         SR_VMIO     = 8,
         SR_GPF      = 9,
+        SR_RFLAG    = 10,
     };
 
     enum PE_stopby {
@@ -326,7 +327,8 @@ public:
         CMP_TWO_RUN = 1,
         STORE_RUN_STATE = 2,
     };
-    static mword prev_rip, instruction_value, tscp_rcx1, tscp_rcx2, vmlaunch;
+    static mword prev_rip, instruction_value, tscp_rcx1, tscp_rcx2, vmlaunch, 
+        guest_single_step_rsp;
     static uint64 counter1, counter2, exc_counter, exc_counter1, exc_counter2, debug_compteur, 
     count_je, nbInstr_to_execute, tsc1, tsc2, nb_inst_single_step, second_run_instr_number, 
     first_run_instr_number, distance_instruction, second_max_instructions;
@@ -336,6 +338,7 @@ public:
     no_further_check, run_switched, keep_cow, single_stepped;
     static int run1_reason, previous_ret, nb_try;
     static const char* reg_names[24], *launches[6], *pe_stop[27];
+    static Paddr guest_rsp_phys;
     
     Ec(Pd *, void (*)(), unsigned, char const *nm = "Unknown");
     Ec(Pd *, mword, Pd *, void (*)(), unsigned, unsigned, mword, mword, Pt *, 
@@ -675,6 +678,7 @@ public:
     static void disable_rdtsc();
     static void enable_mtf();
     static void disable_mtf();
+    static void remove_resume_flag();
     NORETURN
     static void vmx_enable_single_step(Step_reason);
     static void vmx_emulate_rdtsc(bool);

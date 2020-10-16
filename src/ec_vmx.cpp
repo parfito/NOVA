@@ -203,45 +203,48 @@ void Ec::handle_vmx()
     Counter::vmi[reason][Pe::run_number]++;
 
     unsigned reason_vec = 0;
-    String *buff = new String(2*STR_MAX_LENGTH);
     char counter_buff[STR_MIN_LENGTH];
     uint64 counter_value = Lapic::read_instCounter();
     if(counter_value >= Lapic::perf_max_count - MAX_INSTRUCTION)
         String::print(counter_buff, "%#llx", counter_value);
     else
         String::print(counter_buff, "%llu", counter_value);
-    size_t n = String::print(buff->get_string(), "VMEXIT PE %llu guest rip %lx "
-            "rsp %lx flags %lx CS %lx run_num %u counter %s reason %s", 
-            Counter::nb_pe, Vmcs::read(Vmcs::GUEST_RIP), Vmcs::read(Vmcs::GUEST_RSP), 
-            Vmcs::read(Vmcs::GUEST_RFLAGS), Vmcs::read(Vmcs::GUEST_SEL_CS), 
-            Pe::run_number, counter_buff, Vmcs::reason[reason]);
+    call_log_funct(Logstore::add_entry_in_buffer, 0, "VMEXIT PE %llu rip %lx "
+        "rsp %lx flags %lx CS %lx run %u counter %s reason %s", 
+        Counter::nb_pe, Vmcs::read(Vmcs::GUEST_RIP), Vmcs::read(Vmcs::GUEST_RSP), 
+        Vmcs::read(Vmcs::GUEST_RFLAGS), Vmcs::read(Vmcs::GUEST_SEL_CS), 
+        Pe::run_number, counter_buff, Vmcs::reason[reason]);
     if(reason == Vmcs::VMX_EXTINT) {
         reason_vec = Vmcs::read (Vmcs::EXI_INTR_INFO) & 0xff;
-        String::print(buff->get_string()+n, " vec %u", reason_vec);
+        call_log_funct(Logstore::append_entry_in_buffer, 0, "vec %u", reason_vec);
     } else if(reason == Vmcs::VMX_EXC_NMI) {
         mword intr_info = Vmcs::read (Vmcs::EXI_INTR_INFO);
         switch(intr_info & 0x7ff) {
             case 0x202: // NMI
-                copy_string(buff->get_string()+n, " NMI", 2*STR_MAX_LENGTH - n);
+                call_log_funct(Logstore::append_entry_in_buffer, 0, "NMI");
                 break;
             case 0x307: // #NM
-                copy_string(buff->get_string()+n, " NM", 2*STR_MAX_LENGTH - n);
+                call_log_funct(Logstore::append_entry_in_buffer, 0, "NM");
                 break;
             case 0x30e: // #PF
-                String::print(buff->get_string()+n, " PF %lx:%lx ", 
+                call_log_funct(Logstore::append_entry_in_buffer, 0, "PF %lx:%lx ", 
                     Vmcs::read (Vmcs::EXI_QUALIFICATION), Vmcs::read (Vmcs::EXI_INTR_ERROR));    
                 break;
             default:
-                String::print(buff->get_string()+n, " Don't know this VMX_EXTINT %lx", 
+                call_log_funct(Logstore::append_entry_in_buffer, 0, "Don't know "
+                        "this VMX_EXC %lx", 
                     intr_info & 0x7ff);
         } 
+    } else if (reason == Vmcs::VMX_CR) {
+        mword qual = Vmcs::read (Vmcs::EXI_QUALIFICATION);
+        unsigned cr  = qual      & 0xf;        
+        call_log_funct(Logstore::append_entry_in_buffer, 0, "VMX_CR %u", cr);
     } else if (reason == Vmcs::VMX_MTF) {
-        copy_string(buff->get_string()+n, " VMX_MTF", 2*STR_MAX_LENGTH - n);
+        call_log_funct(Logstore::append_entry_in_buffer, 0, "VMX_MTF");
     }
-    call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 0, "%s %s", 
-            buff->get_string(), vmlaunch ? "VMLAUNCH" : "VMRESUME");
-    delete buff;
-
+    call_log_funct(Logstore::append_entry_in_buffer, 0, "%s", vmlaunch ? 
+        "VMLAUNCH" : "VMRESUME");
+   
     if(Pe::run_number == 1 && step_reason == SR_NIL && run1_reason == PES_PMI && 
         reason != Vmcs::VMX_EXTINT) {
 // What are your doing here? Actually, it means 2nd run exceeds 1st run and trigger exception
@@ -467,6 +470,17 @@ void Ec::vmx_disable_single_step() {
             }
             break;
         }
+        case SR_RFLAG: {
+            if(guest_single_step_rsp == Vmcs::read(Vmcs::GUEST_RSP) + 0xc){
+                mword* rsp_map = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, 
+                    guest_rsp_phys + 0x8, 3, sizeof(mword)));
+                *rsp_map = (*rsp_map) & ~Cpu::EFL_RF;
+            }
+            disable_mtf();
+            call_log_funct(Logstore::add_entry_in_buffer, 0, 
+                "Resume flag removed after one instruction");
+            break;
+        }
         default:
             Console::panic("No step Reason");
     }
@@ -593,7 +607,7 @@ void Ec::disable_rdtsc() {
 }
 
 void Ec::enable_mtf() {
-    if (!Vmcs::has_mtf()) return;
+//    assert(Vmcs::has_mtf());
     mword val = Vmcs::read(Vmcs::CPU_EXEC_CTRL0);
     val |= Vmcs::CPU_MONITOR_TRAP_FLAG;
     Vmcs::write(Vmcs::CPU_EXEC_CTRL0, val);
@@ -606,3 +620,8 @@ void Ec::disable_mtf() {
     step_reason = SR_NIL;
 }
 
+void Ec::remove_resume_flag(){
+    call_log_funct(Logstore::add_entry_in_buffer, 0, "Removing resume flag");
+    step_reason = SR_RFLAG;
+    enable_mtf();
+}

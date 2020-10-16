@@ -43,7 +43,8 @@
 #include "log_store.hpp"
 #include "pending_int.hpp"
 
-mword Ec::prev_rip = 0, Ec::tscp_rcx1 = 0, Ec::tscp_rcx2 = 0, Ec::vmlaunch;
+mword Ec::prev_rip = 0, Ec::tscp_rcx1 = 0, Ec::tscp_rcx2 = 0, Ec::vmlaunch, 
+        Ec::guest_single_step_rsp;
 bool Ec::hardening_started = false, Ec::in_rep_instruction = false, Ec::not_nul_cowlist = false, 
         Ec::no_further_check = false, Ec::run_switched = false, Ec::keep_cow = false, 
         Ec::single_stepped = false;
@@ -56,6 +57,8 @@ uint64 Ec::exc_counter = 0, Ec::exc_counter1 = 0, Ec::exc_counter2 = 0, Ec::coun
 uint8 Ec::launch_state = 0, Ec::step_reason = 0, Ec::debug_nb = 0, 
         Ec::debug_type = 0, Ec::replaced_int3_instruction, Ec::replaced_int3_instruction2;
 uint64 Ec::tsc1 = 0, Ec::tsc2 = 0;
+Paddr Ec::guest_rsp_phys;
+
 int Ec::run1_reason = 0, Ec::previous_ret = 0, Ec::nb_try = 0;
 const char* Ec::reg_names[24] = {"N/A", "RAX", "RBX", "RCX", "RDX", "RBP", "RDI", "RSI", "R8", 
 "R9", "R10", "R11", "R12", "R13", "R14", "R15", "RIP", "RSP", "RFLAG", "GUEST_RIP", "GUEST_RSP", 
@@ -426,8 +429,10 @@ void Ec::ret_user_vmresume() {
 
     if (EXPECT_FALSE(get_cr2() != current->regs.cr2))
         set_cr2(current->regs.cr2);
-    call_log_funct(Logstore::add_entry_in_buffer, 0, "VMResume : Run %d Ec %s Rip %lx CS %lx Counter %llx", Pe::run_number, 
-    current->get_name(), Vmcs::read(Vmcs::GUEST_RIP), Vmcs::read(Vmcs::GUEST_SEL_CS), Lapic::read_instCounter());
+    call_log_funct(Logstore::add_entry_in_buffer, 0, "VMResume : Run %d Ec %s "
+        "RIP %lx RSP %lx Counter %llx", Pe::run_number, current->get_name(), 
+        Vmcs::read(Vmcs::GUEST_RIP), Vmcs::read(Vmcs::GUEST_RSP), 
+        Lapic::read_instCounter());
     if(step_reason == SR_DBG)
         enable_mtf();
     asm volatile (EXPAND(LOAD_GPR_COUNT)

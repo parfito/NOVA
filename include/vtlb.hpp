@@ -49,7 +49,7 @@ class Vtlb : public Pte<Vtlb, uint64, 3,  9, false>
     public:
         static size_t gwalk (Exc_regs *, mword, mword &, mword &, mword &);
         static size_t hwalk (mword, mword &, mword &, mword &);
-
+        static bool sysenter_eip_is_cowed, sysenter_eip1_is_cowed;
         enum
         {
             TLB_P   = 1UL << 0,
@@ -90,6 +90,7 @@ class Vtlb : public Pte<Vtlb, uint64, 3,  9, false>
         void cow_update(Paddr, mword);
         size_t lookup(uint64, Paddr&, mword&, Vtlb* &);
         void reserve_stack(Queue<Cow_field> *);
+        void map_address(mword, Queue<Cow_field> * = nullptr);
         ALWAYS_INLINE
         static inline void *operator new (size_t, Quota &quota) { return Buddy::allocator.alloc (0, quota, Buddy::NOFILL); }
 

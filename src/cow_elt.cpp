@@ -158,34 +158,31 @@ Cow_elt* Cow_elt::is_mapped_elsewhere(Paddr phys, mword virt) {
         if (c->phys_addr[0] == phys) {//frame already mapped elsewhere
             mword ec_rip = Ec::current->get_reg(Ec::RIP), ec_rsp = Ec::current->get_reg(Ec::RSP), 
                 ec_rax = Ec::current->get_reg(Ec::RAX), attrib, ec_ss = 0, ec_es = 0;
-            Paddr hpa_rip, hpa_rip_122c012;
-            char ec_rip_122c012_content[STR_MIN_LENGTH];
+            Paddr hpa_rip;
+            char buff[STR_MIN_LENGTH];
             if (Ec::current->is_virutalcpu()) {
-                Ec::current->vtlb_lookup(static_cast<uint64>(0x122c012), hpa_rip_122c012, attrib);
-                Ec::current->vtlb_lookup(static_cast<uint64>(ec_rip), hpa_rip, attrib);
-                mword *rip_ptr_122c012 = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, 
-                    hpa_rip_122c012, 3, sizeof(mword)));
-                assert(rip_ptr_122c012);
-                instruction_in_hex(*rip_ptr_122c012, ec_rip_122c012_content);
-            
+                if(Ec::current->vtlb_lookup(static_cast<uint64>(ec_rip), hpa_rip, attrib)){
+                    mword *rip_ptr = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, 
+                        hpa_rip, 3, sizeof(mword)));
+                    instruction_in_hex(*rip_ptr, buff);
+                } else {
+                    String::print(buff, "VM RIP NOT MAPPED");
+                }
                 ec_ss = Vmcs::read(Vmcs::GUEST_SEL_SS);
                 ec_es = Vmcs::read(Vmcs::GUEST_SEL_ES);
             } else {
                 Pd::current->Space_mem::loc[Cpu::id].lookup(ec_rip, hpa_rip, attrib);
+                assert(hpa_rip);
+                mword *rip_ptr = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, 
+                    hpa_rip, 3, sizeof(mword)));
+                instruction_in_hex(*rip_ptr, buff);
             }
-            assert(hpa_rip);
-            mword *rip_ptr = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, 
-                hpa_rip, 3, sizeof(mword)));
-            assert(rip_ptr);
-            char buff[STR_MIN_LENGTH];
-            instruction_in_hex(*rip_ptr, buff);
-            
             call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 1, "Phys de virt = %lx Is already "
                 "mapped virt %lx Phys:%lx new_phys[0]:%lx new_phys[1]:%lx Rip0 %lx:%s Rsp0 %lx Rax0 %lx "
-                "ES0 %lx SS0 %lx Rip %lx:%s Rsp %lx Rax %lx ES %lx SS %lx rip_122c012_content %s", 
+                "ES0 %lx SS0 %lx Rip %lx:%s Rsp %lx Rax %lx ES %lx SS %lx", 
                 virt, c->page_addr, c->phys_addr[0], c->phys_addr[1], c->phys_addr[2], c->ec_rip, 
                 c->ec_rip_content, c->ec_rsp, c->ec_rax, c->ec_es, c->ec_ss, ec_rip, buff, ec_rsp, 
-                ec_rax, ec_es, ec_ss, ec_rip_122c012_content);
+                ec_rax, ec_es, ec_ss);
 //            assert(!c->v_is_mapped_elsewhere);
             return c;
         }

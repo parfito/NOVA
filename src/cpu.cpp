@@ -261,7 +261,7 @@ void Cpu::init()
     Vmcb::init();
 
     Mca::init();
-    char buff[STR_MIN_LENGTH];
+    char buff[STR_MAX_LENGTH];
     // 0x28 is the number of instructions counted as hypervisor's ones after vmresume 
 // 0x26 for qemu, 0x28 for simics (In the case of simics, 0x28 does not work all 
 // the time, especially at the beginning when guest's EIP is still 0x100 etc, so
@@ -270,7 +270,19 @@ void Cpu::init()
     if(family[Cpu::id] == 0x6 && model[Cpu::id] == 0x1a && stepping[Cpu::id] == 0x4) { // Simics on my Dell core i7
         nb_instruction_before_vmresume = 0x1a;
         nb_instruction_after_vmresume = 0x16;
-        String::print(buff, "Simics on Dell i7");
+        String::print(buff, "Simics ICH10 Corei7 on Dell i7");
+    } else if(family[Cpu::id] == 0x6 && model[Cpu::id] == 0x56 && stepping[Cpu::id] == 0x1){ // Qemu on my Dell core i5
+        nb_instruction_before_vmresume = 0x8;
+        nb_instruction_after_vmresume = 0x16;
+        String::print(buff, "Simics GrangeVille Broadwell xeon on Dell i7");
+    } else if(family[Cpu::id] == 0x6 && model[Cpu::id] == 0x3f && stepping[Cpu::id] == 0x0){ // Qemu on my Dell core i5
+        nb_instruction_before_vmresume = 0x8;
+        nb_instruction_after_vmresume = 0x16;
+        String::print(buff, "Simics ICH10 Broadwell xeon on Dell i7");
+    } else if(family[Cpu::id] == 0x6 && model[Cpu::id] == 0x1a && stepping[Cpu::id] == 0x4){ // Qemu on my Dell core i5
+        nb_instruction_before_vmresume = 0x2;
+        nb_instruction_after_vmresume = 0x0;
+        String::print(buff, "Simics QSP-x86 Corei7 on Dell i7");
     } else if(family[Cpu::id] == 0x6 && model[Cpu::id] == 0x45 && stepping[Cpu::id] == 0x1){ // Qemu on my Dell core i5
         nb_instruction_before_vmresume = 0x17;
         nb_instruction_after_vmresume = 0x14;

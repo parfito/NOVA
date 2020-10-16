@@ -348,8 +348,7 @@ size_t Table_logs::get_number() {
  * store new log to the logs'buffer
  * @param s
  */
-void Logstore::append_log_in_buffer(const char* s, bool to_be_traced){
-    if(!to_be_traced) return;
+void Logstore::append_log_in_buffer(const char* s){
     size_t size = strlen(s); 
     if(!log_on || !size)
         return;    
@@ -368,8 +367,7 @@ void Logstore::append_log_in_buffer(const char* s, bool to_be_traced){
  * store new log to the logs'buffer
  * @param s
  */
-void Logstore::add_log_in_buffer(const char* s, bool to_be_traced){
-    if(!to_be_traced) return;
+void Logstore::add_log_in_buffer(const char* s){
     size_t size = strlen(s); 
     if(!log_on || !size)
         return;    
@@ -390,8 +388,29 @@ void Logstore::add_log_in_buffer(const char* s, bool to_be_traced){
  * store new log entry to the entries'buffer
  * @param s
  */
-void Logstore::add_entry_in_buffer(const char* s, bool to_be_traced){
-    if(!to_be_traced) return;
+void Logstore::append_entry_in_buffer(const char* s){
+    size_t size = strlen(s); 
+    if(!log_on || !size)
+        return;    
+    if(entry_buffer_cursor + size + 1 > entry_buffer + (buffer_size - entry_offset)) {
+// We cannot store in the entry buffer beyond its size which is BUFFER_SIZE - ENTRY_OFFSET, 
+        char buff[STR_MAX_LENGTH];
+        size_t n = copy_string(buff, "Entry (Suite) for log ");
+        copy_string(buff + n, log_buffer, STR_MAX_LENGTH - n);
+        commit_buffer();
+        add_log_in_buffer(buff);
+    }
+    if(entry_buffer_cursor != entry_buffer)
+        *entry_buffer_cursor++ = ' '; // replace the final '\0' by new line
+    copy_string(entry_buffer_cursor, s, size + 1);        
+    entry_buffer_cursor += size; 
+}
+
+/**
+ * store new log entry to the entries'buffer
+ * @param s
+ */
+void Logstore::add_entry_in_buffer(const char* s){
     size_t size = strlen(s); 
     if(!log_on || !size)
         return;    
@@ -433,9 +452,9 @@ void Logstore::commit_buffer(){
  * Call a specif function of Logstore, Logstore::add_entry_in_buffer, Logstore::add_log_in_buffer, etc.
  * @param s
  */
-void Logstore::call(void (*funct)(const char*, bool), const char* s){
+void Logstore::call(void (*funct)(const char*), const char* s){
     size_t size = strlen(s); 
     if(!Ec::current->getPd()->is_to_be_traced() || !log_on || !size)
         return;
-    funct(s, true);    
+    funct(s);    
 }
