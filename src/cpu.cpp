@@ -248,12 +248,15 @@ void Cpu::init()
 
     setup_pcid();
 
-    mword cr4 = get_cr4() | Cpu::CR4_TSD;
-    if (EXPECT_TRUE (feature (FEAT_SMEP)))
-        cr4 |= Cpu::CR4_SMEP;
-    if (EXPECT_TRUE (feature (FEAT_SMAP)))
-        cr4 |= Cpu::CR4_SMAP;
-    if (cr4 != get_cr4())
+    mword cr4 = get_cr4();
+// Simics' broadwell processor like grangeville's Xeon, has these feature, but 
+// does not show it. So, we have to disable them all, whether a processor shows 
+// it or not.
+//    if (EXPECT_TRUE (feature (FEAT_SMEP))) 
+        cr4 &= ~Cpu::CR4_SMEP;
+//    if (EXPECT_TRUE (feature (FEAT_SMAP)))
+        cr4 &= ~Cpu::CR4_SMAP;
+//    if (cr4 != get_cr4())
         set_cr4 (cr4);
     disable_fast_string();
     
