@@ -244,15 +244,6 @@ bool Cow_elt::compare() {
             // because memcmp compare by grasp of 4 bytes
 //            int ratio = sizeof(mword)/4; // sizeof(mword) == 4 ? 1 ; sizeof(mword) == 8 ? 2
             size_t index = missmatch_addr/sizeof(mword);
-//            if(Ec::current->is_virutalcpu()){
-//                // Cow fault due to instruction side effect in VM kernel stack
-//                *(reinterpret_cast<mword*>(ptr1) + index) = *(reinterpret_cast<mword*>(ptr2) + index);
-//                crc1 = Crc::compute(0, ptr1, PAGE_SIZE);
-//                if(crc1 == crc2){
-//                    c->crc1 = crc1;
-//                    continue;
-//                }
-//            }
             mword val1 = *(reinterpret_cast<mword*>(ptr1) + index);
             mword val2 = *(reinterpret_cast<mword*>(ptr2) + index);
             // if in production, comment this and return true, for not to get too many unncessary 
@@ -265,14 +256,30 @@ bool Cow_elt::compare() {
             Paddr phys;
             mword attr;
             mword *rip_ptr;
-            bool to_continue = false;
+            bool is_resume_flag_set = false;
             if(Ec::current->is_virutalcpu()){
                 Ec::current->vtlb_lookup(static_cast<uint64>(c->ec_rip), phys, attr);
                 rip_ptr = reinterpret_cast<mword*>(Hpt::remap_cow(Pd::kern.quota, phys, 3, sizeof(mword)));
-                *(reinterpret_cast<mword*>(ptr1) + index) = *(reinterpret_cast<mword*>(ptr2) + index);
-                crc1 = Crc::compute(0, ptr1, PAGE_SIZE);
-//                if(crc1 == crc2)
-                    to_continue = true;
+                if(sizeof(mword) == 8) {
+                    uint32 val11 = static_cast<uint32>(val1 >> 32), 
+                            val12 = static_cast<uint32>(val1 & 0xffffffff);
+                    uint32 val21 = static_cast<uint32>(val2 >> 32), 
+                            val22 = static_cast<uint32>(val2 & 0xffffffff);
+                    if(val11 == val21) {
+                        assert(val12 != val22);
+                        if((val12 ^ val22) == Cpu::EFL_RF)
+                            is_resume_flag_set = true;
+                    } else {
+                        if((val11 ^ val21) == Cpu::EFL_RF)
+                            is_resume_flag_set = true;
+                    }
+                } else {
+                    if((val1 ^ val2) == Cpu::EFL_RF)
+                        is_resume_flag_set = true;
+                }
+                if(is_resume_flag_set) {
+                    c->crc1 = crc1;
+                }
             }else{
                 rip_ptr = reinterpret_cast<mword*>(Hpt::remap_cow(Pd::kern.quota, 
                 Pd::current->Space_mem::loc[Cpu::id], c->ec_rip, 3, sizeof(mword)));
@@ -280,26 +287,31 @@ bool Cow_elt::compare() {
             assert(rip_ptr);
             char instr_buff[STR_MIN_LENGTH];
             instruction_in_hex(*rip_ptr, instr_buff);
-            call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 1, "MISSMATCH Pd: %s PE %llu virt %lx: phys0:%lx phys1 %lx phys2 %lx "
-                "rip %lx:%s rcx %lx rsp %lx:%lx MM %lx index %lu %lx val0: 0x%lx  val1: 0x%lx "
-                "val2 0x%lx", Pd::current->get_name(), Counter::nb_pe, c->m_fault_addr, c->phys_addr[0], 
-                c->phys_addr[1], c->phys_addr[2], c->ec_rip, instr_buff, c->ec_rcx, c->ec_rsp, 
-                c->ec_rsp_content, Pe::missmatch_addr, index, reinterpret_cast<mword>(reinterpret_cast<mword*>(c->page_addr) + index), val0, val1, val2);
-            if(to_continue)
-                continue;
-            // if in development, we got a real bug, print info, 
-            // if in production, we got an SEU, just return true
-            c = cow_elts->head(), n = nullptr, h = c;
-            while (c) {
-                trace(0, "Cow v: %lx  phys: %lx phys1: %lx  phys2: %lx", c->page_addr, c->phys_addr[0],
-                    c->phys_addr[1], c->phys_addr[2]);
-                n = c->next;
-                c = (n == h) ? nullptr : n;
+            call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 1, "MISSMATCH "
+                "Pd: %s PE %llu virt %lx: phys0:%lx phys1 %lx phys2 %lx rip %lx:%s "
+                "rcx %lx rsp %lx:%lx MM %lx index %lu %lx val0: 0x%lx  val1: 0x%lx "
+                "val2 0x%lx %s", Pd::current->get_name(), Counter::nb_pe, c->m_fault_addr, 
+                c->phys_addr[0], c->phys_addr[1], c->phys_addr[2], c->ec_rip, 
+                instr_buff, c->ec_rcx, c->ec_rsp, c->ec_rsp_content, Pe::missmatch_addr, 
+                index, reinterpret_cast<mword>(reinterpret_cast<mword*>(c->page_addr) 
+                + index), val0, val1, val2, is_resume_flag_set ? "Resume flag set": "Fatal");
+            if(!is_resume_flag_set) {
+                // if in development, we got a real bug, print info, 
+                // if in production, we got an SEU, just return true
+                if(IN_PRODUCTION)
+                    return true;
+                c = cow_elts->head(), n = nullptr, h = c;
+                while (c) {
+                    trace(0, "Cow v: %lx  phys: %lx phys1: %lx  phys2: %lx", c->page_addr, c->phys_addr[0],
+                        c->phys_addr[1], c->phys_addr[2]);
+                    n = c->next;
+                    c = (n == h) ? nullptr : n;
+                }
+                Console::print_page(ptr0);
+                Console::print_page(ptr1);
+                Console::print_page(ptr2);
+                return true;
             }
-            Console::print_page(ptr0);
-            Console::print_page(ptr1);
-            Console::print_page(ptr2);
-            return true;
         }        
         n = c->next;
         c = (n == h) ? nullptr : n;

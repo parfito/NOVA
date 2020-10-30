@@ -183,10 +183,31 @@ Vtlb::Reason Vtlb::miss (Exc_regs *regs, mword virt, mword &error, Queue<Cow_fie
             attr |= TLB_S;
         }
         if((tlb->addr() == (host & ~PAGE_MASK)) && tlb->is_cow(virt, phys, error, cow_fields)){
-            if(virt == Vmcs::read(Vmcs::GUEST_RSP)) {
+            mword guest_sysenter_esp = Vmcs::read(Vmcs::GUEST_SYSENTER_ESP); 
+            Paddr vtlb_hpa;
+            mword vtlb_attr;
+            mword* sys_enter_rsp_map; 
+            Vtlb *sys_enter_rsp_tlb = nullptr;
+            if(guest_sysenter_esp &&  
+                regs->vtlb->lookup(guest_sysenter_esp, vtlb_hpa, vtlb_attr, sys_enter_rsp_tlb)){
+                mword rsp_bottom = (guest_sysenter_esp & ~PAGE_MASK) - PAGE_SIZE + 4;
+                sys_enter_rsp_map = reinterpret_cast<mword*> 
+                    (Hpt::remap_cow(Pd::kern.quota, vtlb_hpa, 3, sizeof(mword)));
+                call_log_funct(Logstore::add_entry_in_buffer, 0, "guest_sysenter_esp"
+                " %lx: ", guest_sysenter_esp);
+                int i = 3;
+                while (i && (guest_sysenter_esp >= rsp_bottom)) {
+                    call_log_funct(Logstore::append_entry_in_buffer, 0, "%lx ", 
+                        *sys_enter_rsp_map);
+                    sys_enter_rsp_map--; i--;
+                    guest_sysenter_esp -= sizeof(mword);
+                } 
+            }
+            mword guest_rsp = Vmcs::read(Vmcs::GUEST_RSP);
+            if((virt & ~PAGE_MASK) == (guest_rsp & ~PAGE_MASK)) {
                 Ec::remove_resume_flag();
-                Ec::guest_single_step_rsp = virt;
-                Ec::guest_rsp_phys = host;
+                Ec::guest_single_step_rsp = guest_rsp;
+                Ec::guest_rsp_phys = (host & ~PAGE_MASK) | (guest_rsp & PAGE_MASK);
             }
             return SUCCESS;
         }
@@ -373,9 +394,12 @@ void Vtlb::reserve_stack(Queue<Cow_field> *cow_fields){
     Vtlb* tlb = nullptr;
     size_t size_vtlb = lookup(guest_rsp, vtlb_hpa, vtlb_attr, tlb);
     if(size_vtlb && Cow_field::is_cowed(cow_fields, guest_rsp) && 
-        (vtlb_attr & TLB_P) && !(vtlb_attr & TLB_W))
+        (vtlb_attr & TLB_P) && !(vtlb_attr & TLB_W)) {
+        Ec::pe_guest_rsp = guest_rsp;
         Cow_elt::resolve_cow_fault(tlb, nullptr, guest_rsp, vtlb_hpa, vtlb_attr);
-    
+    } else {
+        Ec::pe_guest_rsp = 0;
+    }
     vtlb_hpa = vtlb_attr = 0;
     tlb = nullptr;
     mword guest_idt = Vmcs::read(Vmcs::GUEST_BASE_IDTR);

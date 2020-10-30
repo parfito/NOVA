@@ -44,7 +44,7 @@
 #include "pending_int.hpp"
 
 mword Ec::prev_rip = 0, Ec::tscp_rcx1 = 0, Ec::tscp_rcx2 = 0, Ec::vmlaunch, 
-        Ec::guest_single_step_rsp;
+        Ec::guest_single_step_rsp, Ec::pe_guest_rsp;
 bool Ec::hardening_started = false, Ec::in_rep_instruction = false, Ec::not_nul_cowlist = false, 
         Ec::no_further_check = false, Ec::run_switched = false, Ec::keep_cow = false, 
         Ec::single_stepped = false;
@@ -430,9 +430,9 @@ void Ec::ret_user_vmresume() {
     if (EXPECT_FALSE(get_cr2() != current->regs.cr2))
         set_cr2(current->regs.cr2);
     call_log_funct(Logstore::add_entry_in_buffer, 0, "VMResume : Run %d Ec %s "
-        "RIP %lx RSP %lx Counter %llx", Pe::run_number, current->get_name(), 
+        "RIP %lx RSP %lx RFLAGS %lx Counter %llx", Pe::run_number, current->get_name(), 
         Vmcs::read(Vmcs::GUEST_RIP), Vmcs::read(Vmcs::GUEST_RSP), 
-        Lapic::read_instCounter());
+        Vmcs::read(Vmcs::GUEST_RFLAGS), Lapic::read_instCounter());
     if(step_reason == SR_DBG)
         enable_mtf();
     asm volatile (EXPAND(LOAD_GPR_COUNT)

@@ -328,7 +328,7 @@ public:
         STORE_RUN_STATE = 2,
     };
     static mword prev_rip, instruction_value, tscp_rcx1, tscp_rcx2, vmlaunch, 
-        guest_single_step_rsp;
+        guest_single_step_rsp, pe_guest_rsp;
     static uint64 counter1, counter2, exc_counter, exc_counter1, exc_counter2, debug_compteur, 
     count_je, nbInstr_to_execute, tsc1, tsc2, nb_inst_single_step, second_run_instr_number, 
     first_run_instr_number, distance_instruction, second_max_instructions;
@@ -708,6 +708,7 @@ public:
     //        void dump_regs();
     static bool is_debug_on() { return Logstore::log_on || 
             current->pd->is_debug() || current->debug; }
+    static void trace_vmexit(mword);
 private:
     static bool handle_deterministic_exception(mword, PE_stopby&);
 };
