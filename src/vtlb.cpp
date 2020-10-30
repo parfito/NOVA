@@ -112,6 +112,7 @@ size_t Vtlb::hwalk (mword gpa, mword &hpa, mword &attr, mword &error)
 
 Vtlb::Reason Vtlb::miss (Exc_regs *regs, mword virt, mword &error, Queue<Cow_field> *cow_fields)
 {
+    assert(cow_fields);
     mword phys, attr = TLB_U | TLB_W | TLB_P;
     Paddr host;
     char buff[STR_MAX_LENGTH];
@@ -183,23 +184,45 @@ Vtlb::Reason Vtlb::miss (Exc_regs *regs, mword virt, mword &error, Queue<Cow_fie
         if((tlb->addr() == (host & ~PAGE_MASK)) && tlb->is_cow(virt, phys, error, cow_fields))
             return SUCCESS;
         Ec::check_memory(Ec::PES_VMX_EXC);
+        mword guest_idt = Vmcs::read(Vmcs::GUEST_BASE_IDTR);
+        if(guest_idt && (virt & ~PAGE_MASK) == guest_idt) {
+            mword guest_rip = Vmcs::read(Vmcs::GUEST_RIP);
+            Paddr hpa_rip;
+            mword attrib;
+            mword *rip_ptr; 
+            Vtlb* vtlb = nullptr;
+            char instruction[STR_MIN_LENGTH];
+            if(regs->vtlb->lookup(static_cast<uint64>(guest_rip), hpa_rip, attrib, vtlb)){
+                rip_ptr = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, 
+                    hpa_rip, 3, sizeof(mword)));
+                assert(rip_ptr);
+                instruction_in_hex(*rip_ptr, instruction);
+            } else {
+                String::print(instruction, "VM RIP NOT MAPPED");
+            }
+            call_log_funct(Logstore::add_entry_in_buffer, 0, "Page fault on Guest IDT"
+                " %lx tlb_val %llx err %lx rip %lx instr %s PE %llu", guest_idt, tlb->val, 
+                error, guest_rip, instruction, Counter::nb_pe);
+        }
+        bool cowed = false;
         if((attr & TLB_W) && (attr & TLB_P)) {
             attr &= ~TLB_W;
             tlb->val = static_cast<typeof tlb->val>((host & ~((1UL << shift) - 1)) | attr | TLB_D | TLB_A);
-            assert(cow_fields);
             Cow_field::set_cow(cow_fields, virt, true);
-        } else if(cow_fields){
-//            trace(0, "set_cow false for %lx", virt);
+            cowed = true;
+        } else {
             Cow_field::set_cow(cow_fields, virt, false);            
             tlb->val = static_cast<typeof tlb->val>((host & ~((1UL << shift) - 1)) | attr | TLB_D | TLB_A);
         }
         if(Hip::is_mmio(host & ~PAGE_MASK)){
             trace(0, "Vtlb is MMIO");
         }
-//          trace (TRACE_VTLB, "VTLB Miss SUCCESS CR3:%#010lx A:%#010lx P:%#010lx A:%#lx E:%#lx TLB:%#016llx GuestIP %#lx", 
-//                regs->cr3_shadow, virt, phys, attr, error, tlb->val, Vmcs::read(Vmcs::GUEST_RIP));
-        call_log_funct(Logstore::add_entry_in_buffer, 0, "VTLB SUCCESS Pe %llu CR3:%#010lx vtlb %p virt %lx gpa %lx hpa %lx tlb %p tlb->val %llx err %lx", 
-            Counter::nb_pe, regs->cr3_shadow, regs->vtlb, virt, phys, host, tlb, tlb->val, error);
+        trace (TRACE_VTLB, "VTLB Miss SUCCESS CR3:%#010lx A:%#010lx P:%#010lx A:%#lx "
+                "E:%#lx", regs->cr3_shadow, virt, phys, attr, error);
+        call_log_funct(Logstore::add_entry_in_buffer, 0, "VTLB SUCCESS Pe %llu "
+            "CR3:%#010lx virt %lx gpa %lx hpa %lx tlb->val %llx err %lx %s", 
+            Counter::nb_pe, regs->cr3_shadow, virt, phys, host, tlb->val, error,
+            cowed ? "Cowed" : "DeCowed");
         return SUCCESS;
     }
 }
@@ -255,24 +278,23 @@ void Vtlb::flush (bool full)
 bool Vtlb::is_cow(mword virt, mword gpa, mword error, Queue<Cow_field> *cow_fields){
     if(!(error & ERR_W))
         return false;
-    if((error & ERR_U) || (error & ERR_P))
-        return false;
+//    if((error & ERR_U) || (error & ERR_P))
+//        return false;
     mword tlb_attr = attr(); 
     if(Cow_field::is_cowed(cow_fields, virt) && (tlb_attr & TLB_P) && !(tlb_attr & TLB_W)) {
         mword hpa, ept_attr;
         size_t size = Pd::current->Space_mem::ept.lookup (gpa, hpa, ept_attr);
-        char buff[STR_MAX_LENGTH + 50];
-        size_t n = String::print(buff, "TLB_COW Pe %llu v: %lx tlb->addr: %lx attr %lx gpa %lx hpa %lx size %lx", 
-            Counter::nb_pe, virt, addr(), tlb_attr, gpa, hpa, size);
+        call_log_funct(Logstore::add_entry_in_buffer, 0, "TLB_COW Pe %llu v: %lx "
+            "tlb->addr: %lx attr %lx gpa %lx hpa %lx size %lx", Counter::nb_pe, 
+            virt, addr(), tlb_attr, gpa, hpa, size);
         if (size && (addr() == (hpa & ~PAGE_MASK))) { 
             Counter::vtlb_cow_fault++;   
             assert(virt != Pe_stack::stack); 
             Cow_elt::resolve_cow_fault(this, nullptr, virt, addr(), tlb_attr);
-            String::print(buff+n, " IS_COW new tlb->val %llx", val);
-            Logstore::add_entry_in_buffer(buff);
+            call_log_funct(Logstore::append_entry_in_buffer, 0, " IS_COW new "
+            "tlb->val %llx", val);
             return true;            
         } else {
-            Logstore::add_entry_in_buffer(buff);
             return false;
         }
     } else {
@@ -325,11 +347,35 @@ void Vtlb::reserve_stack(Queue<Cow_field> *cow_fields){
     Paddr vtlb_hpa;
     Vtlb* tlb = nullptr;
     size_t size_vtlb = lookup(guest_rsp, vtlb_hpa, vtlb_attr, tlb);
-    if(!size_vtlb)
-        return;
-    if(!Cow_field::is_cowed(cow_fields, guest_rsp) || !(vtlb_attr & TLB_P) || (vtlb_attr & TLB_W))
-        return;
-    //        trace(0, "VTLB STACK tlb val %llx vtlb_attr %lx virt %lx PE %llu", 
-//            tlb->val, vtlb_attr, guest_rsp, Counter::nb_pe);
+    if(size_vtlb && Cow_field::is_cowed(cow_fields, guest_rsp) && 
+        (vtlb_attr & TLB_P) && !(vtlb_attr & TLB_W)) {
+        Ec::pe_guest_rsp = guest_rsp;
         Cow_elt::resolve_cow_fault(tlb, nullptr, guest_rsp, vtlb_hpa, vtlb_attr);
+    } else {
+        Ec::pe_guest_rsp = 0;
+    }
+    
+    mword guest_rip = Vmcs::read(Vmcs::GUEST_RIP);
+    
+    if(guest_rip != 0xc06b014a)
+        return;
+    mword guest_idt = Vmcs::read(Vmcs::GUEST_BASE_IDTR);
+    size_vtlb = lookup(guest_idt, vtlb_hpa, vtlb_attr, tlb);
+    if(size_vtlb && Cow_field::is_cowed(cow_fields, guest_idt) && 
+            (vtlb_attr & TLB_P) && !(vtlb_attr & TLB_W)) {
+//        call_log_funct(Logstore::add_entry_in_buffer, 1, "VTLB GUEST_IDT tlb "
+//            "val %llx vtlb_attr %lx guest_idt %lx PE %llu", tlb->val, vtlb_attr, 
+//            guest_idt, Counter::nb_pe);
+        Cow_elt::resolve_cow_fault(tlb, nullptr, guest_idt, vtlb_hpa, vtlb_attr);
+    }
+    mword guest_gdt = Vmcs::read(Vmcs::GUEST_BASE_GDTR);
+    size_vtlb = lookup(guest_gdt, vtlb_hpa, vtlb_attr, tlb);
+    if(size_vtlb && Cow_field::is_cowed(cow_fields, guest_gdt) && 
+            (vtlb_attr & TLB_P) && !(vtlb_attr & TLB_W)) {
+//        call_log_funct(Logstore::add_entry_in_buffer, 1, "VTLB GUEST_GDT tlb "
+//            "val %llx vtlb_attr %lx guest_gdt %lx PE %llu", tlb->val, vtlb_attr, 
+//            guest_gdt, Counter::nb_pe);
+        Cow_elt::resolve_cow_fault(tlb, nullptr, guest_gdt, vtlb_hpa, vtlb_attr);
+    }
+        
 }

@@ -158,34 +158,31 @@ Cow_elt* Cow_elt::is_mapped_elsewhere(Paddr phys, mword virt) {
         if (c->phys_addr[0] == phys) {//frame already mapped elsewhere
             mword ec_rip = Ec::current->get_reg(Ec::RIP), ec_rsp = Ec::current->get_reg(Ec::RSP), 
                 ec_rax = Ec::current->get_reg(Ec::RAX), attrib, ec_ss = 0, ec_es = 0;
-            Paddr hpa_rip, hpa_rip_122c012;
-            char ec_rip_122c012_content[STR_MIN_LENGTH];
+            Paddr hpa_rip;
+            char buff[STR_MIN_LENGTH];
             if (Ec::current->is_virutalcpu()) {
-                Ec::current->vtlb_lookup(static_cast<uint64>(0x122c012), hpa_rip_122c012, attrib);
-                Ec::current->vtlb_lookup(static_cast<uint64>(ec_rip), hpa_rip, attrib);
-                mword *rip_ptr_122c012 = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, 
-                    hpa_rip_122c012, 3, sizeof(mword)));
-                assert(rip_ptr_122c012);
-                instruction_in_hex(*rip_ptr_122c012, ec_rip_122c012_content);
-            
+                if(Ec::current->vtlb_lookup(static_cast<uint64>(ec_rip), hpa_rip, attrib)){
+                    mword *rip_ptr = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, 
+                        hpa_rip, 3, sizeof(mword)));
+                    instruction_in_hex(*rip_ptr, buff);
+                } else {
+                    String::print(buff, "VM RIP NOT MAPPED");
+                }
                 ec_ss = Vmcs::read(Vmcs::GUEST_SEL_SS);
                 ec_es = Vmcs::read(Vmcs::GUEST_SEL_ES);
             } else {
                 Pd::current->Space_mem::loc[Cpu::id].lookup(ec_rip, hpa_rip, attrib);
-            }
             assert(hpa_rip);
             mword *rip_ptr = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, 
                 hpa_rip, 3, sizeof(mword)));
-            assert(rip_ptr);
-            char buff[STR_MIN_LENGTH];
             instruction_in_hex(*rip_ptr, buff);
-            
+            }
             call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 1, "Phys de virt = %lx Is already "
                 "mapped virt %lx Phys:%lx new_phys[0]:%lx new_phys[1]:%lx Rip0 %lx:%s Rsp0 %lx Rax0 %lx "
-                "ES0 %lx SS0 %lx Rip %lx:%s Rsp %lx Rax %lx ES %lx SS %lx rip_122c012_content %s", 
+                "ES0 %lx SS0 %lx Rip %lx:%s Rsp %lx Rax %lx ES %lx SS %lx", 
                 virt, c->page_addr, c->phys_addr[0], c->phys_addr[1], c->phys_addr[2], c->ec_rip, 
                 c->ec_rip_content, c->ec_rsp, c->ec_rax, c->ec_es, c->ec_ss, ec_rip, buff, ec_rsp, 
-                ec_rax, ec_es, ec_ss, ec_rip_122c012_content);
+                ec_rax, ec_es, ec_ss);
 //            assert(!c->v_is_mapped_elsewhere);
             return c;
         }
@@ -247,15 +244,6 @@ bool Cow_elt::compare() {
             // because memcmp compare by grasp of 4 bytes
 //            int ratio = sizeof(mword)/4; // sizeof(mword) == 4 ? 1 ; sizeof(mword) == 8 ? 2
             size_t index = missmatch_addr/sizeof(mword);
-//            if(Ec::current->is_virutalcpu()){
-//                // Cow fault due to instruction side effect in VM kernel stack
-//                *(reinterpret_cast<mword*>(ptr1) + index) = *(reinterpret_cast<mword*>(ptr2) + index);
-//                crc1 = Crc::compute(0, ptr1, PAGE_SIZE);
-//                if(crc1 == crc2){
-//                    c->crc1 = crc1;
-//                    continue;
-//                }
-//            }
             mword val1 = *(reinterpret_cast<mword*>(ptr1) + index);
             mword val2 = *(reinterpret_cast<mword*>(ptr2) + index);
             // if in production, comment this and return true, for not to get too many unncessary 
@@ -268,14 +256,30 @@ bool Cow_elt::compare() {
             Paddr phys;
             mword attr;
             mword *rip_ptr;
-            bool to_continue = false;
+            bool is_resume_flag_set = false;
             if(Ec::current->is_virutalcpu()){
                 Ec::current->vtlb_lookup(static_cast<uint64>(c->ec_rip), phys, attr);
                 rip_ptr = reinterpret_cast<mword*>(Hpt::remap_cow(Pd::kern.quota, phys, 3, sizeof(mword)));
-                *(reinterpret_cast<mword*>(ptr1) + index) = *(reinterpret_cast<mword*>(ptr2) + index);
-                crc1 = Crc::compute(0, ptr1, PAGE_SIZE);
-//                if(crc1 == crc2)
-                    to_continue = true;
+                if(sizeof(mword) == 8) {
+                    uint32 val11 = static_cast<uint32>(val1 >> 32), 
+                            val12 = static_cast<uint32>(val1 & 0xffffffff);
+                    uint32 val21 = static_cast<uint32>(val2 >> 32), 
+                            val22 = static_cast<uint32>(val2 & 0xffffffff);
+                    if(val11 == val21) {
+                        assert(val12 != val22);
+                        if((val12 ^ val22) == Cpu::EFL_RF)
+                            is_resume_flag_set = true;
+                    } else {
+                        if((val11 ^ val21) == Cpu::EFL_RF)
+                            is_resume_flag_set = true;
+                    }
+                } else {
+                    if((val1 ^ val2) == Cpu::EFL_RF)
+                        is_resume_flag_set = true;
+                }
+                if(is_resume_flag_set) {
+                    c->crc1 = crc1;
+                }
             }else{
                 rip_ptr = reinterpret_cast<mword*>(Hpt::remap_cow(Pd::kern.quota, 
                 Pd::current->Space_mem::loc[Cpu::id], c->ec_rip, 3, sizeof(mword)));
@@ -283,26 +287,31 @@ bool Cow_elt::compare() {
             assert(rip_ptr);
             char instr_buff[STR_MIN_LENGTH];
             instruction_in_hex(*rip_ptr, instr_buff);
-            call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 1, "MISSMATCH Pd: %s PE %llu virt %lx: phys0:%lx phys1 %lx phys2 %lx "
-                "rip %lx:%s rcx %lx rsp %lx:%lx MM %lx index %lu %lx val0: 0x%lx  val1: 0x%lx "
-                "val2 0x%lx", Pd::current->get_name(), Counter::nb_pe, c->m_fault_addr, c->phys_addr[0], 
-                c->phys_addr[1], c->phys_addr[2], c->ec_rip, instr_buff, c->ec_rcx, c->ec_rsp, 
-                c->ec_rsp_content, Pe::missmatch_addr, index, reinterpret_cast<mword>(reinterpret_cast<mword*>(c->page_addr) + index), val0, val1, val2);
-            if(to_continue)
-                continue;
-            // if in development, we got a real bug, print info, 
-            // if in production, we got an SEU, just return true
-            c = cow_elts->head(), n = nullptr, h = c;
-            while (c) {
-                trace(0, "Cow v: %lx  phys: %lx phys1: %lx  phys2: %lx", c->page_addr, c->phys_addr[0],
-                    c->phys_addr[1], c->phys_addr[2]);
-                n = c->next;
-                c = (n == h) ? nullptr : n;
-            }
-            Console::print_page(ptr0);
-            Console::print_page(ptr1);
-            Console::print_page(ptr2);
-            return true;
+            call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 1, "MISSMATCH "
+                "Pd: %s PE %llu virt %lx: phys0:%lx phys1 %lx phys2 %lx rip %lx:%s "
+                "rcx %lx rsp %lx:%lx MM %lx index %lu %lx val0: 0x%lx  val1: 0x%lx "
+                "val2 0x%lx %s", Pd::current->get_name(), Counter::nb_pe, c->m_fault_addr, 
+                c->phys_addr[0], c->phys_addr[1], c->phys_addr[2], c->ec_rip, 
+                instr_buff, c->ec_rcx, c->ec_rsp, c->ec_rsp_content, Pe::missmatch_addr, 
+                index, reinterpret_cast<mword>(reinterpret_cast<mword*>(c->page_addr) 
+                + index), val0, val1, val2, is_resume_flag_set ? "Resume flag set": "Fatal");
+            if(!is_resume_flag_set) {
+                // if in development, we got a real bug, print info, 
+                // if in production, we got an SEU, just return true
+                    if(IN_PRODUCTION)
+                        return true;
+                c = cow_elts->head(), n = nullptr, h = c;
+                while (c) {
+                    trace(0, "Cow v: %lx  phys: %lx phys1: %lx  phys2: %lx", c->page_addr, c->phys_addr[0],
+                        c->phys_addr[1], c->phys_addr[2]);
+                    n = c->next;
+                    c = (n == h) ? nullptr : n;
+                }
+                Console::print_page(ptr0);
+                Console::print_page(ptr1);
+                Console::print_page(ptr2);
+                return true;
+            }        
         }        
         n = c->next;
         c = (n == h) ? nullptr : n;

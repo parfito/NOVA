@@ -173,13 +173,10 @@ bool Ec::handle_exc_gp(Exc_regs *r) {
     assert(ptr);
     char inst_buff[STR_MAX_LENGTH];
     instruction_in_hex(*ptr, inst_buff);
-    String *buffer = new String(2*STR_MAX_LENGTH);
-    String::print(buffer->get_string(), "GP in %s: Ec: %s  Pd: %s EIP %#lx:%#lx:%#lx:%#lx(%s), rdi %#lx",
-    r->user() ? "USER" : "KERNEL", ec->get_name(), ec->getPd()->get_name(), regs_0.REG(ip), 
-    regs_1.REG(ip), regs_2.REG(ip), r->REG(ip), inst_buff, r->REG(di));
-    Logstore::add_entry_in_buffer(buffer->get_string());
-    trace(0, "%s", buffer->get_string());
-    delete buffer;
+    call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 1, "GP in %s: Ec: %s "
+        "Pd: %s EIP %#lx:%#lx:%#lx:%#lx(%s), PE %llu", r->user() ? "USER" : 
+        "KERNEL", ec->get_name(), ec->getPd()->get_name(), regs_0.REG(ip), 
+        regs_1.REG(ip), regs_2.REG(ip), r->REG(ip), inst_buff, Counter::nb_pe);
     Logstore::dump("handle_exc_gp", true);
     Counter::dump();
     ec->start_debugging(Debug_type::STORE_RUN_STATE);
