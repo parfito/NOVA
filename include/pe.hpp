@@ -25,4 +25,5 @@ public:
     static bool pmi_pending;
     static mword missmatch_addr;
     static void* missmatch_ptr;
+    static bool in_triple_exec;
 };

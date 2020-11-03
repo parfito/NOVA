@@ -222,6 +222,7 @@ void Cow_elt::restore_state0() {
  * @return true if they don't match
  */
 bool Cow_elt::compare() {
+    bool to_return = false;
     Cow_elt *c = cow_elts->head(), *n = nullptr, *h = c;
     while (c) {
 //        Console::print("Compare v: %p  phys: %p  ce: %p  phys1: %p  phys2: %p", 
@@ -229,10 +230,10 @@ bool Cow_elt::compare() {
 //        cow->new_phys[1]->phys_addr);
         void *ptr1 = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, c->phys_addr[1], 1)),
                 *ptr2 = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, c->phys_addr[2], 2));
-        uint32 crc1 = Crc::compute(0, ptr1, PAGE_SIZE);
-        uint32 crc2 = Crc::compute(0, ptr2, PAGE_SIZE);
-        if (crc1 == crc2) {
-            c->crc1 = crc1;
+        c->crc1 = Crc::compute(0, ptr1, PAGE_SIZE);
+        c->crc2 = Crc::compute(0, ptr2, PAGE_SIZE);
+        if (c->crc1 == c->crc2) {
+            c->temp_crc = c->crc1;
         } else {
             // if in production, uncomment this, for not to get too many unncessary Missmatch errors because 
             // just of error in vm stack            
@@ -260,26 +261,6 @@ bool Cow_elt::compare() {
             if(Ec::current->is_virutalcpu()){
                 Ec::current->vtlb_lookup(static_cast<uint64>(c->ec_rip), phys, attr);
                 rip_ptr = reinterpret_cast<mword*>(Hpt::remap_cow(Pd::kern.quota, phys, 3, sizeof(mword)));
-                if(sizeof(mword) == 8) {
-                    uint32 val11 = static_cast<uint32>(val1 >> 32), 
-                            val12 = static_cast<uint32>(val1 & 0xffffffff);
-                    uint32 val21 = static_cast<uint32>(val2 >> 32), 
-                            val22 = static_cast<uint32>(val2 & 0xffffffff);
-                    if(val11 == val21) {
-                        assert(val12 != val22);
-                        if((val12 ^ val22) == Cpu::EFL_RF)
-                            is_resume_flag_set = true;
-                    } else {
-                        if((val11 ^ val21) == Cpu::EFL_RF)
-                            is_resume_flag_set = true;
-                    }
-                } else {
-                    if((val1 ^ val2) == Cpu::EFL_RF)
-                        is_resume_flag_set = true;
-                }
-                if(is_resume_flag_set) {
-                    c->crc1 = crc1;
-                }
             }else{
                 rip_ptr = reinterpret_cast<mword*>(Hpt::remap_cow(Pd::kern.quota, 
                 Pd::current->Space_mem::loc[Cpu::id], c->ec_rip, 3, sizeof(mword)));
@@ -295,30 +276,40 @@ bool Cow_elt::compare() {
                 instr_buff, c->ec_rcx, c->ec_rsp, c->ec_rsp_content, Pe::missmatch_addr, 
                 index, reinterpret_cast<mword>(reinterpret_cast<mword*>(c->page_addr) 
                 + index), val0, val1, val2, is_resume_flag_set ? "Resume flag set": "Fatal");
-            if(!is_resume_flag_set) {
-                // if in development, we got a real bug, print info, 
-                // if in production, we got an SEU, just return true
-                    if(IN_PRODUCTION)
-                        return true;
-                c = cow_elts->head(), n = nullptr, h = c;
-                while (c) {
-                    trace(0, "Cow v: %lx  phys: %lx phys1: %lx  phys2: %lx", c->page_addr, c->phys_addr[0],
-                        c->phys_addr[1], c->phys_addr[2]);
-                    n = c->next;
-                    c = (n == h) ? nullptr : n;
-                }
-                Console::print_page(ptr0);
-                Console::print_page(ptr1);
-                Console::print_page(ptr2);
-                return true;
-            }        
+            to_return = true;
         }        
         n = c->next;
         c = (n == h) ? nullptr : n;
     }
-    return false;
+    return to_return;
 }
 
+bool Cow_elt::triple_exec_compare() {
+    Cow_elt *c = cow_elts->head(), *n = nullptr, *h = c;
+    int run1 = 0, run2 = 0;
+    while (c) {
+        void *ptr3 = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, c->phys_addr[2], 2));
+        c->crc3= Crc::compute(0, ptr3, PAGE_SIZE);
+        if(c->crc1 != c->crc2) {
+            if (c->crc1 == c->crc3) {
+                run1 ++;
+            } else if (c->crc2 == c->crc3) {
+                void *ptr0 = Hpt::remap_cow(Pd::kern.quota, c->phys_addr[0], 0); 
+                memcpy(ptr0, ptr3, PAGE_SIZE);  
+                run2 ++;
+            } else {
+                return true;
+            }        
+        }
+        c->temp_crc = c->crc3;
+        n = c->next;
+        c = (n == h) ? nullptr : n;
+    }
+    if(run1 && run2)
+        call_log_funct(Logstore::add_entry_in_buffer, 1, "3rd run matches "
+        "partialy run1 %d and run2 %d", run1, run2);
+    return false;
+}
 /**
  * Only called if everything went fine during comparison, 
  * We can now copy memories back to frame0, destroy cow_elts 
@@ -331,12 +322,12 @@ void Cow_elt::commit() {
         asm volatile ("" ::"m" (c)); // to avoid gdb "optimized out"                        
         Cow_elt *ce = c->v_is_mapped_elsewhere;
         if (c->linear_add) { 
-            int diff = (c->crc != c->crc1);
+            int diff = (c->crc != c->temp_crc);
             if (diff) {
                 void *ptr0 = Hpt::remap_cow(Pd::kern.quota, c->phys_addr[0], 0), 
                         *ptr1 = Hpt::remap_cow(Pd::kern.quota, c->phys_addr[1], 1);
                 memcpy(ptr0, ptr1, PAGE_SIZE); 
-                c->crc = c->crc1;
+                c->crc = c->temp_crc;
             }
             if (!c->age || (c->age && diff) || Ec::keep_cow) {
                 c->age++;
@@ -487,4 +478,16 @@ void Cow_elt::to_log(const char* reason){
     call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 0, "%s d %lx %lx %lx %lx %d de %lx next %lx %s", reason, page_addr, 
         phys_addr[0], phys_addr[1], phys_addr[2], age, v_is_mapped_elsewhere ? 
         v_is_mapped_elsewhere->page_addr : 0, next ? next->page_addr:0, pte.is_hpt ? "Hpt" : "VTLB");
+}
+
+void Cow_elt::place_phys0() {
+    Cow_elt *c = cow_elts->head(), *n = nullptr, *h = c;
+    call_log_funct(Logstore::add_entry_in_buffer, 0, "Placins phys0 PE %llu", Counter::nb_pe);
+    while (c) {
+        void *ptr0 = Hpt::remap_cow(Pd::kern.quota, c->phys_addr[0], 0), 
+                *ptr2 = Hpt::remap_cow(Pd::kern.quota, c->phys_addr[2], 1);
+                memcpy(ptr2, ptr0, PAGE_SIZE); 
+                n = c->next;
+        c = (n == h) ? nullptr : n;
+    }
 }

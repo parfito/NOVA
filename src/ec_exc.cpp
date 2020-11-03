@@ -723,7 +723,28 @@ void Ec::check_memory(PE_stopby from) {
             Register reg_diff = ec->compare_regs(from);
             call_log_funct(Logstore::append_log_in_buffer, 0, "rip2 %lx", ec->utcb ? from == PES_SYS_ENTER ? 
                 ec->regs.ARG_IP : ec->regs_2.REG(ip) : Vmcs::read(Vmcs::GUEST_RIP));
+            if(Pe::in_triple_exec) {
+                Pe::in_triple_exec = false;
+                if(Cow_elt::triple_exec_compare() || reg_diff) {
+                    Console::panic("Triple_exec Panic");
+                } else {
+                    Cow_elt::commit();
+                    if(in_rep_instruction){
+                        in_rep_instruction = false;
+                        Cpu::enable_fast_string();                    
+                    }
+                    launch_state = UNLAUNCHED;
+                    reset_all();
+                    return;
+                }
+            }
             if (Cow_elt::compare() || reg_diff) {
+                if(!Pe::in_triple_exec) {
+                    Cow_elt::place_phys0();
+                    ec->restore_state0();
+                    Pe::in_triple_exec = true;
+                    check_exit();
+                }
                 if(IN_PRODUCTION){
 //                    Logstore::commit_buffer();
                     ec->rollback();
