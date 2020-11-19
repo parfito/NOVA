@@ -198,41 +198,48 @@ void Ec::handle_vmx()
     mword reason = Vmcs::read (Vmcs::EXI_REASON) & 0xff;
     unsigned reason_vec = 0;
     Counter::vmi[reason][0]++;
-
-    String *buff = new String(2*STR_MAX_LENGTH);
+    
     char counter_buff[STR_MIN_LENGTH];
     uint64 counter_value = Lapic::read_instCounter();
     if(counter_value >= Lapic::perf_max_count - MAX_INSTRUCTION)
         String::print(counter_buff, "%#llx", counter_value);
     else
         String::print(counter_buff, "%llu", counter_value);
-    size_t n = String::print(buff->get_string(), "VMEXIT PE %llu guest rip %lx rsp %lx flags %lx CS %lx run_num %u counter %s reason %s", 
-            Counter::nb_pe, Vmcs::read(Vmcs::GUEST_RIP), Vmcs::read(Vmcs::GUEST_RSP), Vmcs::read(Vmcs::GUEST_RFLAGS), 
-            Vmcs::read(Vmcs::GUEST_SEL_CS), 0, counter_buff, Vmcs::reason[reason]);
+    mword guest_eip = Vmcs::read(Vmcs::GUEST_RIP);
+    call_log_funct(Logstore::add_entry_in_buffer, 0, "VMEXIT PE %llu rip %lx "
+        "rsp %lx flags %lx CS %lx counter %s reason %s", Counter::nb_pe, guest_eip, 
+        Vmcs::read(Vmcs::GUEST_RSP), Vmcs::read(Vmcs::GUEST_RFLAGS), 
+        Vmcs::read(Vmcs::GUEST_SEL_CS), counter_buff, Vmcs::reason[reason]);
     if(reason == Vmcs::VMX_EXTINT) {
         reason_vec = Vmcs::read (Vmcs::EXI_INTR_INFO) & 0xff;
-        String::print(buff->get_string()+n, " vec %u", reason_vec);
+        call_log_funct(Logstore::append_entry_in_buffer, 0, "vec %u", reason_vec);
     } else if(reason == Vmcs::VMX_EXC_NMI) {
         mword intr_info = Vmcs::read (Vmcs::EXI_INTR_INFO);
         switch(intr_info & 0x7ff) {
             case 0x202: // NMI
-                copy_string(buff->get_string()+n, " NMI", STR_MAX_LENGTH + 50 - n);
+                call_log_funct(Logstore::append_entry_in_buffer, 0, "NMI");
                 break;
             case 0x307: // #NM
-                copy_string(buff->get_string()+n, " NM", STR_MAX_LENGTH + 50 - n);
+                call_log_funct(Logstore::append_entry_in_buffer, 0, "NM");
                 break;
             case 0x30e: // #PF
-                String::print(buff->get_string()+n, " PF %lx:%lx ", Vmcs::read (Vmcs::EXI_QUALIFICATION), 
-                        Vmcs::read (Vmcs::EXI_INTR_ERROR));    
+                call_log_funct(Logstore::append_entry_in_buffer, 0, "PF %lx:%lx ", 
+                    Vmcs::read (Vmcs::EXI_QUALIFICATION), Vmcs::read (Vmcs::EXI_INTR_ERROR));    
                 break;
             default:
-                String::print(buff->get_string()+n, " Don't know this VMX_EXTINT %lx", intr_info & 0x7ff);
+                call_log_funct(Logstore::append_entry_in_buffer, 0, "Don't know "
+                        "this VMX_EXC %lx", 
+                    intr_info & 0x7ff);
         } 
+    } else if (reason == Vmcs::VMX_CR) {
+        mword qual = Vmcs::read (Vmcs::EXI_QUALIFICATION);
+        unsigned cr  = qual      & 0xf;        
+        call_log_funct(Logstore::append_entry_in_buffer, 0, "VMX_CR %u", cr);
     } else if (reason == Vmcs::VMX_MTF) {
-        copy_string(buff->get_string()+n, " VMX_MTF", STR_MAX_LENGTH + 50 - n);
+        call_log_funct(Logstore::append_entry_in_buffer, 0, "VMX_MTF");
     }
-    call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 0, "%s %s", buff->get_string(), vmlaunch ? "VMLAUNCH" : "VMRESUME");
-    delete buff;
+    call_log_funct(Logstore::append_entry_in_buffer, 0, "%s", vmlaunch ? 
+        "VMLAUNCH" : "VMRESUME");
 
     switch (reason) {
         case Vmcs::VMX_EXC_NMI:     vmx_exception();
