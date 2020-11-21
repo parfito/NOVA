@@ -357,7 +357,9 @@ void Vtlb::reserve_stack(Queue<Cow_field> *cow_fields){
     
     mword guest_rip = Vmcs::read(Vmcs::GUEST_RIP);
     
-    if(guest_rip != 0xc06b014a)
+    /*
+     This address is the last address before Simics crashes */
+    if(guest_rip != 0xc06b044a)
         return;
     mword guest_idt = Vmcs::read(Vmcs::GUEST_BASE_IDTR);
     size_vtlb = lookup(guest_idt, vtlb_hpa, vtlb_attr, tlb);
