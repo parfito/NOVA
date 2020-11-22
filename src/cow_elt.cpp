@@ -236,23 +236,9 @@ bool Cow_elt::compare() {
         } else {
             // if in production, uncomment this, for not to get too many unncessary Missmatch errors because 
             // just of error in vm stack            
-            size_t missmatch_addr = 0;
-            int diff = page_comp(ptr1, ptr2, missmatch_addr, PAGE_SIZE);
-            assert(diff);
-                asm volatile ("" ::"m" (missmatch_addr)); // to avoid gdb "optimized out"            
-                asm volatile ("" ::"m" (c)); // to avoid gdb "optimized out"     
-            // because memcmp compare by grasp of 4 bytes
-//            int ratio = sizeof(mword)/4; // sizeof(mword) == 4 ? 1 ; sizeof(mword) == 8 ? 2
-            size_t index = missmatch_addr/sizeof(mword);
-            mword val1 = *(reinterpret_cast<mword*>(ptr1) + index);
-            mword val2 = *(reinterpret_cast<mword*>(ptr2) + index);
-            // if in production, comment this and return true, for not to get too many unncessary 
-            // Missmatch errors           
-            
-            void *ptr0 = Hpt::remap_cow(Pd::kern.quota, c->phys_addr[0], 0);
-            mword val0 = *(reinterpret_cast<mword*>(ptr0) + index);
-            Pe::missmatch_addr = c->page_addr + missmatch_addr;
-
+            size_t missmatch_addr = 0, index = missmatch_addr/sizeof(mword);;
+            int diff = 0;           
+            mword val1, val2;
             Paddr phys;
             mword attr;
             mword *rip_ptr;
@@ -260,33 +246,72 @@ bool Cow_elt::compare() {
             if(Ec::current->is_virutalcpu()){
                 Ec::current->vtlb_lookup(static_cast<uint64>(c->ec_rip), phys, attr);
                 rip_ptr = reinterpret_cast<mword*>(Hpt::remap_cow(Pd::kern.quota, phys, 3, sizeof(mword)));
-                if(sizeof(mword) == 8) {
-                    uint32 val11 = static_cast<uint32>(val1 >> 32), 
-                            val12 = static_cast<uint32>(val1 & 0xffffffff);
-                    uint32 val21 = static_cast<uint32>(val2 >> 32), 
-                            val22 = static_cast<uint32>(val2 & 0xffffffff);
-                    if(val11 == val21) {
-                        assert(val12 != val22);
-                        if((val12 ^ val22) == Cpu::EFL_RF)
-                            is_resume_flag_set = true;
-                    } else {
-                        if((val11 ^ val21) == Cpu::EFL_RF)
-                            is_resume_flag_set = true;
-                    }
-                } else {
-                    if((val1 ^ val2) == Cpu::EFL_RF)
+                mword rf_flag;
+                if(sizeof(mword) == 8)
+                    rf_flag = 1ull << 48;
+                else
+                    rf_flag = Cpu::EFL_RF;
+                
+                int page1 = 0, page2 = 0;
+                do {
+                    missmatch_addr = 0;
+                    diff = page_comp(ptr1, ptr2, missmatch_addr, PAGE_SIZE);
+                    assert(diff);
+                    asm volatile ("" ::"m" (missmatch_addr)); // to avoid gdb "optimized out"            
+                    asm volatile ("" ::"m" (c)); // to avoid gdb "optimized out"     
+                    // because memcmp compare by grasp of 4 bytes
+                    // int ratio = sizeof(mword)/4; // sizeof(mword) == 4 ? 1 ; sizeof(mword) == 8 ? 2
+                    index = missmatch_addr/sizeof(mword);
+                    val1 = *(reinterpret_cast<mword*>(ptr1) + index);
+                    val2 = *(reinterpret_cast<mword*>(ptr2) + index);
+                    if((val1 ^ val2) == rf_flag) {
                         is_resume_flag_set = true;
-                }
+                        if(val1 & rf_flag) { // bit 1 in page 1
+                            *(reinterpret_cast<mword*>(ptr1) + index) = *(reinterpret_cast<mword*>(ptr2) + index);
+                            crc1 = Crc::compute(0, ptr1, PAGE_SIZE);
+                            page1 ++;
+                        } else { // bit 1 in page 2
+                            *(reinterpret_cast<mword*>(ptr2) + index) = *(reinterpret_cast<mword*>(ptr1) + index);
+                            crc2 = Crc::compute(0, ptr2, PAGE_SIZE);
+                            page2 ++;
+                        }
+                    } else {
+                        is_resume_flag_set = false;
+                        break;
+                    }
+                } while(crc1 != crc2);
                 if(is_resume_flag_set) {
-                    c->crc1 = crc1;
+                    if(page1 && page2)
+                        call_log_funct(Logstore::add_entry_in_buffer, 1, "3rd run matches "
+                        "partialy run1 %d and run2 %d", page1, page2);
+                    if(page1)
+                        c->crc1 = crc1;
+                    else 
+                        c->crc1 = crc2;
                 }
             }else{
+                missmatch_addr = 0;
+                diff = page_comp(ptr1, ptr2, missmatch_addr, PAGE_SIZE);
+                assert(diff);
+                asm volatile ("" ::"m" (missmatch_addr)); // to avoid gdb "optimized out"            
+                asm volatile ("" ::"m" (c)); // to avoid gdb "optimized out"     
+                // because memcmp compare by grasp of 4 bytes
+                // int ratio = sizeof(mword)/4; // sizeof(mword) == 4 ? 1 ; sizeof(mword) == 8 ? 2
+                index = missmatch_addr/sizeof(mword);
+                val1 = *(reinterpret_cast<mword*>(ptr1) + index);
+                val2 = *(reinterpret_cast<mword*>(ptr2) + index);
                 rip_ptr = reinterpret_cast<mword*>(Hpt::remap_cow(Pd::kern.quota, 
                 Pd::current->Space_mem::loc[Cpu::id], c->ec_rip, 3, sizeof(mword)));
-            }            
+            } 
+                
+            // if in production, comment this and return true, for not to get too many unncessary 
+            // Missmatch errors    
             assert(rip_ptr);
             char instr_buff[STR_MIN_LENGTH];
             instruction_in_hex(*rip_ptr, instr_buff);
+            void *ptr0 = Hpt::remap_cow(Pd::kern.quota, c->phys_addr[0], 0);
+            mword val0 = *(reinterpret_cast<mword*>(ptr0) + index);
+            Pe::missmatch_addr = c->page_addr + missmatch_addr;
             call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 1, "MISSMATCH "
                 "Pd: %s PE %llu virt %lx: phys0:%lx phys1 %lx phys2 %lx rip %lx:%s "
                 "rcx %lx rsp %lx:%lx MM %lx index %lu %lx val0: 0x%lx  val1: 0x%lx "
