@@ -33,6 +33,8 @@ class Pte
 
         P *walk (Quota &quota, E, unsigned long, bool = true);
 
+        P *cow_walk (E);
+        
         ALWAYS_INLINE
         inline bool present() const { return val & P::PTE_P; }
 

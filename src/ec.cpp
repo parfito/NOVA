@@ -36,6 +36,7 @@
 Ec *Ec::current, *Ec::fpowner;
 mword Ec::vmlaunch;
 uint8 Ec::debug_type = 0;
+bool Ec::debug_started;
 
 // Constructors
 Ec::Ec(Pd *own, void (*f)(), unsigned c, char const *nm) : 
@@ -281,6 +282,10 @@ void Ec::ret_user_sysexit()
         send_msg<Ec::ret_user_sysexit>();
     }
 
+//    if(debug_started && (strmatch(current->getPd()->get_name(), "init -> seoul", 13) ||
+//            strmatch(current->getPd()->get_name(), "root", 4)))
+//        trace(0, "sysexit EC %s PD %s ARG_IP %#lx", current->get_name(), 
+//            current->getPd()->get_name(), current->regs.ARG_IP);
     asm volatile ("lea %0," EXPAND (PREG(sp); LOAD_GPR RET_USER_HYP) : : "m" (current->regs) : "memory");
 
     UNREACHED;
@@ -293,6 +298,9 @@ void Ec::ret_user_iret()
     if (EXPECT_FALSE (hzd))
         handle_hazard (hzd, ret_user_iret);
 
+//    if(debug_started && (strmatch(current->getPd()->get_name(), "init -> seoul", 13) ||
+//            strmatch(current->getPd()->get_name(), "root", 4)))
+//        trace(0, "Iret EC %s PD %s", current->get_name(), current->getPd()->get_name());
     asm volatile ("lea %0," EXPAND (PREG(sp); LOAD_GPR LOAD_SEG RET_USER_EXC) : : "m" (current->regs) : "memory");
 
     UNREACHED;
@@ -320,15 +328,15 @@ void Ec::ret_user_vmresume()
 
     if (EXPECT_FALSE (Pd::current->gtlb.chk (Cpu::id))) {
         Pd::current->gtlb.clr (Cpu::id);
-        if (current->regs.nst_on)
+        if (current->regs.nst_on) {
             Pd::current->ept.flush();
-        else
+        } else
             current->regs.vtlb->flush (true);
     }
 
     if (EXPECT_FALSE (get_cr2() != current->regs.cr2))
         set_cr2 (current->regs.cr2);
-
+    debug_started = true;
     asm volatile ("lea %0," EXPAND (PREG(sp); LOAD_GPR)
                   "vmresume;"
                   "vmlaunch;"

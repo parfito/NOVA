@@ -36,15 +36,17 @@ public:
         
     static void dump(char const*, bool = true, size_t = 5, bool = false);
             
-    static void add_entry_in_buffer(const char*, bool = true);
+    static void add_entry_in_buffer(const char*);
     
-    static void add_log_in_buffer(const char*, bool = true);
+    static void add_log_in_buffer(const char*);
     
-    static void append_log_in_buffer(const char*, bool = true);
+    static void append_log_in_buffer(const char*);
+
+    static void append_entry_in_buffer(const char*);
     
     static void commit_buffer();
     
-    static void call(void (*)(const char*, bool), const char*);
+    static void call(void (*)(const char*), const char*);
     
     static size_t get_number();
     

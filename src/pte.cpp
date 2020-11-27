@@ -50,6 +50,22 @@ P *Pte<P,E,L,B,F>::walk (Quota &quota, E v, unsigned long n, bool a)
 }
 
 template <typename P, typename E, unsigned L, unsigned B, bool F>
+P *Pte<P,E,L,B,F>::cow_walk (E v)
+{
+    unsigned long l = L;
+
+    for (P *e = static_cast<P *>(this);; e = static_cast<P *>(Buddy::phys_to_ptr (e->addr())) + (v >> (--l * B + PAGE_BITS) & ((1UL << B) - 1))) {
+
+        if (!e->val) {
+            return nullptr;
+        }
+        
+        if (l == 0)
+            return e;
+    }
+}
+
+template <typename P, typename E, unsigned L, unsigned B, bool F>
 size_t Pte<P,E,L,B,F>::lookup (E v, Paddr &p, mword &a)
 {
     unsigned long l = L;
