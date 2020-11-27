@@ -51,7 +51,8 @@ bool Space_mem::update (Quota_guard &quota, Mdb *mdb, mword r)
     mword o = mdb->node_order;
     mword a = mdb->node_attr & ~r;
     mword s = mdb->node_sub;
-
+    mword ept_a = 0, new_ept_a = 0;
+    bool to_be_cowed = false;
     if (s & 1 && Dpt::ord != ~0UL) {
         mword ord = min (o, Dpt::ord);
         for (unsigned long i = 0; i < 1UL << (o - ord); i++) {
@@ -77,13 +78,26 @@ bool Space_mem::update (Quota_guard &quota, Mdb *mdb, mword r)
             }
         } else {
             mword ord = min (o, Ept::ord);
+            ept_a = Ept::hw_attr (a, mdb->node_type);
+            new_ept_a = ept_a;
+            if(ept_a & Ept::EPT_W) {
+                new_ept_a &= ~Ept::EPT_W;
+                to_be_cowed = true;
+            }
             for (unsigned long i = 0; i < 1UL << (o - ord); i++) {
                 if (!r && !ept.check(quota, ord)) {
                     Cpu::hazard |= HZD_OOM;
                     return false;
                 }
 
-                ept.update (quota, b + i * (1UL << (ord + PAGE_BITS)), ord, p + i * (1UL << (ord + PAGE_BITS)), Ept::hw_attr (a, mdb->node_type), r ? Ept::TYPE_DN : Ept::TYPE_UP);
+                if(ord < Ept::bpl() || !(ept_a & Ept::EPT_W)){
+                    ept.update (quota, b + i * (1UL << (ord + PAGE_BITS)), ord, p + i * (1UL << (ord + PAGE_BITS)), new_ept_a, r ? Ept::TYPE_DN : Ept::TYPE_UP);
+                } else {
+                    mword max_ord = ord - Ept::bpl() + 1;
+                    for(unsigned long j = 0; j < 1UL << max_ord; j++) {
+                        ept.update (quota, b + i * (1UL << (ord + PAGE_BITS)) + j * (1UL << (Ept::bpl() + PAGE_BITS - 1)), Ept::bpl() - 1, p + i * (1UL << (ord + PAGE_BITS)) + j * (1UL << (Ept::bpl() + PAGE_BITS - 1)), new_ept_a, r ? Ept::TYPE_DN : Ept::TYPE_UP);
+                    }
+                }
             }
         }
         if (r)
@@ -103,14 +117,23 @@ bool Space_mem::update (Quota_guard &quota, Mdb *mdb, mword r)
 
     mword ord = min (o, Hpt::ord);
     bool f = false;
-
+    mword hpt_a = Hpt::hw_attr (a);
+    mword new_hpt_a = hpt_a;
+    if(to_be_cowed) {
+        new_hpt_a &= ~Hpt::HPT_W;
+    }
     for (unsigned long i = 0; i < 1UL << (o - ord); i++) {
         if (!r && !hpt.check(quota, ord)) {
             Cpu::hazard |= HZD_OOM;
             return f;
         }
-
-        f |= hpt.update (quota, b + i * (1UL << (ord + PAGE_BITS)), ord, p + i * (1UL << (ord + PAGE_BITS)), Hpt::hw_attr (a), r ? Hpt::TYPE_DN : Hpt::TYPE_UP);
+        if(ord < Hpt::bpl() || !(hpt_a & Hpt::HPT_W))
+            f |= hpt.update (quota, b + i * (1UL << (ord + PAGE_BITS)), ord, p + i * (1UL << (ord + PAGE_BITS)), new_hpt_a, r ? Hpt::TYPE_DN : Hpt::TYPE_UP);
+        else {
+            mword max_ord = ord - Hpt::bpl() + 1;
+            for(unsigned long j = 0; j < 1UL << max_ord; j++)
+                f |= hpt.update (quota, b + i * (1UL << (ord + PAGE_BITS)) + j * (1UL << (Hpt::bpl() + PAGE_BITS - 1)), Hpt::bpl() - 1, p + i * (1UL << (ord + PAGE_BITS)) + j * (1UL << (Hpt::bpl() + PAGE_BITS - 1)), new_hpt_a, r ? Hpt::TYPE_DN : Hpt::TYPE_UP);
+        }
     }
 
     if (r || f) {
@@ -125,7 +148,13 @@ bool Space_mem::update (Quota_guard &quota, Mdb *mdb, mword r)
                     return (r || f);
                 }
 
-                loc[j].update (quota, b + i * (1UL << (ord + PAGE_BITS)), ord, p + i * (1UL << (ord + PAGE_BITS)), Hpt::hw_attr (a), Hpt::TYPE_DF);
+                if(ord < Hpt::bpl() || !(a & Hpt::HPT_W))
+                    loc[j].update (quota, b + i * (1UL << (ord + PAGE_BITS)), ord, p + i * (1UL << (ord + PAGE_BITS)), new_hpt_a, Hpt::TYPE_DF);
+                else{
+                    mword max_ord = ord - Hpt::bpl() + 1;
+                    for(unsigned long k = 0; k < 1UL << max_ord; k++)
+                        loc[j].update (quota, b + i * (1UL << (ord + PAGE_BITS)) + k * (1UL << (Hpt::bpl() + PAGE_BITS - 1)), Hpt::bpl() - 1, p + i * (1UL << (ord + PAGE_BITS)) + k * (1UL << (Hpt::bpl() + PAGE_BITS - 1)), new_hpt_a, Hpt::TYPE_DF);
+                }
             }
         }
 

@@ -349,6 +349,7 @@ class Vmcs
             VMX_EPT_VIOLATION       = 48,
             VMX_EPT_MISCONFIG       = 49,
             VMX_INVEPT              = 50,
+            VMX_RDTSCP              = 51,
             VMX_PREEMPT             = 52,
             VMX_INVVPID             = 53,
             VMX_WBINVD              = 54,

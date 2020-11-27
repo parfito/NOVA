@@ -64,4 +64,7 @@ class Ept : public Pte<Ept, uint64, 4, 9, false>
     static void print(char const *s, uint64 v){
         Console::print("%s %llx", s, v);
     }
+
+    bool cow_update(mword);    
+    
 };

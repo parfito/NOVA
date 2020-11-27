@@ -195,7 +195,7 @@ void Ec::handle_vmx()
 {
     Cpu::hazard = (Cpu::hazard | HZD_DS_ES | HZD_TR) & ~HZD_FPU;
 
-    mword reason = Vmcs::read (Vmcs::EXI_REASON) & 0xff;
+    mword reason = Vmcs::read (Vmcs::EXI_REASON) & 0xff, nst_error = 0, nst_fault = 0;
     unsigned reason_vec = 0;
     Counter::vmi[reason][0]++;
     
@@ -235,6 +235,11 @@ void Ec::handle_vmx()
         mword qual = Vmcs::read (Vmcs::EXI_QUALIFICATION);
         unsigned cr  = qual      & 0xf;        
         call_log_funct(Logstore::append_entry_in_buffer, 0, "VMX_CR %u", cr);
+    } else if (reason == Vmcs::VMX_EPT_VIOLATION) {
+        nst_error = Vmcs::read (Vmcs::EXI_QUALIFICATION); 
+        nst_fault = Vmcs::read (Vmcs::INFO_PHYS_ADDR);
+        call_log_funct(Logstore::append_entry_in_buffer, 0, "%lx:%lx ", nst_error, 
+            nst_fault);
     } else if (reason == Vmcs::VMX_MTF) {
         call_log_funct(Logstore::append_entry_in_buffer, 0, "VMX_MTF");
     }
@@ -249,8 +254,11 @@ void Ec::handle_vmx()
             else break;
         case Vmcs::VMX_CR:          vmx_cr();
         case Vmcs::VMX_EPT_VIOLATION:
-            current->regs.nst_error = Vmcs::read (Vmcs::EXI_QUALIFICATION);
-            current->regs.nst_fault = Vmcs::read (Vmcs::INFO_PHYS_ADDR);
+            if(Pd::current->ept.cow_update(nst_fault)) {
+                ret_user_vmresume();
+            }
+            current->regs.nst_error = nst_error;
+            current->regs.nst_fault = nst_fault;
             break;
     }
 
