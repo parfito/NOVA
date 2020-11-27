@@ -45,6 +45,7 @@ void Ec::vmx_exception()
     };
 
     mword intr_info = Vmcs::read (Vmcs::EXI_INTR_INFO);
+
     switch (intr_info & 0x7ff) {
 
         default:
@@ -93,6 +94,7 @@ void Ec::vmx_exception()
 void Ec::vmx_extint()
 {
     unsigned vector = Vmcs::read (Vmcs::EXI_INTR_INFO) & 0xff;
+
     if (vector >= VEC_IPI)
         Lapic::ipi_vector (vector);
     else if (vector >= VEC_MSI)
@@ -266,7 +268,7 @@ void Ec::handle_vmx()
 {
     Cpu::hazard = (Cpu::hazard | HZD_DS_ES | HZD_TR) & ~HZD_FPU;
 
-    mword reason = Vmcs::read (Vmcs::EXI_REASON) & 0xff;
+    mword reason = Vmcs::read (Vmcs::EXI_REASON) & 0xff, nst_error = 0, nst_fault = 0;
     keep_cow = false;    
     Counter::vmi[reason][Pe::run_number]++;
 
@@ -300,7 +302,7 @@ void Ec::handle_vmx()
     } else {
         String::print(rip_instruction, "No next_fault");
     }
-    call_log_funct(Logstore::add_entry_in_buffer, 0, "VMEXIT PE %llu rip %lx "
+    call_log_funct(Logstore::add_entry_in_buffer, 1, "VMEXIT PE %llu rip %lx "
         "(%s) rsp %lx flags %lx CS %lx run %u counter %s reason %s, %s", 
         Counter::nb_pe, guest_eip, rip_instruction, Vmcs::read(Vmcs::GUEST_RSP), 
         Vmcs::read(Vmcs::GUEST_RFLAGS), Vmcs::read(Vmcs::GUEST_SEL_CS), 
@@ -330,6 +332,11 @@ void Ec::handle_vmx()
         mword qual = Vmcs::read (Vmcs::EXI_QUALIFICATION);
         unsigned cr  = qual      & 0xf;        
         call_log_funct(Logstore::append_entry_in_buffer, 0, "VMX_CR %u", cr);
+    } else if (reason == Vmcs::VMX_EPT_VIOLATION) {
+        nst_error = Vmcs::read (Vmcs::EXI_QUALIFICATION); 
+        nst_fault = Vmcs::read (Vmcs::INFO_PHYS_ADDR);
+        call_log_funct(Logstore::append_entry_in_buffer, 1, "%lx:%lx ", nst_error, 
+            nst_fault);
     } else if (reason == Vmcs::VMX_MTF) {
         call_log_funct(Logstore::append_entry_in_buffer, 0, "VMX_MTF");
     }
@@ -361,9 +368,11 @@ void Ec::handle_vmx()
         case Vmcs::VMX_CR:          check_memory(PES_VMX_CR); vmx_cr();
         case Vmcs::VMX_MTF:         vmx_disable_single_step();
         case Vmcs::VMX_EPT_VIOLATION:
-            check_memory(PES_VMX_EPT_VIOL); 
-            current->regs.nst_error = Vmcs::read (Vmcs::EXI_QUALIFICATION);
-            current->regs.nst_fault = Vmcs::read (Vmcs::INFO_PHYS_ADDR);
+            if(Pd::current->ept.cow_update(nst_fault)) {
+                ret_user_vmresume();
+            }
+            current->regs.nst_error = nst_error;
+            current->regs.nst_fault = nst_fault;
             break;
 //        case Vmcs::VMX_RDTSCP:      
 //            if(Pe::run_number == 0)

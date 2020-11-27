@@ -53,10 +53,10 @@ const char* Vmcs::reason[57] = {"EXC_NMI", "EXTINT", "TRIPLE_FAULT", "INIT",
 "SIPI", "SMI_IO", "SMI_OTHER", "INTR_WINDOW", "NMI_WINDOW", "TASK_SWITCH", 
 "CPUID", "GETSEC", "HLT", "INVD", "INVLPG", "RDPMC", "RDTSC", "RSM", "VMCALL", 
 "VMCLEAR", "VMLAUNCH", "VMPTRLD", "VMPTRST", "VMREAD", "VMRESUME", "VMWRITE",
-"VMXOFF", "VMXON", "CR", "DR", "IO", "RDMSR", "WRMSR", "FAIL_STATE", "FAIL_MSR", 
-"MWAIT", "MTF", "MONITOR", "PAUSE", "FAIL_MCHECK", "TPR_THRESHOLD", "APIC_ACCESS", 
-"GDTR_IDTR", "LDTR_TR", "EPT_VIOLATION", "EPT_MISCONFIG", "INVEPT", "RDTSCP",
-"PREEMPT", "INVVPID", "WBINVD", "XSETBV"};
+"VMXOFF", "VMXON", "CR", "DR", "IO", "RDMSR", "WRMSR", "FAIL_STATE", "FAIL_MSR",
+"", "MWAIT", "MTF", "", "MONITOR", "PAUSE", "FAIL_MCHECK", "", "TPR_THRESHOLD", 
+"APIC_ACCESS", "", "GDTR_IDTR", "LDTR_TR", "EPT_VIOLATION", "EPT_MISCONFIG",
+"INVEPT", "RDTSCP", "PREEMPT", "INVVPID", "WBINVD", "XSETBV"};
         
 Vmcs::Vmcs (mword esp, mword bmp, mword cr3, uint64 eptp) : rev (basic.revision)
 {
@@ -128,7 +128,7 @@ void Vmcs::init()
             return;
         }
     }
-    
+//    assert(has_mtf());
     fix_cr0_set =  Msr::read<mword>(Msr::IA32_VMX_CR0_FIXED0);
     fix_cr0_clr = ~Msr::read<mword>(Msr::IA32_VMX_CR0_FIXED1);
     fix_cr4_set =  Msr::read<mword>(Msr::IA32_VMX_CR4_FIXED0);

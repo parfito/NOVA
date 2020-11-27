@@ -927,8 +927,8 @@ void Ec::trace_sysenter(){
     else
         String::print(counter_buff, "%llu", counter_value - Lapic::start_counter);
     call_log_funct(Logstore::add_entry_in_buffer, 0,
-    "SysEnter ARG_IP/RIP %lx:%lx utcb_rip %lx Rdi %lx:%lx run_num %u Counter %s", 
-    current->regs.ARG_IP, current->regs.REG(ip), current->utcb->get_rip(), current->regs.ARG_1, 
-    current->regs.REG(di), Pe::run_number, counter_buff);
+    "SysEnter ARG_IP %lx utcb_rip %lx Rdi %lx run_num %u Counter %s", 
+    current->regs.ARG_IP, current->utcb->get_rip(), current->regs.ARG_1, 
+    Pe::run_number, counter_buff);
     return;
 }

@@ -150,6 +150,21 @@ void Pte<P, E, L, B, F>::free_up(Quota &quota, unsigned l, P * e, mword v,
     }
 }
 
+template <typename P, typename E, unsigned L, unsigned B, bool F>
+P *Pte<P,E,L,B,F>::cow_walk (E v) {
+    unsigned long l = L;
+
+    for (P *e = static_cast<P *>(this);; e = static_cast<P *>(Buddy::phys_to_ptr (e->addr())) + (v >> (--l * B + PAGE_BITS) & ((1UL << B) - 1))) {
+
+        if (!e->val) {
+            return nullptr;
+        }
+        
+        if (l == 0)
+            return e;
+    }
+}
+
 template class Pte<Dpt, uint64, 4, 9, true>;
 template class Pte<Ept, uint64, 4, 9, false>;
 template class Pte<Hpt, mword, PTE_LEV, PTE_BPL, false>;

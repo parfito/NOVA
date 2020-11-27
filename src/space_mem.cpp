@@ -52,7 +52,7 @@ bool Space_mem::update (Quota_guard &quota, Mdb *mdb, mword r, bool to_be_cowed)
     mword o = mdb->node_order;
     mword a = mdb->node_attr & ~r;
     mword s = mdb->node_sub;
-
+    mword ept_a = 0, new_ept_a = 0;
     if (s & 1 && Dpt::ord != ~0UL) {
         mword ord = min (o, Dpt::ord);
         for (unsigned long i = 0; i < 1UL << (o - ord); i++) {
@@ -78,18 +78,23 @@ bool Space_mem::update (Quota_guard &quota, Mdb *mdb, mword r, bool to_be_cowed)
             }
         } else {
             mword ord = min (o, Ept::ord);
+            ept_a = Ept::hw_attr (a, mdb->node_type);
+            new_ept_a = ept_a;
+            if(ept_a & Ept::EPT_W) {
+                new_ept_a &= ~Ept::EPT_W;
+            }
             for (unsigned long i = 0; i < 1UL << (o - ord); i++) {
                 if (!r && !ept.check(quota, ord)) {
                     Cpu::hazard |= HZD_OOM;
                     return false;
                 }
 
-                if(ord < Ept::bpl())
-                    ept.update (quota, b + i * (1UL << (ord + PAGE_BITS)), ord, p + i * (1UL << (ord + PAGE_BITS)), Ept::hw_attr (a, mdb->node_type), r ? Ept::TYPE_DN : Ept::TYPE_UP);
-                else{
+                if(ord < Ept::bpl() || !(ept_a & Ept::EPT_W)) {
+                    ept.update (quota, b + i * (1UL << (ord + PAGE_BITS)), ord, p + i * (1UL << (ord + PAGE_BITS)), new_ept_a, r ? Ept::TYPE_DN : Ept::TYPE_UP);
+                } else {
                     mword max_ord = ord - Ept::bpl() + 1;
                     for(unsigned long j = 0; j < 1UL << max_ord; j++)
-                        ept.update (quota, b + i * (1UL << (ord + PAGE_BITS)) + j * (1UL << (Ept::bpl() + PAGE_BITS - 1)), Ept::bpl() - 1, p + i * (1UL << (ord + PAGE_BITS)) + j * (1UL << (Ept::bpl() + PAGE_BITS - 1)), Ept::hw_attr (a, mdb->node_type), r ? Ept::TYPE_DN : Ept::TYPE_UP);
+                        ept.update (quota, b + i * (1UL << (ord + PAGE_BITS)) + j * (1UL << (Ept::bpl() + PAGE_BITS - 1)), Ept::bpl() - 1, p + i * (1UL << (ord + PAGE_BITS)) + j * (1UL << (Ept::bpl() + PAGE_BITS - 1)), new_ept_a, r ? Ept::TYPE_DN : Ept::TYPE_UP);
                 }
             }
         }
@@ -112,7 +117,12 @@ bool Space_mem::update (Quota_guard &quota, Mdb *mdb, mword r, bool to_be_cowed)
     bool f = false;
     
     mword new_a = Hpt::hw_attr (a);
-    if(to_be_cowed && new_a) {
+    if(s & 2) {
+        if(new_ept_a != ept_a) {
+            new_a &= ~Hpt::HPT_W;
+            to_be_cowed = true;  // force cow for the guest OS memory
+        }
+    } else if(to_be_cowed && new_a) {
         new_a = cowed_attrib(b, p, new_a);
     }
     for (unsigned long i = 0; i < 1UL << (o - ord); i++) {
