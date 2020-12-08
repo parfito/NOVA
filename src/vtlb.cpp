@@ -117,6 +117,8 @@ Vtlb::Reason Vtlb::miss (Exc_regs *regs, mword virt, mword &error, Queue<Cow_fie
     Paddr host;
     char buff[STR_MAX_LENGTH];
 
+    trace (TRACE_VTLB, "VTLB Miss CR3:%#010lx A:%#010lx E:%#lx", regs->cr3_shadow, virt, error);
+
     error &= ERR_U | ERR_W;
 
     size_t gsize = gwalk (regs, virt, phys, attr, error);
@@ -359,7 +361,7 @@ void Vtlb::reserve_stack(Queue<Cow_field> *cow_fields){
     
     /*
      This address is the last address before Simics crashes */
-    if(guest_rip != 0xc06b044a)
+    if(guest_rip != 0xc06b014a)
         return;
     mword guest_idt = Vmcs::read(Vmcs::GUEST_BASE_IDTR);
     size_vtlb = lookup(guest_idt, vtlb_hpa, vtlb_attr, tlb);
