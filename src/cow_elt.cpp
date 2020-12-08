@@ -22,11 +22,16 @@ Slab_cache Cow_elt::cache(sizeof (Cow_elt), 32);
 Queue<Cow_elt> *Cow_elt::cow_elts;
 size_t Cow_elt::number = 0;
 size_t Cow_elt::current_ec_cow_elts_size = 0;
+const char* Cow_elt::pte[3] = {"HPT", "EPT", "VTLB"}; 
 
-Cow_elt::Cow_elt(mword addr, Paddr phys, mword a, Hpt* h, Vtlb* v, Page_type t, mword f_addr) : 
-type(t), page_addr(addr), attr(a), prev(nullptr), next(nullptr) {
+Cow_elt::Cow_elt(Pte_type ptet, mword addr, Paddr phys, mword a, Page_type t) : 
+    pte_type(ptet), type(t), attr(a), prev(nullptr), next(nullptr) {
     // TODO: Implement handling of cow fault in big pages
-    assert((h && (v == nullptr)) || (v && (h == nullptr)));
+    mword fault_addr = addr;
+    phys &= ~PAGE_MASK;
+    addr &= ~PAGE_MASK;
+    Counter::cow_fault++;
+    page_addr = addr;
     phys_addr[0] = phys;
     /* Do not try again to optimize by avoiding a new Cow_elt creation when phys is mapped elsewhere
      * if you don't have a good reason to. When phys is already mapped elsewhere, 
@@ -39,15 +44,7 @@ type(t), page_addr(addr), attr(a), prev(nullptr), next(nullptr) {
         linear_add = nullptr;
         phys_addr[1] = c->phys_addr[1];
         phys_addr[2] = c->phys_addr[2];
-        crc = c->crc;    
-        if (h) {
-            pte.hpt = h;
-        } else if (v) { // virt is not mapped in the kernel page table
-            pte.is_hpt = false;
-            pte.vtlb = v;
-        } else {
-            Console::panic("Neither tlb, nor htp is specified");
-        }
+        crc = c->crc;   
         v_is_mapped_elsewhere = c;
         c->v_is_mapped_elsewhere = this;
     } else {
@@ -55,47 +52,28 @@ type(t), page_addr(addr), attr(a), prev(nullptr), next(nullptr) {
         linear_add = Buddy::allocator.alloc(ord, Pd::kern.quota, Buddy::NOFILL);
         phys_addr[1] = Buddy::ptr_to_phys(linear_add);
         phys_addr[2] = phys_addr[1] + (1UL << ((ord - 1) + PAGE_BITS));
-        if (h) {
-            pte.hpt = h;
-        } else if (v) { // virt is not mapped in the kernel page table
-            pte.is_hpt = false;
-            pte.vtlb = v;
-        } else {
-            Console::panic("Neither tlb, nor htp is specified");
-        }
         copy_frames(phys_addr[1], phys_addr[2], phys);
         crc = Crc::compute(0, reinterpret_cast<void*>(COW_ADDR), PAGE_SIZE); // phys should have been mapped on COW_ADDR by copy_frames()
     }
-    // update page table entry with the newly allocated frame1
-    update_pte(Pe::run_number == 0 ? PHYS1 : PHYS2, RW);
     number++;
+    cow_elts->enqueue(this);
     // For debugging purpose =====================================================
-    m_fault_addr = f_addr;
+    m_fault_addr = fault_addr;
     ec_rip = Ec::current->get_reg(Ec::RIP);
     ec_rax = Ec::current->get_reg(Ec::RAX);
     ec_rsp = Ec::current->get_reg(Ec::RSP);
     Paddr hpa_rip;
     mword attrib;
     mword *rip_ptr; 
-    if (Ec::current->is_virutalcpu()) {
-        if(Ec::current->vtlb_lookup(static_cast<uint64>(ec_rip), hpa_rip, attrib)){
+    if (Ec::current->lookup(static_cast<uint64>(ec_rip), hpa_rip, attrib)){
             rip_ptr = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, 
                 hpa_rip, 3, sizeof(mword)));
             assert(rip_ptr);
             instruction_in_hex(*rip_ptr, ec_rip_content);
-        } else {
-            String::print(ec_rip_content, "VM RIP NOT MAPPED");
-        }
-        ec_es = Vmcs::read(Vmcs::GUEST_SEL_ES);
-        ec_ss = Vmcs::read(Vmcs::GUEST_SEL_SS);
-    } else {
-        Pd::current->Space_mem::loc[Cpu::id].lookup(ec_rip, hpa_rip, attrib);
-        rip_ptr = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, 
-                hpa_rip, 3, sizeof(mword)));
-        assert(rip_ptr);
-        instruction_in_hex(*rip_ptr, ec_rip_content);
         ec_es = Ec::current->get_regsES();
         ec_ss = Ec::current->get_regsSS();
+    } else {
+        String::print(ec_rip_content, "VM RIP NOT MAPPED");
     }
      //=============================================================================
 }
@@ -104,13 +82,12 @@ type(t), page_addr(addr), attr(a), prev(nullptr), next(nullptr) {
  * Clones a cow_elt (orig) which points to the same physical frames that the orig uses 
  * @param orig
  */
-Cow_elt::Cow_elt(const Cow_elt& orig) : type(orig.type), page_addr(orig.page_addr), attr(orig.attr), 
-        prev(nullptr), next(nullptr) {
+Cow_elt::Cow_elt(const Cow_elt& orig) : pte_type(orig.pte_type), type(orig.type), 
+    page_addr(orig.page_addr), attr(orig.attr), prev(nullptr), next(nullptr) {
     linear_add = 0;
     phys_addr[0] = orig.phys_addr[0];
     phys_addr[1] = orig.phys_addr[1];
     phys_addr[2] = orig.phys_addr[2];
-    pte = orig.pte;
 }
 
 Cow_elt::~Cow_elt() {
@@ -133,19 +110,26 @@ Cow_elt::~Cow_elt() {
  * @param phys : page physical address mapped at
  * @param attr : entry attribut
  */
-void Cow_elt::resolve_cow_fault(Vtlb* tlb, Hpt *hpt, mword virt, Paddr phys, mword attr) {
-    mword fault_addr = virt;
-    phys &= ~PAGE_MASK;
-    virt &= ~PAGE_MASK;
-    Counter::cow_fault++;
-
-    Cow_elt *c = new Cow_elt(virt, phys, attr, hpt, tlb, Cow_elt::NORMAL, fault_addr);
-
-    cow_elts->enqueue(c);
+void Cow_elt::resolve_cow_fault_hpt(Hpt *h, mword virt, Paddr phys, mword attr) {
+    Cow_elt *c = new Cow_elt(HPT, virt, phys, attr, Cow_elt::NORMAL);
+    c->hpt = h;
+    // update page table entry with the newly allocated frame1
+    c->update_pte(Pe::run_number == 0 ? PHYS1 : PHYS2, true);
 //    Console::print("Cow error v: %lx attr %lx phys0: %lx  phys1: %lx  phys2: %lx", virt, c->attr, 
 //            c->phys_addr[0], c->phys_addr[1], c->phys_addr[2]);            
 }
 
+void Cow_elt::resolve_cow_fault_ept(Ept *e, mword virt, Paddr phys, mword attr) {
+    Cow_elt *c = new Cow_elt(EPT, virt, phys, attr, Cow_elt::NORMAL);
+    c->ept = e;
+    c->update_pte(Pe::run_number == 0 ? PHYS1 : PHYS2, true);
+}
+
+void Cow_elt::resolve_cow_fault_vtlb(Vtlb* tlb, mword virt, Paddr phys, mword attr) {
+    Cow_elt *c = new Cow_elt(VTLB, virt, phys, attr, Cow_elt::NORMAL);
+    c->vtlb = tlb;
+    c->update_pte(Pe::run_number == 0 ? PHYS1 : PHYS2, true);
+}
 /**
  * Checks if the physical page was already in-use and listed in COW page list (cow_elts)
  * Called from resolve_cow_fault
@@ -160,22 +144,14 @@ Cow_elt* Cow_elt::is_mapped_elsewhere(Paddr phys, mword virt) {
                 ec_rax = Ec::current->get_reg(Ec::RAX), attrib, ec_ss = 0, ec_es = 0;
             Paddr hpa_rip;
             char buff[STR_MIN_LENGTH];
-            if (Ec::current->is_virutalcpu()) {
-                if(Ec::current->vtlb_lookup(static_cast<uint64>(ec_rip), hpa_rip, attrib)){
-                    mword *rip_ptr = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, 
-                        hpa_rip, 3, sizeof(mword)));
-                    instruction_in_hex(*rip_ptr, buff);
-                } else {
-                    String::print(buff, "VM RIP NOT MAPPED");
-                }
+            if (Ec::current->lookup(static_cast<uint64>(ec_rip), hpa_rip, attrib)){
+                mword *rip_ptr = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, 
+                    hpa_rip, 3, sizeof(mword)));
+                instruction_in_hex(*rip_ptr, buff);
                 ec_ss = Vmcs::read(Vmcs::GUEST_SEL_SS);
                 ec_es = Vmcs::read(Vmcs::GUEST_SEL_ES);
             } else {
-                Pd::current->Space_mem::loc[Cpu::id].lookup(ec_rip, hpa_rip, attrib);
-            assert(hpa_rip);
-            mword *rip_ptr = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, 
-                hpa_rip, 3, sizeof(mword)));
-            instruction_in_hex(*rip_ptr, buff);
+                String::print(buff, "VM RIP NOT MAPPED");
             }
             call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 1, "Phys de virt = %lx Is already "
                 "mapped virt %lx Phys:%lx new_phys[0]:%lx new_phys[1]:%lx Rip0 %lx:%s Rsp0 %lx Rax0 %lx "
@@ -211,7 +187,7 @@ void Cow_elt::copy_frames(Paddr phys1, Paddr phys2, Paddr phys0) {
 void Cow_elt::restore_state0() {
     Cow_elt *c = cow_elts->head(), *n = nullptr, *h = c;
     while (c) {
-        c->update_pte(PHYS2, RW);
+        c->update_pte(PHYS2, true);
         n = c->next;
         c = (n == h) ? nullptr : n;
     }
@@ -236,16 +212,11 @@ bool Cow_elt::compare() {
         } else {
             // if in production, uncomment this, for not to get too many unncessary Missmatch errors because 
             // just of error in vm stack            
-            size_t missmatch_addr = 0, index = missmatch_addr/sizeof(mword);;
+            size_t missmatch_addr = 0, index = 0;
             int diff = 0;           
             mword val1, val2;
-            Paddr phys;
-            mword attr;
-            mword *rip_ptr;
             bool is_resume_flag_set = false;
             if(Ec::current->is_virutalcpu()){
-                Ec::current->vtlb_lookup(static_cast<uint64>(c->ec_rip), phys, attr);
-                rip_ptr = reinterpret_cast<mword*>(Hpt::remap_cow(Pd::kern.quota, phys, 3, sizeof(mword)));
                 mword rf_flag;
                 if(sizeof(mword) == 8)
                     rf_flag = 1ull << 48;
@@ -300,15 +271,10 @@ bool Cow_elt::compare() {
                 index = missmatch_addr/sizeof(mword);
                 val1 = *(reinterpret_cast<mword*>(ptr1) + index);
                 val2 = *(reinterpret_cast<mword*>(ptr2) + index);
-                rip_ptr = reinterpret_cast<mword*>(Hpt::remap_cow(Pd::kern.quota, 
-                Pd::current->Space_mem::loc[Cpu::id], c->ec_rip, 3, sizeof(mword)));
             } 
                 
             // if in production, comment this and return true, for not to get too many unncessary 
             // Missmatch errors    
-            assert(rip_ptr);
-            char instr_buff[STR_MIN_LENGTH];
-            instruction_in_hex(*rip_ptr, instr_buff);
             void *ptr0 = Hpt::remap_cow(Pd::kern.quota, c->phys_addr[0], 0);
             mword val0 = *(reinterpret_cast<mword*>(ptr0) + index);
             Pe::missmatch_addr = c->page_addr + missmatch_addr;
@@ -317,7 +283,7 @@ bool Cow_elt::compare() {
                 "rcx %lx rsp %lx:%lx MM %lx index %lu %lx val0: 0x%lx  val1: 0x%lx "
                 "val2 0x%lx %s", Pd::current->get_name(), Counter::nb_pe, c->m_fault_addr, 
                 c->phys_addr[0], c->phys_addr[1], c->phys_addr[2], c->ec_rip, 
-                instr_buff, c->ec_rcx, c->ec_rsp, c->ec_rsp_content, Pe::missmatch_addr, 
+                c->ec_rip_content, c->ec_rcx, c->ec_rsp, c->ec_rsp_content, Pe::missmatch_addr, 
                 index, reinterpret_cast<mword>(reinterpret_cast<mword*>(c->page_addr) 
                 + index), val0, val1, val2, is_resume_flag_set ? "Resume flag set": "Fatal");
             if(!is_resume_flag_set) {
@@ -373,7 +339,7 @@ void Cow_elt::commit() {
             assert(ce); // Mandatory
             c->age = ce->age;    
         }
-        c->update_pte(PHYS0,c->pte.is_hpt?RW:RO);
+        c->update_pte(PHYS0, (c->pte_type == HPT) ? true : c->page_addr == 0x48ffc ? true : false);
 
         c->to_log("COMMIT");
         count++;
@@ -395,7 +361,7 @@ void Cow_elt::commit() {
 void Cow_elt::restore_state1() {
     Cow_elt *c = cow_elts->head(), *n = nullptr, *h = c;
     while (c) {
-        c->update_pte(PHYS1, RW);
+        c->update_pte(PHYS1, true);
         n = c->next;
         c = (n == h) ? nullptr : n;
     }
@@ -408,7 +374,7 @@ void Cow_elt::restore_state1() {
 void Cow_elt::restore_state2() {
     Cow_elt *c = cow_elts->head(), *n = nullptr, *h = c;
     while (c) {
-        c->update_pte(PHYS2, RW);
+        c->update_pte(PHYS2, true);
         n = c->next;
         c = (n == h) ? nullptr : n;
     }
@@ -422,7 +388,7 @@ void Cow_elt::rollback() {
     Cow_elt *c = cow_elts->head(), *n = nullptr, *h = c;
     while (c) {
         copy_frames(c->phys_addr[1], c->phys_addr[2], c->phys_addr[0]);
-        c->update_pte(PHYS1, RW);
+        c->update_pte(PHYS1, true);
         n = c->next;
         c = (n == h) ? nullptr : n;
     }
@@ -453,50 +419,25 @@ void Cow_elt::free_current_pd_cowelts() {
 void Cow_elt::free(Cow_elt* c){
     Paddr phys;
     mword attr;
-    if(Pd::current->Space_mem::loc[Cpu::id].lookup(c->page_addr, phys, attr) && 
-            phys == c->phys_addr[0]){
-        c->update_pte(PHYS0, RO);
+    if(Ec::current->lookup(c->page_addr, phys, attr) && 
+            phys == c->phys_addr[0]) {
+        c->update_pte(PHYS0, false);
     }
 //    c->to_log("free deleting 1");      
     delete c;    
 }
 
-void Cow_elt::update_pte(Physic phys_type, Right right){
-    mword a = attr;
-    Paddr phys = 0;
-    switch(phys_type){
-        case PHYS0:
-            phys = phys_addr[0];
-            break;
-        case PHYS1:
-            phys = phys_addr[1];
-            break;
-        case PHYS2:
-            phys = phys_addr[2];
-            break;
-        default:
-            Console::panic("Wrong phys type");
-    }
-    if(pte.is_hpt)  {
-        switch(right) {
-        case RO:
-            a &= ~Hpt::HPT_W;
-            break;
-        case RW:
-            a |= Hpt::HPT_W;
-            break;
-        }
-        pte.hpt->cow_update(phys, a, page_addr); 
-    } else {
-        switch(right) {
-        case RO:
-            a &= ~Vtlb::TLB_W;
-            break;
-        case RW:
-            a |= Vtlb::TLB_W;
-            break;
-        }
-       pte.vtlb->cow_update(phys, a); 
+void Cow_elt::update_pte(Physic phys_type, bool rw){
+    Paddr phys = phys_addr[phys_type];
+    switch(pte_type) {
+    case HPT:
+        hpt->cow_update(phys | attr, rw, page_addr); 
+        break;
+    case EPT:
+       ept->cow_update(phys | attr, rw);
+       break;
+    case VTLB:
+        vtlb->cow_update(phys | attr, rw);
     }      
 }
 
@@ -511,5 +452,38 @@ static inline void Cow_elt::operator delete (void *ptr) {
 void Cow_elt::to_log(const char* reason){
     call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 0, "%s d %lx %lx %lx %lx %d de %lx next %lx %s", reason, page_addr, 
         phys_addr[0], phys_addr[1], phys_addr[2], age, v_is_mapped_elsewhere ? 
-        v_is_mapped_elsewhere->page_addr : 0, next ? next->page_addr:0, pte.is_hpt ? "Hpt" : "VTLB");
+        v_is_mapped_elsewhere->page_addr : 0, next ? next->page_addr:0, pte[pte_type]);
+}
+
+void Cow_elt::abort() {
+    cow_elts = &Pd::current->cow_elts;
+    Cow_elt *d = nullptr;
+    uint8 phys_from = Pe::run_number == 0 ? 1 : 2;
+    int n= 0;
+    while(cow_elts->dequeue(d = cow_elts->head())) {
+        void *ptr = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, d->phys_addr[phys_from], phys_from));
+        assert(Crc::compute(0, ptr, PAGE_SIZE) == d->crc);
+        d->update_pte(PHYS0, false);
+        delete d;    
+        n++;
+    }
+    assert(n == 1);
+}
+
+bool Cow_elt::is_pe_empty() {
+    cow_elts = &Pd::current->cow_elts;
+    Cow_elt *d = nullptr;
+    int n= 0;
+    uint8 phys_from = Pe::run_number == 0 ? 1 : 2;
+    while(cow_elts->dequeue(d = cow_elts->head())) {
+        void *ptr = reinterpret_cast<mword*> (Hpt::remap_cow(Pd::kern.quota, d->phys_addr[phys_from], phys_from));
+        if(Crc::compute(0, ptr, PAGE_SIZE) != d->crc)
+            return false;
+        if(n > 1)
+            return false;
+    }
+    if(n == 1)
+        return true;
+    else
+        return false;
 }

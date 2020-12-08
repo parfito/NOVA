@@ -44,10 +44,10 @@ protected:
 
     P *walk(Quota &quota, E, unsigned long, bool = true);
 
-        P *cow_walk (E);
+    P *cow_walk (E);
         
-        ALWAYS_INLINE
-        inline bool present() const { return val & P::PTE_P; }
+    ALWAYS_INLINE
+    inline bool present() const { return val & P::PTE_P; }
 
     ALWAYS_INLINE
     inline bool super() const { return val & P::PTE_S; }
@@ -134,7 +134,5 @@ public:
     
     void print_walk(Quota &quota, E, mword);
     
-    bool pub_super() const {
-        return val & P::PTE_S;
-    }
+    bool pub_super() const { return val & P::PTE_S; };
 };

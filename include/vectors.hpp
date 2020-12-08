@@ -24,7 +24,8 @@
 #define VEC_LVT         (VEC_GSI + NUM_GSI) // 160
 #define VEC_MSI         (VEC_LVT + NUM_LVT) // 166
 #define VEC_IPI         (VEC_MSI + NUM_MSI) // 167
-#define VEC_MAX         (VEC_IPI + NUM_IPI) // 169
+#define VEC_MAX         (VEC_IPI + NUM_IPI) // 170
+#define VMX_MAX         (VEC_VMX + NUM_VMX) // 418
 
 #define VEC_LVT_TIMER   (VEC_LVT + 0)
 #define VEC_LVT_ERROR   (VEC_LVT + 3)

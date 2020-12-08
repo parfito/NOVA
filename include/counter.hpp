@@ -35,10 +35,12 @@ class Counter
         static unsigned delayed_gsi[NUM_GSI]    ;
         static uint64 lag_gsi[NUM_GSI]          ;
         static unsigned msi[NUM_MSI][2]         ;
-        static unsigned delayed_msi[NUM_MSI]      ;
+        static unsigned delayed_msi[NUM_MSI]    ;
         static uint64 lag_msi[NUM_MSI]          ;
         static unsigned exc[NUM_EXC][2]         ;
         static unsigned vmi[NUM_VMI][2]         ;
+        static unsigned delayed_vmx[NUM_VMX]    ;
+        static uint64 lag_vmx[NUM_VMX]          ;
         static unsigned vtlb_gpf                ;
         static unsigned vtlb_hpf                ;
         static unsigned vtlb_fill               ;

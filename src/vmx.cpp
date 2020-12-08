@@ -170,3 +170,9 @@ void Vmcs::init()
 
     trace (TRACE_VMX, "VMCS:%#010lx REV:%#x EPT:%d URG:%d VNMI:%d VPID:%d", Buddy::ptr_to_phys (root), basic.revision, has_ept(), has_urg(), has_vnmi(), has_vpid());
 }
+
+void Vmcs::write_eptp(uint64 eptp) {
+    write (EPTP,    static_cast<mword>(eptp) | (Ept::max() - 1) << 3 | 6);
+    write (EPTP_HI, static_cast<mword>(eptp >> 32));
+//    trace(0, "After write EPT %lx %lx", read (EPTP), read (EPTP_HI));
+}

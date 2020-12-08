@@ -248,7 +248,7 @@ void Cpu::init()
 
     setup_pcid();
 
-    mword cr4 = get_cr4();
+    mword cr4 = get_cr4() | Cpu::CR4_TSD;
 // Simics' broadwell processor like grangeville's Xeon, has these feature, but 
 // does not show it. So, we have to disable them all, whether a processor shows 
 // it or not.
@@ -257,7 +257,7 @@ void Cpu::init()
 //    if (EXPECT_TRUE (feature (FEAT_SMAP)))
         cr4 &= ~Cpu::CR4_SMAP;
 //    if (cr4 != get_cr4())
-        set_cr4 (cr4);
+    set_cr4 (cr4);
     disable_fast_string();
     
     Vmcs::init();
@@ -290,6 +290,10 @@ void Cpu::init()
         nb_instruction_before_vmresume = 0x17;
         nb_instruction_after_vmresume = 0x14;
         String::print(buff, "Qemu on Dell i5");
+    } else if(family[Cpu::id] == 0x6 && model[Cpu::id] == 0x8e && stepping[Cpu::id] == 0xc){ // Lenovo
+        nb_instruction_before_vmresume = 0x17;
+        nb_instruction_after_vmresume = 0x14;
+        String::print(buff, "Qemu on Dell i7");
     } else { // Lenovo
         nb_instruction_before_vmresume = 0x18;
         nb_instruction_after_vmresume = 0x16;

@@ -41,17 +41,11 @@ public:
     }
 
     Pe_stack &operator = (Pe_stack const &);
-    
-    static void add_detected_stack(mword, Paddr, mword, Vtlb*, Hpt*);
-    
-    static void free_detected_stacks();
-    
+            
     static bool is_empty() {
         return !detected_stacks.head();
     }
-    
-    static void remove_cow_for_detected_stacks(Vtlb*, Hpt*); 
-    
+        
     static void print(){
         Pe_stack *c = detected_stacks.head(), *head = detected_stacks.head(), *n = nullptr;
 

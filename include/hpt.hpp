@@ -63,6 +63,7 @@ public:
 
     enum {
         PTE_P   = HPT_P,
+        PTE_W   = HPT_W,
         PTE_S   = HPT_S,
         PTE_N   = HPT_A | HPT_U | HPT_W | HPT_P,
     };
@@ -136,7 +137,7 @@ public:
         
     Paddr replace_cow(Quota &quota, mword, mword, mword, mword = 0);
     static void print(char const *s, mword v);
-    void cow_update(Paddr, mword, mword);
+    void cow_update(mword, bool, mword);
     void resolve_cow(Quota&, mword, Paddr, mword);
     
 };

@@ -452,6 +452,8 @@ class Vmcs
         static bool has_mtf()      { return ctrl_cpu[0].clr & CPU_MONITOR_TRAP_FLAG; }
 
         static void init();
+
+        void write_eptp(uint64);
 };
 
 struct PACKED Msr_entry

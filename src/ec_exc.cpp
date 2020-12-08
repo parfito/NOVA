@@ -546,7 +546,6 @@ void Ec::check_memory(PE_stopby from) {
             run1_reason = from;
             ec->restore_state0();
             counter1 = Lapic::read_instCounter();
-            second_max_instructions = MAX_INSTRUCTION;
             if (from == PES_PMI) {
                 exc_counter1 = exc_counter;
                 counter1 = Lapic::read_instCounter();
@@ -580,10 +579,10 @@ void Ec::check_memory(PE_stopby from) {
                 /* Currently, this only happens on vmx execution on qemu.
                  * must be dug deeper
                  */
-                if((first_run_instr_number > MAX_INSTRUCTION + 300) || 
-                        (first_run_instr_number < MAX_INSTRUCTION - 300)){
+                if((first_run_instr_number + exc_counter1 > MAX_INSTRUCTION + 300) || 
+                    (first_run_instr_number + exc_counter1 < MAX_INSTRUCTION - 300)){
                     call_log_funct(Logstore::add_entry_in_buffer, 2, "PMI served too early or too late first_run_instr_number %llu "
-                    "counter1 %llx \nMust be dug deeper", first_run_instr_number, counter1);
+                    "counter1 %#llx exc_counter1 %llu\nMust be dug deeper", first_run_instr_number, counter1, exc_counter1);
                 }
             } 
             Pe::run_number++;
@@ -609,7 +608,7 @@ void Ec::check_memory(PE_stopby from) {
                     
                     // If simulatneous PMI and exception, Lapic::read_instCounter() must be 
                     // 0xFFFFFFF00001
-                    if(Lapic::read_instCounter() == Lapic::perf_max_count - second_max_instructions + 1)
+                    if(Lapic::read_instCounter() == Lapic::perf_max_count - MAX_INSTRUCTION + 1)
                         check_exit();
                     
                     Logstore::dump("check_memory 1", true);
@@ -625,13 +624,14 @@ void Ec::check_memory(PE_stopby from) {
                  * NEVER be > Lapic::start_counter.
                  */
                 second_run_instr_number = counter2 < Lapic::start_counter ? 
-                    second_max_instructions + counter2 - exc_counter2 : 
-                    counter2 - (Lapic::perf_max_count - second_max_instructions);
+                    MAX_INSTRUCTION + counter2 - exc_counter2 : 
+                    counter2 - (Lapic::perf_max_count - MAX_INSTRUCTION);
                 assert(second_run_instr_number < Lapic::perf_max_count);
-                if ((second_run_instr_number > second_max_instructions + 300) || 
-                        (second_run_instr_number < second_max_instructions - 300)){
-                    trace(0, "PMI served too early or too late counter2 %llx \nMust be dug deeper", 
-                            counter2);
+                if ((second_run_instr_number + exc_counter2 > MAX_INSTRUCTION + 300) || 
+                        (second_run_instr_number + exc_counter2 < MAX_INSTRUCTION - 300)){
+                    trace(0, "PMI served too early or too late second_run_instr_number"
+                        " %llx counter2 %#llx \n Must be dug deeper", second_run_instr_number,
+                        counter2);
                 } 
                 distance_instruction = distance(first_run_instr_number, second_run_instr_number);
 //                if(!ec->utcb)
@@ -787,7 +787,7 @@ void Ec::check_memory(PE_stopby from) {
                         mword guest_rip = Vmcs::read(Vmcs::GUEST_RIP);
                         Paddr hpa_miss_match_addr;
                         mword attr;
-                        current->vtlb_lookup(Pe::missmatch_addr, hpa_miss_match_addr, attr);
+                        current->lookup(Pe::missmatch_addr, hpa_miss_match_addr, attr);
                         mword offset = hpa_miss_match_addr & PAGE_MASK, mod = offset % sizeof(mword);
                         offset = (mod == 0) ? offset : offset - mod;
                         mword *mm_ptr = reinterpret_cast<mword*>(Hpt::remap_cow(Pd::kern.quota, 
@@ -847,7 +847,7 @@ void Ec::check_exit() {
  */ 
 void Ec::reset_counter() {
     exc_counter = counter1 = counter2 = exc_counter1 = exc_counter2 = nb_inst_single_step = 0;
-    distance_instruction = first_run_instr_number = second_run_instr_number = second_max_instructions = 0;
+    distance_instruction = first_run_instr_number = second_run_instr_number = 0;
     single_stepped = false;
     Counter::cow_fault = 0;
     Counter::used_cows_in_old_cow_elts = 0;
@@ -930,5 +930,22 @@ void Ec::trace_sysenter(){
     "SysEnter ARG_IP %lx utcb_rip %lx Rdi %lx run_num %u Counter %s", 
     current->regs.ARG_IP, current->utcb->get_rip(), current->regs.ARG_1, 
     Pe::run_number, counter_buff);
+    return;
+}
+
+void Ec::abort_pe(PE_stopby from) {
+    call_log_funct(Logstore::append_log_in_buffer, 0, "Abort PE %llu run %u "
+        "from %s", Counter::nb_pe, Pe::run_number, pe_stop[from]);
+    if (!Cow_elt::is_empty())
+        Cow_elt::abort();
+    current->regs = current->regs_0;
+    Fpu::dwc_rollback();
+    if (current->fpu)
+        current->fpu->roll_back();
+    if(current->is_virutalcpu()){
+        current->restore_state0();
+    }
+    launch_state = UNLAUNCHED;
+    reset_all();
     return;
 }

@@ -292,7 +292,7 @@ bool Vtlb::is_cow(mword virt, mword gpa, mword error, Queue<Cow_field> *cow_fiel
         if (size && (addr() == (hpa & ~PAGE_MASK))) { 
             Counter::vtlb_cow_fault++;   
             assert(virt != Pe_stack::stack); 
-            Cow_elt::resolve_cow_fault(this, nullptr, virt, addr(), tlb_attr);
+            Cow_elt::resolve_cow_fault_vtlb(this, virt, addr(), tlb_attr);
             call_log_funct(Logstore::append_entry_in_buffer, 0, " IS_COW new "
             "tlb->val %llx", val);
             return true;            
@@ -310,8 +310,9 @@ bool Vtlb::is_cow(mword virt, mword gpa, mword error, Queue<Cow_field> *cow_fiel
  * @param phys
  * @param attr
  */
-void Vtlb::cow_update(Paddr phys, mword attr){
-    val = phys | attr;
+void Vtlb::cow_update(mword new_val, bool rw){
+    new_val = rw ? new_val | TLB_W : new_val & ~TLB_W;
+    val = new_val;
 }
 
 size_t Vtlb::lookup(uint64 v, Paddr &p, mword &a, Vtlb* &tlb) {
@@ -352,7 +353,7 @@ void Vtlb::reserve_stack(Queue<Cow_field> *cow_fields){
     if(size_vtlb && Cow_field::is_cowed(cow_fields, guest_rsp) && 
         (vtlb_attr & TLB_P) && !(vtlb_attr & TLB_W)) {
         Ec::pe_guest_rsp = guest_rsp;
-        Cow_elt::resolve_cow_fault(tlb, nullptr, guest_rsp, vtlb_hpa, vtlb_attr);
+        Cow_elt::resolve_cow_fault_vtlb(tlb, guest_rsp, vtlb_hpa, vtlb_attr);
     } else {
         Ec::pe_guest_rsp = 0;
     }
@@ -370,7 +371,7 @@ void Vtlb::reserve_stack(Queue<Cow_field> *cow_fields){
 //        call_log_funct(Logstore::add_entry_in_buffer, 1, "VTLB GUEST_IDT tlb "
 //            "val %llx vtlb_attr %lx guest_idt %lx PE %llu", tlb->val, vtlb_attr, 
 //            guest_idt, Counter::nb_pe);
-        Cow_elt::resolve_cow_fault(tlb, nullptr, guest_idt, vtlb_hpa, vtlb_attr);
+        Cow_elt::resolve_cow_fault_vtlb(tlb, guest_idt, vtlb_hpa, vtlb_attr);
     }
     mword guest_gdt = Vmcs::read(Vmcs::GUEST_BASE_GDTR);
     size_vtlb = lookup(guest_gdt, vtlb_hpa, vtlb_attr, tlb);
@@ -379,7 +380,7 @@ void Vtlb::reserve_stack(Queue<Cow_field> *cow_fields){
 //        call_log_funct(Logstore::add_entry_in_buffer, 1, "VTLB GUEST_GDT tlb "
 //            "val %llx vtlb_attr %lx guest_gdt %lx PE %llu", tlb->val, vtlb_attr, 
 //            guest_gdt, Counter::nb_pe);
-        Cow_elt::resolve_cow_fault(tlb, nullptr, guest_gdt, vtlb_hpa, vtlb_attr);
+        Cow_elt::resolve_cow_fault_vtlb(tlb, guest_gdt, vtlb_hpa, vtlb_attr);
     }
         
 }

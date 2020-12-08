@@ -65,6 +65,7 @@ class Ept : public Pte<Ept, uint64, 4, 9, false>
         Console::print("%s %llx", s, v);
     }
 
-    bool cow_update(mword);    
+    void cow_update(mword, bool);    
     
+    bool is_cow_fault(mword);
 };

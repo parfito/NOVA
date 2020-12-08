@@ -42,6 +42,10 @@ class Space_mem : public Space
             Hpt npt;
         };
 
+        union {
+            Ept ept_backup;
+            Hpt npt_backup;
+        };
         enum { NO_PCID = 2 };
         mword did { NO_PCID };
 

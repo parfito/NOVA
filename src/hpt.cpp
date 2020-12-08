@@ -194,11 +194,11 @@ void Hpt::print(char const *s, mword v){
  * @param phys
  * @param attr
  */
-void Hpt::cow_update(Paddr phys, mword attr, mword v){
+void Hpt::cow_update(mword new_val, bool rw, mword v){
     /**TODO
      Use tremplate to merge Hpt::cow_update and Vtlb::cow_update in one function*/
+    new_val = rw ? new_val | HPT_W : new_val & ~HPT_W;
     Hpt o, *e = this;
-    mword new_val = phys | attr;
     do o = *e; while (o.val != new_val && !e->set (o.val, new_val));
     flush(v);    
 }
@@ -206,5 +206,5 @@ void Hpt::cow_update(Paddr phys, mword attr, mword v){
 void Hpt::resolve_cow(Quota &quota, mword v, Paddr phys, mword a) {
     Hpt *e = walk(quota, v, 0); // mword l = (bit_scan_reverse(v ^ USSER_ADDR) - PAGE_BITS) / bpl() = 3; but 3 doesnot work
     assert(e);
-    Cow_elt::resolve_cow_fault(nullptr, e, v, phys, a);
+    Cow_elt::resolve_cow_fault_hpt(e, v, phys, a);
 }

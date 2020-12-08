@@ -44,17 +44,16 @@
 #include "pending_int.hpp"
 
 mword Ec::prev_rip = 0, Ec::tscp_rcx1 = 0, Ec::tscp_rcx2 = 0, Ec::vmlaunch, 
-        Ec::guest_single_step_rsp, Ec::pe_guest_rsp;
+        Ec::guest_single_step_rsp, Ec::pe_guest_rsp, Ec::guest_start_rip, Ec::pe_start_rip;
 bool Ec::hardening_started = false, Ec::in_rep_instruction = false, Ec::not_nul_cowlist = false, 
         Ec::no_further_check = false, Ec::run_switched = false, Ec::keep_cow = false, 
-        Ec::single_stepped = false;
+        Ec::single_stepped = false, Ec::ept_backup;
 uint64 Ec::exc_counter = 0, Ec::exc_counter1 = 0, Ec::exc_counter2 = 0, Ec::counter1 = 0, 
         Ec::counter2 = 0, Ec::debug_compteur = 0, Ec::count_je = 0, Ec::nbInstr_to_execute = 0,
         Ec::nb_inst_single_step = 0, Ec::second_run_instr_number = 0, 
-        Ec::first_run_instr_number = 0, Ec::distance_instruction = 0,
-        Ec::second_max_instructions = 0;
+        Ec::first_run_instr_number = 0, Ec::distance_instruction = 0;
        
-uint8 Ec::launch_state = 0, Ec::step_reason = 0, Ec::debug_nb = 0, 
+uint8 Ec::launch_state = 0, Ec::step_reason = 0, Ec::vmx_step_reason = 0, Ec::debug_nb = 0, 
         Ec::debug_type = 0, Ec::replaced_int3_instruction, Ec::replaced_int3_instruction2;
 uint64 Ec::tsc1 = 0, Ec::tsc2 = 0;
 Paddr Ec::guest_rsp_phys;
@@ -429,9 +428,10 @@ void Ec::ret_user_vmresume() {
 
     if (EXPECT_FALSE(get_cr2() != current->regs.cr2))
         set_cr2(current->regs.cr2);
+    guest_start_rip = Vmcs::read(Vmcs::GUEST_RIP);
     call_log_funct(Logstore::add_entry_in_buffer, 0, "VMResume : Run %d Ec %s "
         "RIP %lx RSP %lx RFLAGS %lx Counter %llx", Pe::run_number, current->get_name(), 
-        Vmcs::read(Vmcs::GUEST_RIP), Vmcs::read(Vmcs::GUEST_RSP), 
+        guest_start_rip, Vmcs::read(Vmcs::GUEST_RSP), 
         Vmcs::read(Vmcs::GUEST_RFLAGS), Lapic::read_instCounter());
     if(step_reason == SR_DBG)
         enable_mtf();
@@ -902,7 +902,9 @@ void Ec::restore_state0_data() {
 }
 
 void Ec::vmx_save_state0() {
-    save_vm_stack();
+    if(!current->regs.nst_on)
+        save_vm_stack();
+    pe_start_rip = Vmcs::read(Vmcs::GUEST_RIP);   
     mword host_msr_area_phys = Vmcs::read(Vmcs::EXI_MSR_LD_ADDR);
     Msr_area *cur_host_msr_area = reinterpret_cast<Msr_area*> 
             (Buddy::phys_to_ptr(host_msr_area_phys));
@@ -1044,11 +1046,19 @@ mword Ec::get_regsRCX() {
 }
 
 mword Ec::get_regsES() {
-    return regs.es;
+    if(utcb) {
+        return regs.es;
+    } else {
+        return Vmcs::read(Vmcs::GUEST_SEL_ES);
+    }
 }
 
 mword Ec::get_regsSS() {
-    return regs.ss;
+    if(utcb) {
+        return regs.ss;
+    } else {
+        return Vmcs::read(Vmcs::GUEST_SEL_SS);
+    }
 }
 
 void Ec::Setx86DebugReg(mword addr, int dr) {
@@ -1370,6 +1380,24 @@ void Ec::check_instr_number_equals(int from){
 void Ec::step_debug(){
     step_reason = SR_GP;
     current->regs.REG(fl) |= Cpu::EFL_TF;
+}
+
+size_t Ec::lookup(uint64 v, Paddr &p, mword &a){
+    if(utcb) {
+        return Pd::current->Space_mem::loc[Cpu::id].lookup(v, p, a);
+    } else {
+        if(regs.nst_on) {
+//            Paddr h_cr3;
+//            mword a_cr3;
+//            mword guest_cr3 = Vmcs::read(Vmcs::GUEST_CR3);
+//            Pd::current->ept.lookup(guest_cr3 +, p, a);
+//            Hptp hpt(h_cr3);
+//            hpt.lookup(p+v, p, a);
+            return Pd::current->ept.lookup(v, p, a);
+        } else {
+            return vtlb_lookup(v, p, a); 
+        }
+    }
 }
 
 size_t Ec::vtlb_lookup(uint64 v, Paddr &p, mword &a){

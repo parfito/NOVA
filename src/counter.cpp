@@ -35,6 +35,8 @@ unsigned Counter::delayed_msi[NUM_MSI];
 uint64 Counter::lag_msi[NUM_MSI];
 unsigned Counter::exc[NUM_EXC][2];
 unsigned Counter::vmi[NUM_VMI][2];
+uint64 Counter::lag_vmx[NUM_VMX];
+unsigned Counter::delayed_vmx[NUM_VMX];
 unsigned Counter::vtlb_gpf;
 unsigned Counter::vtlb_hpf;
 unsigned Counter::vtlb_fill;

@@ -17,6 +17,7 @@
 #include "lapic.hpp"
 #include "counter.hpp"
 #include "vectors.hpp"
+#include "ec.hpp"
 
 Slab_cache Pending_int::cache(sizeof (Pending_int), 32);
 Queue<Pending_int> Pending_int::pendings;
@@ -64,6 +65,17 @@ void Pending_int::exec_pending_interrupt(){
                 Counter::delayed_msi[pi->vector - VEC_MSI]++;
                 Counter::lag_msi[pi->vector - VEC_MSI] += lag;
                 Dmar::exec_msi(pi->vector, true);
+                break;
+            case VEC_VMX ... VMX_MAX - 1: 
+                if(pi->next && pi->next->vector < VEC_MAX)
+                    continue;
+            {   unsigned vec = pi->vector - VEC_VMX;
+                Counter::delayed_vmx[vec]++;
+                Counter::lag_vmx[vec] += lag;
+                do
+                    delete pi; // because the folling function call will never return
+                while(pendings.dequeue(pi = pendings.head()));
+                Ec::exec_pending(vec); }
                 break;
             default:
                 Console::panic("Unhandled pending interrupt");

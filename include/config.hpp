@@ -31,6 +31,8 @@
 #define NUM_LVT         6
 #define NUM_MSI         1
 #define NUM_IPI         3
+#define VEC_VMX         350
+#define NUM_VMX         68
 
 #define SPN_SCH         0
 #define SPN_HLP         1

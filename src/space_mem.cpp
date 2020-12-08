@@ -90,11 +90,14 @@ bool Space_mem::update (Quota_guard &quota, Mdb *mdb, mword r, bool to_be_cowed)
                 }
 
                 if(ord < Ept::bpl() || !(ept_a & Ept::EPT_W)) {
+                    ept_backup.update (quota, b + i * (1UL << (ord + PAGE_BITS)), ord, p + i * (1UL << (ord + PAGE_BITS)), Ept::hw_attr (a, mdb->node_type), r ? Ept::TYPE_DN : Ept::TYPE_UP);
                     ept.update (quota, b + i * (1UL << (ord + PAGE_BITS)), ord, p + i * (1UL << (ord + PAGE_BITS)), new_ept_a, r ? Ept::TYPE_DN : Ept::TYPE_UP);
                 } else {
                     mword max_ord = ord - Ept::bpl() + 1;
-                    for(unsigned long j = 0; j < 1UL << max_ord; j++)
+                    for(unsigned long j = 0; j < 1UL << max_ord; j++) {
                         ept.update (quota, b + i * (1UL << (ord + PAGE_BITS)) + j * (1UL << (Ept::bpl() + PAGE_BITS - 1)), Ept::bpl() - 1, p + i * (1UL << (ord + PAGE_BITS)) + j * (1UL << (Ept::bpl() + PAGE_BITS - 1)), new_ept_a, r ? Ept::TYPE_DN : Ept::TYPE_UP);
+                        ept_backup.update (quota, b + i * (1UL << (ord + PAGE_BITS)) + j * (1UL << (Ept::bpl() + PAGE_BITS - 1)), Ept::bpl() - 1, p + i * (1UL << (ord + PAGE_BITS)) + j * (1UL << (Ept::bpl() + PAGE_BITS - 1)), Ept::hw_attr (a, mdb->node_type), r ? Ept::TYPE_DN : Ept::TYPE_UP);
+                    }
                 }
             }
         }

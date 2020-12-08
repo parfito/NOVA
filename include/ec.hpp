@@ -262,6 +262,7 @@ public:
         SR_VMIO     = 8,
         SR_GPF      = 9,
         SR_RFLAG    = 10,
+        SR_VMIW     = 11,
     };
 
     enum PE_stopby {
@@ -293,6 +294,7 @@ public:
         PES_VMX_IO = 25,
         PES_COW_IN_STACK = 26,
         PES_SINGLE_STEP_FINISHED = 27,
+        PES_VMX_MTF              = 28,
     };
     
     enum Register {
@@ -328,14 +330,14 @@ public:
         STORE_RUN_STATE = 2,
     };
     static mword prev_rip, instruction_value, tscp_rcx1, tscp_rcx2, vmlaunch, 
-        guest_single_step_rsp, pe_guest_rsp;
+        guest_single_step_rsp, pe_guest_rsp, guest_start_rip, pe_start_rip;
     static uint64 counter1, counter2, exc_counter, exc_counter1, exc_counter2, debug_compteur, 
     count_je, nbInstr_to_execute, tsc1, tsc2, nb_inst_single_step, second_run_instr_number, 
-    first_run_instr_number, distance_instruction, second_max_instructions;
-    static uint8 launch_state, step_reason, debug_nb, debug_type, 
+    first_run_instr_number, distance_instruction;
+    static uint8 launch_state, step_reason, vmx_step_reason, debug_nb, debug_type, 
     replaced_int3_instruction, replaced_int3_instruction2;
     static bool hardening_started, in_rep_instruction, not_nul_cowlist, 
-    no_further_check, run_switched, keep_cow, single_stepped;
+    no_further_check, run_switched, keep_cow, single_stepped, ept_backup;
     static int run1_reason, previous_ret, nb_try;
     static const char* reg_names[24], *launches[6], *pe_stop[27];
     static Paddr guest_rsp_phys;
@@ -612,6 +614,7 @@ public:
     static void trace_sysenter() asm ("trace_sysenter");
     bool is_temporal_exc();
     bool is_io_exc(mword = 0);
+    static void abort_pe(PE_stopby = PES_DEFAULT);
 
     void resolve_PIO_execption();
 
@@ -690,10 +693,14 @@ public:
     static void vmx_resolve_io();
     NORETURN
     static void vmx_emulate_io();
+    NORETURN
+    static void exec_pending(unsigned);
 
     bool is_virutalcpu() {
         return !utcb;
     }
+    
+    static void resolve_intr_window();
     mword get_reg(Register, int = 3);
     Register compare_regs(PE_stopby = PES_DEFAULT);
     static void count_interrupt(Exc_regs*);
@@ -702,6 +709,7 @@ public:
     static void debug_record_info();
     static void step_debug();
     size_t vtlb_lookup(uint64, Paddr&, mword&);
+    size_t lookup(uint64, Paddr&, mword&);
     //        size_t get_cow_number() { return cow_elts.size(); }
     //        bool is_cow_elts_empty() { return !cow_elts.head(); }
     //        void dump_regs();

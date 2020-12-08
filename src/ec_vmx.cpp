@@ -28,6 +28,7 @@
 #include "log.hpp"
 #include "pe.hpp"
 #include "log_store.hpp"
+#include "pending_int.hpp"
 
 void Ec::vmx_exception()
 {
@@ -197,7 +198,7 @@ void Ec::vmx_cr()
 }
 
 void Ec::trace_vmexit(mword reason) {
-    unsigned reason_vec = 0;
+    mword nst_error = 0, nst_fault = 0;
     char counter_buff[STR_MIN_LENGTH];
     uint64 counter_value = Lapic::read_instCounter();
     if(counter_value >= Lapic::perf_max_count - MAX_INSTRUCTION)
@@ -227,106 +228,24 @@ void Ec::trace_vmexit(mword reason) {
     } else {
         String::print(rip_instruction, "No next_fault");
     }
-    call_log_funct(Logstore::add_entry_in_buffer, 0, "VMEXIT PE %llu rip %lx "
-        "(%s) rsp %lx flags %lx CS %lx run %u counter %s reason %s, %s", 
-        Counter::nb_pe, guest_eip, rip_instruction, Vmcs::read(Vmcs::GUEST_RSP), 
-        Vmcs::read(Vmcs::GUEST_RFLAGS), Vmcs::read(Vmcs::GUEST_SEL_CS), 
-        Pe::run_number, counter_buff, Vmcs::reason[reason], next_fault);
+    char detail[STR_MIN_LENGTH];
     if(reason == Vmcs::VMX_EXTINT) {
-        reason_vec = Vmcs::read (Vmcs::EXI_INTR_INFO) & 0xff;
-        call_log_funct(Logstore::append_entry_in_buffer, 0, "vec %u", reason_vec);
+        String::print(detail, "vec %lu", Vmcs::read(Vmcs::EXI_INTR_INFO) & 0xff);
     } else if(reason == Vmcs::VMX_EXC_NMI) {
         mword intr_info = Vmcs::read (Vmcs::EXI_INTR_INFO);
         switch(intr_info & 0x7ff) {
             case 0x202: // NMI
-                call_log_funct(Logstore::append_entry_in_buffer, 0, "NMI");
+                String::print(detail, "NMI");
                 break;
             case 0x307: // #NM
-                call_log_funct(Logstore::append_entry_in_buffer, 0, "NM");
+                String::print(detail, "NM");
                 break;
             case 0x30e: // #PF
-                call_log_funct(Logstore::append_entry_in_buffer, 0, "PF %lx:%lx ", 
-                    Vmcs::read (Vmcs::EXI_QUALIFICATION), Vmcs::read (Vmcs::EXI_INTR_ERROR));    
+                String::print(detail, "PF %lx:%lx ", Vmcs::read(Vmcs::EXI_QUALIFICATION), 
+                    Vmcs::read(Vmcs::EXI_INTR_ERROR));    
                 break;
             default:
-                call_log_funct(Logstore::append_entry_in_buffer, 0, "Don't know "
-                        "this VMX_EXC %lx", 
-                    intr_info & 0x7ff);
-        } 
-    } else if (reason == Vmcs::VMX_CR) {
-        mword qual = Vmcs::read (Vmcs::EXI_QUALIFICATION);
-        unsigned cr  = qual      & 0xf;        
-        call_log_funct(Logstore::append_entry_in_buffer, 0, "VMX_CR %u", cr);
-    } else if (reason == Vmcs::VMX_MTF) {
-        call_log_funct(Logstore::append_entry_in_buffer, 0, "VMX_MTF");
-    }
-    call_log_funct(Logstore::append_entry_in_buffer, 0, "%s", vmlaunch ? 
-        "VMLAUNCH" : "VMRESUME");
-}
-
-void Ec::handle_vmx()
-{
-    Cpu::hazard = (Cpu::hazard | HZD_DS_ES | HZD_TR) & ~HZD_FPU;
-
-    mword reason = Vmcs::read (Vmcs::EXI_REASON) & 0xff, nst_error = 0, nst_fault = 0;
-    keep_cow = false;    
-    Counter::vmi[reason][Pe::run_number]++;
-
-    unsigned reason_vec = 0;
-    char counter_buff[STR_MIN_LENGTH];
-    uint64 counter_value = Lapic::read_instCounter();
-    if(counter_value >= Lapic::perf_max_count - MAX_INSTRUCTION)
-        String::print(counter_buff, "%#llx", counter_value);
-    else
-        String::print(counter_buff, "%llu", counter_value);
-    mword guest_eip = Vmcs::read(Vmcs::GUEST_RIP);
-    Paddr vtlb_hpa;
-    mword vtlb_attr;
-    Vtlb *guest_eip_tlb = nullptr;
-    char rip_instruction[STR_MIN_LENGTH];
-    if(guest_eip &&  
-        current->regs.vtlb->lookup(guest_eip, vtlb_hpa, vtlb_attr, guest_eip_tlb)){
-        uint8 *rip_map = reinterpret_cast<uint8*> 
-            (Hpt::remap_cow(Pd::kern.quota, vtlb_hpa, 3, sizeof(mword)));
-        String::print(rip_instruction, "%x %x", *rip_map, *(rip_map+1));
-    } else {
-        String::print(rip_instruction, "No instruction");
-    }
-    char next_fault[2*STR_MIN_LENGTH];
-    mword next_fault_addr = (pe_guest_rsp & ~PAGE_MASK) + 0xFE0;
-    if(pe_guest_rsp &&
-        current->regs.vtlb->lookup(next_fault_addr, vtlb_hpa, vtlb_attr, guest_eip_tlb)) {
-        mword* fault_addr_map = reinterpret_cast<mword*> 
-                (Hpt::remap_cow(Pd::kern.quota, vtlb_hpa, 3, sizeof(mword)));
-        String::print(next_fault, "next_fault %lx (%lx)", next_fault_addr, *fault_addr_map);
-    } else {
-        String::print(rip_instruction, "No next_fault");
-    }
-    call_log_funct(Logstore::add_entry_in_buffer, 1, "VMEXIT PE %llu rip %lx "
-        "(%s) rsp %lx flags %lx CS %lx run %u counter %s reason %s, %s", 
-        Counter::nb_pe, guest_eip, rip_instruction, Vmcs::read(Vmcs::GUEST_RSP), 
-        Vmcs::read(Vmcs::GUEST_RFLAGS), Vmcs::read(Vmcs::GUEST_SEL_CS), 
-        Pe::run_number, counter_buff, Vmcs::reason[reason], next_fault);
-    if(reason == Vmcs::VMX_EXTINT) {
-        reason_vec = Vmcs::read (Vmcs::EXI_INTR_INFO) & 0xff;
-        call_log_funct(Logstore::append_entry_in_buffer, 0, "vec %u", reason_vec);
-    } else if(reason == Vmcs::VMX_EXC_NMI) {
-        mword intr_info = Vmcs::read (Vmcs::EXI_INTR_INFO);
-        switch(intr_info & 0x7ff) {
-            case 0x202: // NMI
-                call_log_funct(Logstore::append_entry_in_buffer, 0, "NMI");
-                break;
-            case 0x307: // #NM
-                call_log_funct(Logstore::append_entry_in_buffer, 0, "NM");
-                break;
-            case 0x30e: // #PF
-                call_log_funct(Logstore::append_entry_in_buffer, 0, "PF %lx:%lx ", 
-                    Vmcs::read (Vmcs::EXI_QUALIFICATION), Vmcs::read (Vmcs::EXI_INTR_ERROR));    
-                break;
-            default:
-                call_log_funct(Logstore::append_entry_in_buffer, 0, "Don't know "
-                        "this VMX_EXC %lx", 
-                    intr_info & 0x7ff);
+                String::print(detail, "Don't know this VMX_EXC %lx", intr_info & 0x7ff);
         } 
     } else if (reason == Vmcs::VMX_CR) {
         mword qual = Vmcs::read (Vmcs::EXI_QUALIFICATION);
@@ -340,22 +259,113 @@ void Ec::handle_vmx()
     } else if (reason == Vmcs::VMX_MTF) {
         call_log_funct(Logstore::append_entry_in_buffer, 0, "VMX_MTF");
     }
-    call_log_funct(Logstore::append_entry_in_buffer, 0, "%s", vmlaunch ? 
-        "VMLAUNCH" : "VMRESUME");
+    call_log_funct(Logstore::add_entry_in_buffer, 1, "VMEXIT PE %llu rip %lx:%lx "
+        "(%s) rsp %lx flags %lx CS %lx run %u counter %s reason %s %s %s, %s", Counter::nb_pe,
+        guest_start_rip, guest_eip, rip_instruction, Vmcs::read(Vmcs::GUEST_RSP), 
+        Vmcs::read(Vmcs::GUEST_RFLAGS), Vmcs::read(Vmcs::GUEST_SEL_CS), Pe::run_number, 
+        counter_buff, Vmcs::reason[reason], detail, next_fault, vmlaunch ? "VMLAUNCH" :
+        "VMRESUME");
+}
+
+void Ec::handle_vmx()
+{
+    Cpu::hazard = (Cpu::hazard | HZD_DS_ES | HZD_TR) & ~HZD_FPU;
+
+    mword reason = Vmcs::read (Vmcs::EXI_REASON) & 0xff, nst_error = 0, nst_fault = 0;
+    keep_cow = false;    
+    Counter::vmi[reason][Pe::run_number]++;
+
+    char counter_buff[STR_MIN_LENGTH];
+    uint64 counter_value = Lapic::read_instCounter();
+    if(counter_value >= Lapic::perf_max_count - MAX_INSTRUCTION)
+        String::print(counter_buff, "%#llx", counter_value);
+    else
+        String::print(counter_buff, "%llu", counter_value);
+    mword guest_eip = Vmcs::read(Vmcs::GUEST_RIP);
+    Paddr hpa;
+    mword attr;
+    char rip_instruction[STR_MIN_LENGTH];
+    if(guest_eip && current->lookup(guest_eip, hpa, attr)){
+        uint8 *rip_map = reinterpret_cast<uint8*> 
+            (Hpt::remap_cow(Pd::kern.quota, hpa, 3, sizeof(mword)));
+        String::print(rip_instruction, "%x %x", *rip_map, *(rip_map+1));
+    } else {
+        String::print(rip_instruction, "No instruction");
+    }
+    char detail[STR_MIN_LENGTH];
+    if(reason == Vmcs::VMX_EXTINT) {
+        String::print(detail, "vec %lu", Vmcs::read(Vmcs::EXI_INTR_INFO) & 0xff);
+    } else if(reason == Vmcs::VMX_EXC_NMI) {
+        mword intr_info = Vmcs::read (Vmcs::EXI_INTR_INFO);
+        switch(intr_info & 0x7ff) {
+            case 0x202: // NMI
+                String::print(detail, "NMI");
+                break;
+            case 0x307: // #NM
+                String::print(detail, "NM");
+                break;
+            case 0x30e: // #PF
+                String::print(detail, "PF %lx:%lx ", Vmcs::read(Vmcs::EXI_QUALIFICATION), 
+                    Vmcs::read(Vmcs::EXI_INTR_ERROR));    
+                break;
+            default:
+                String::print(detail, "Don't know this VMX_EXC %lx", intr_info & 0x7ff);
+        } 
+    } else if (reason == Vmcs::VMX_CR) {
+        mword qual = Vmcs::read (Vmcs::EXI_QUALIFICATION);
+        unsigned cr  = qual      & 0xf;        
+        String::print(detail, "VMX_CR %u", cr);
+    } else if (reason == Vmcs::VMX_INTR_WINDOW) {
+        uint32 val = static_cast<uint32>(Vmcs::read (Vmcs::CPU_EXEC_CTRL0));
+        String::print(detail, "val %x %s", val, val & Vmcs::CPU_INTR_WINDOW ? "YES " : "NO");
+    } else if (reason == Vmcs::VMX_EPT_VIOLATION) {
+        nst_error = Vmcs::read (Vmcs::EXI_QUALIFICATION); 
+        nst_fault = Vmcs::read (Vmcs::INFO_PHYS_ADDR);
+        String::print(detail, "%lx:%lx ", nst_error, nst_fault);
+    } else if (reason == Vmcs::VMX_MTF) {
+        String::print(detail, "VMX_MTF");
+    } else {
+        String::print(detail, " ");
+    }
+    call_log_funct(Logstore::add_entry_in_buffer, 0, "VMEXIT PE %llu rip %lx:%lx "
+        "(%s) rsp %lx flags %lx CS %lx run %u counter %s reason %s %s %s", Counter::nb_pe,
+        guest_start_rip, guest_eip, rip_instruction, Vmcs::read(Vmcs::GUEST_RSP), 
+        Vmcs::read(Vmcs::GUEST_RFLAGS), Vmcs::read(Vmcs::GUEST_SEL_CS), Pe::run_number, 
+        counter_buff, Vmcs::reason[reason], detail, vmlaunch ? "VMLAUNCH" :
+        "VMRESUME");
    
-    if(Pe::run_number == 1 && step_reason == SR_NIL && run1_reason == PES_PMI && 
+    if(Pe::run_number == 1 && vmx_step_reason == SR_NIL && run1_reason == PES_PMI && 
         reason != Vmcs::VMX_EXTINT) {
 // What are your doing here? Actually, it means 2nd run exceeds 1st run and trigger exception
 // In this case, PMI must be pending and should be served just after IRET
+//        if(reason == Vmcs::VMX_EPT_VIOLATION) {
+//         Very bad second run, the 2nd run has surely exceeded the 1st
+//            current->rollback();
+//            launch_state = UNLAUNCHED;
+//            reset_all();
+//            ret_user_vmresume();
+//        But if the first run was stopped by PMI, it may be better to stop the 
+//        2nd run here and single stepp the 1st run to catch up with the 2nd
+//        }
         call_log_funct(Logstore::add_entry_in_buffer, 1, "Warning : An interrupt "
-                "(other VMX_EXTINT  - than PMI or Timer - ) happens in 2nd run "
-                "when 1st run was stopped by PMI");
+                "other VMX_EXTINT (PMI and Timer) happens in 2nd run when 1st run "
+                "was stopped by PMI. Reason %s %s", Vmcs::reason[reason], detail);
         ret_user_vmresume();
     }
 
     switch (reason) {
         case Vmcs::VMX_EXC_NMI:     vmx_exception();
         case Vmcs::VMX_EXTINT:      vmx_extint();
+//        case Vmcs::VMX_INTR_WINDOW: 
+//            if(Ec::is_idle()){
+//                break;
+//            } else {
+//                Pending_int::add_pending_interrupt(Vmcs::VMX_INTR_WINDOW + VEC_VMX);
+//                uint32 val = static_cast<uint32>(Vmcs::read (Vmcs::CPU_EXEC_CTRL0));
+//                trace(0, "val %x Interrupt Window %s", val, val & Vmcs::CPU_INTR_WINDOW ? "YES " : "NO");
+//                current->regs.vmx_set_cpu_ctrl0 (val & ~Vmcs::CPU_INTR_WINDOW);
+//                ret_user_vmresume();
+//            }
         case Vmcs::VMX_INVLPG:
             if (!current->regs.nst_on) vmx_invlpg();
             else break;
@@ -366,9 +376,12 @@ void Ec::handle_vmx()
 //            check_memory(PES_VMX_RDTSC); 
 //            vmx_resolve_rdtsc();
         case Vmcs::VMX_CR:          check_memory(PES_VMX_CR); vmx_cr();
-        case Vmcs::VMX_MTF:         vmx_disable_single_step();
+        case Vmcs::VMX_MTF:         
+            if(vmx_step_reason == SR_VMIW) 
+                check_memory(PES_VMX_MTF); 
+            vmx_disable_single_step();
         case Vmcs::VMX_EPT_VIOLATION:
-            if(Pd::current->ept.cow_update(nst_fault)) {
+            if(Pd::current->ept.is_cow_fault(nst_fault)) {
                 ret_user_vmresume();
             }
             current->regs.nst_error = nst_error;
@@ -382,21 +395,51 @@ void Ec::handle_vmx()
 //            vmx_resolve_rdtsc(true);
 //            break;
     }
-    
     if(reason == Vmcs::VMX_IO)
         keep_cow = true;    
-    check_memory(PES_VMX_EXIT);     
-    current->regs.dst_portal = reason;
+    if(reason == Vmcs::VMX_INTR_WINDOW && (
+            (counter_value == (Lapic::perf_max_count - MAX_INSTRUCTION)) ||
+            (guest_eip == pe_start_rip))) {
+        if(counter_value != (Lapic::perf_max_count - MAX_INSTRUCTION))
+            call_log_funct(Logstore::add_entry_in_buffer, 1, "Warning : Interrupt "
+            "Window on 1st PE instruction but counter is not 0. EIP Start %lx "
+            "Current %lx counter %s", guest_start_rip, guest_eip, counter_buff);
+        assert(Pe::run_number == 0);
+        abort_pe(PES_VMX_EXIT);
+        ept_backup = true;
+        current->regs.vmcs->write_eptp(Pd::current->ept_backup.root(Pd::current->quota));
+        resolve_intr_window();
+        ret_user_vmresume();
+//        current->regs.dst_portal = reason;
+//        send_msg<ret_user_vmresume>();
+    } else {
+        check_memory(PES_VMX_EXIT);     
+    
+        current->regs.dst_portal = reason;
+        if (reason == Vmcs::VMX_INTR_WINDOW) { 
+            // Guest OS first instruction after INTR_WINDOW must never page fault
+            ept_backup = true;
+            current->regs.vmcs->write_eptp(Pd::current->ept_backup.root(Pd::current->quota));
+            resolve_intr_window();
+        }
+        send_msg<ret_user_vmresume>();
+    }
+}
 
+void Ec::exec_pending(unsigned reason) {
+    trace(0, "Exec %s", Vmcs::reason[reason]);
+    current->regs.dst_portal = reason;
+    uint32 val = static_cast<uint32>(Vmcs::read (Vmcs::CPU_EXEC_CTRL0));
+    current->regs.vmx_set_cpu_ctrl0 (val | Vmcs::CPU_INTR_WINDOW);
     send_msg<ret_user_vmresume>();
 }
 
 void Ec::vmx_disable_single_step() {
-    switch(step_reason){
+    switch(vmx_step_reason){
         case SR_RDTSC:
             disable_mtf();
             disable_rdtsc();
-            step_reason = SR_NIL;
+            vmx_step_reason = SR_NIL;
             break;
         case SR_PMI: {
             ++Counter::pmi_ss;
@@ -495,7 +538,6 @@ void Ec::vmx_disable_single_step() {
                 second_run_instr_number, Pd::current->get_name(), 
                 Ec::current->get_name());
             }
-            nb_inst_single_step++;
 //            if (nbInstr_to_execute > 0)
 //                nbInstr_to_execute--;
             if (prev_rip == current_rip) { // Rep Prefix
@@ -630,6 +672,12 @@ void Ec::vmx_disable_single_step() {
             disable_mtf();
             break;
         }
+        case SR_VMIW:
+            ept_backup = false;
+            current->regs.vmcs->write_eptp(Pd::current->ept.root(Pd::current->quota));            
+            vmx_step_reason = SR_NIL;
+            disable_mtf();
+            break;
         default:
             Console::panic("No step Reason");
     }
@@ -639,11 +687,15 @@ void Ec::vmx_disable_single_step() {
 void Ec::vmx_resolve_io(){
     if (Vmcs::has_mtf()) {// if the CPU honors the monitor trap flag
         enable_mtf();
-        step_reason = SR_VMIO;
+        vmx_step_reason = SR_VMIO;
         current->regs.vmcs->make_current();
     } else
         vmx_emulate_io();
     ret_user_vmresume();
+}
+void Ec::resolve_intr_window(){
+    enable_mtf();
+    vmx_step_reason = SR_VMIW;
 }
 
 void Ec::vmx_emulate_io(){
@@ -654,7 +706,7 @@ void Ec::vmx_resolve_rdtsc(bool is_rdtscp) {
     if (Vmcs::has_mtf()) {// if the CPU honors the monitor trap flag
         enable_mtf();
         enable_rdtsc();
-        step_reason = SR_RDTSC;
+        vmx_step_reason = SR_RDTSC;
         current->regs.vmcs->make_current();
     } else
         vmx_emulate_rdtsc(is_rdtscp);
@@ -664,7 +716,7 @@ void Ec::vmx_resolve_rdtsc(bool is_rdtscp) {
 void Ec::vmx_enable_single_step(Step_reason reason) {
     if (Vmcs::has_mtf()) {// if the CPU honors the monitor trap flag
         enable_mtf();
-        step_reason = reason;
+        vmx_step_reason = reason;
         current->regs.vmcs->make_current();
     } else {
         Console::panic("VM Single step required and monitor trap not supported : IO Emulation required");        
@@ -672,14 +724,14 @@ void Ec::vmx_enable_single_step(Step_reason reason) {
     if(reason == SR_DBG){
         Paddr hpa_guest_rip;
         mword guest_rip = Vmcs::read(Vmcs::GUEST_RIP), attr;
-        current->vtlb_lookup(guest_rip, hpa_guest_rip, attr);
+        current->lookup(guest_rip, hpa_guest_rip, attr);
         void *rip_ptr = reinterpret_cast<char*>(Hpt::remap_cow(Pd::kern.quota, hpa_guest_rip, 3)) + 
             (hpa_guest_rip & PAGE_MASK);
         char instr_buff[STR_MIN_LENGTH];
         instruction_in_hex(*reinterpret_cast<mword*>(rip_ptr), instr_buff);
         
         Paddr hpa_miss_match_addr;
-        current->vtlb_lookup(Pe::missmatch_addr, hpa_miss_match_addr, attr);
+        current->lookup(Pe::missmatch_addr, hpa_miss_match_addr, attr);
         mword offset = hpa_miss_match_addr & PAGE_MASK, mod = offset % sizeof(mword);
         offset = (mod == 0) ? offset : offset - mod;
         void *mm_ptr = reinterpret_cast<char*>(Hpt::remap_cow(Pd::kern.quota, hpa_miss_match_addr, 
@@ -702,7 +754,7 @@ void Ec::vmx_emulate_rdtsc(bool is_rdtscp) {
         uint64 entry = 0;
         Paddr physic;
         mword attrib;
-        if (!current->vtlb_lookup(inst_addr, physic, attrib)) {
+        if (!current->lookup(inst_addr, physic, attrib)) {
             Console::print("Instr_addr not found %lx", inst_addr);
         }
         uint8 *ptr = reinterpret_cast<uint8 *> (Hpt::remap_cow(Pd::current->quota, entry & ~PAGE_MASK));  
@@ -766,5 +818,5 @@ void Ec::disable_mtf() {
     mword val = Vmcs::read(Vmcs::CPU_EXEC_CTRL0);
     val &= ~Vmcs::CPU_MONITOR_TRAP_FLAG;
     Vmcs::write(Vmcs::CPU_EXEC_CTRL0, val);
-    step_reason = SR_NIL;
+    vmx_step_reason = SR_NIL;
 }

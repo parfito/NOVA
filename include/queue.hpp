@@ -166,14 +166,10 @@ class Queue
             T *temp = t1;
             t1 = t2;
             t2 = temp;
-            t1_prev->next = t1;
-            t1_next->prev = t1;
-            t2_prev->next = t2;
-            t2_next->prev = t2;
-            t1->next = t1_next;
-            t1->prev = t1_prev;
-            t2->next = t2_next;
-            t2->prev = t2_prev;
+            t1->prev = t2_prev;
+            t1->next = t2_next;
+            t2->prev = t1_prev;
+            t2->next = t1_next;
             return true;
         }
 };

@@ -156,7 +156,7 @@ P *Pte<P,E,L,B,F>::cow_walk (E v) {
 
     for (P *e = static_cast<P *>(this);; e = static_cast<P *>(Buddy::phys_to_ptr (e->addr())) + (v >> (--l * B + PAGE_BITS) & ((1UL << B) - 1))) {
 
-        if (!e->val) {
+        if (e && !e->val) {
             return nullptr;
         }
         
