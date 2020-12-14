@@ -742,7 +742,7 @@ void Ec::check_memory(PE_stopby from) {
                         "nb_cow_fault %u counter1 %llx counter2 %llx Nb_pe %llu is_saved %d", out_buff, ec->get_name(), pd->get_name(), pe_stop[run1_reason], 
                         pe_stop[from], launches[launch_state], Counter::cow_fault, counter1, counter2 ? counter2 : 
                         Lapic::read_instCounter(),  Counter::nb_pe, Fpu::is_saved());
-                    Logstore::dump("check_memory 2", true);
+                    call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 2, "check_memory 2");
                     counter2 = nbInstr_to_execute ? counter2 + nbInstr_to_execute : 
                     Lapic::read_instCounter();
                     /**

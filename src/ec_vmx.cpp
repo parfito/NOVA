@@ -335,7 +335,7 @@ void Ec::handle_vmx()
         "VMRESUME");
    
     if(Pe::run_number == 1 && vmx_step_reason == SR_NIL && run1_reason == PES_PMI && 
-        reason != Vmcs::VMX_EXTINT) {
+        reason != Vmcs::VMX_EXTINT && reason != Vmcs::VMX_EPT_VIOLATION) {
 // What are your doing here? Actually, it means 2nd run exceeds 1st run and trigger exception
 // In this case, PMI must be pending and should be served just after IRET
 //        if(reason == Vmcs::VMX_EPT_VIOLATION) {
@@ -382,6 +382,12 @@ void Ec::handle_vmx()
             vmx_disable_single_step();
         case Vmcs::VMX_EPT_VIOLATION:
             if(Pd::current->ept.is_cow_fault(nst_fault)) {
+                if(Pe::run_number == 1) {
+                    call_log_funct(Logstore::add_entry_in_buffer, 1, "VMX_EPT_VIOLATION EIP Start %lx "
+                    "Current %lx run1_reason %s counter %s", guest_start_rip, guest_eip, Vmcs::reason[run1_reason], counter_buff);
+                    assert(run1_reason == PES_PMI);
+                    check_memory(PES_VMX_EPT_VIOL);
+                }
                 ret_user_vmresume();
             }
             current->regs.nst_error = nst_error;
