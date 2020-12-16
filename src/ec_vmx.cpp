@@ -110,7 +110,12 @@ void Ec::vmx_extint()
 
 void Ec::vmx_invlpg()
 {
-    check_memory(PES_VMX_INVLPG); 
+    if (current->regs.nst_on) {
+        call_log_funct(Logstore::add_entry_in_buffer, 0, "VMX_INVLPG");
+        check_memory(PES_VMX_INVLPG);
+        resolve_vmx_invlpg();
+        ret_user_vmresume();
+    } 
     current->regs.tlb_flush<Vmcs>(Vmcs::read (Vmcs::EXI_QUALIFICATION));
     Vmcs::adjust_rip();
     ret_user_vmresume();
@@ -124,6 +129,14 @@ void Ec::vmx_cr()
     unsigned acc = qual >> 4 & 0x3;
     unsigned cr  = qual      & 0xf;
 
+    call_log_funct(Logstore::add_entry_in_buffer, 0, "VMX_CR CR%u %s run %d", 
+        cr, acc ? "READ" : "WRITE", Pe::run_number);
+    if (current->regs.nst_on && cr == 3) {
+        check_memory(PES_VMX_CR);
+        resolve_vmx_cr();
+        ret_user_vmresume();
+    }
+    check_memory(PES_VMX_CR);
     switch (acc) {
         case 0:     // MOV to CR
         {
@@ -367,17 +380,17 @@ void Ec::handle_vmx()
 //                ret_user_vmresume();
 //            }
         case Vmcs::VMX_INVLPG:
-            if (!current->regs.nst_on) vmx_invlpg();
-            else break;
+            vmx_invlpg();
 //        case Vmcs::VMX_RDTSC:       
 //            if(Pe::run_number == 0)
 //                tsc1 = rdtsc();
 //            keep_cow = true;
 //            check_memory(PES_VMX_RDTSC); 
 //            vmx_resolve_rdtsc();
-        case Vmcs::VMX_CR:          check_memory(PES_VMX_CR); vmx_cr();
+        case Vmcs::VMX_CR:          vmx_cr();
         case Vmcs::VMX_MTF:         
-            if(vmx_step_reason == SR_VMIW) 
+            if((vmx_step_reason == SR_VMIW) || (vmx_step_reason == SR_VMCR) ||
+                (vmx_step_reason == SR_VMINVPG)) 
                 check_memory(PES_VMX_MTF); 
             vmx_disable_single_step();
         case Vmcs::VMX_EPT_VIOLATION:
@@ -684,6 +697,13 @@ void Ec::vmx_disable_single_step() {
             vmx_step_reason = SR_NIL;
             disable_mtf();
             break;
+        case SR_VMINVPG: {
+        case SR_VMCR:
+            unsigned const msk = Vmcs::CPU_INVLPG | Vmcs::CPU_CR3_LOAD | Vmcs::CPU_CR3_STORE;
+            uint32 val = static_cast<uint32>(Vmcs::read (Vmcs::CPU_EXEC_CTRL0));
+            val |= msk;
+            disable_mtf();
+            break; }
         default:
             Console::panic("No step Reason");
     }
@@ -702,6 +722,24 @@ void Ec::vmx_resolve_io(){
 void Ec::resolve_intr_window(){
     enable_mtf();
     vmx_step_reason = SR_VMIW;
+}
+
+void Ec::resolve_vmx_invlpg(){
+    uint32 val = static_cast<uint32>(Vmcs::read (Vmcs::CPU_EXEC_CTRL0));
+    unsigned const msk = Vmcs::CPU_INVLPG | Vmcs::CPU_CR3_LOAD | Vmcs::CPU_CR3_STORE;
+    val &= ~msk;
+    Vmcs::write(Vmcs::CPU_EXEC_CTRL0, val);
+    enable_mtf();
+    vmx_step_reason = SR_VMINVPG;
+}
+
+void Ec::resolve_vmx_cr(){
+    uint32 val = static_cast<uint32>(Vmcs::read (Vmcs::CPU_EXEC_CTRL0));
+    unsigned const msk = Vmcs::CPU_INVLPG | Vmcs::CPU_CR3_LOAD | Vmcs::CPU_CR3_STORE;
+    val &= ~msk;
+    Vmcs::write(Vmcs::CPU_EXEC_CTRL0, val);
+    enable_mtf();
+    vmx_step_reason = SR_VMCR;
 }
 
 void Ec::vmx_emulate_io(){

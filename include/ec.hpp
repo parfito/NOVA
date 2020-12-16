@@ -263,6 +263,8 @@ public:
         SR_GPF      = 9,
         SR_RFLAG    = 10,
         SR_VMIW     = 11,
+        SR_VMCR     = 12,
+        SR_VMINVPG  = 13
     };
 
     enum PE_stopby {
@@ -701,6 +703,8 @@ public:
     }
     
     static void resolve_intr_window();
+    static void resolve_vmx_cr();
+    static void resolve_vmx_invlpg();
     mword get_reg(Register, int = 3);
     Register compare_regs(PE_stopby = PES_DEFAULT);
     static void count_interrupt(Exc_regs*);

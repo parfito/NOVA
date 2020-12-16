@@ -154,7 +154,8 @@ void Vmcs::init()
 
     fix_cr0_clr |= Cpu::CR0_CD | Cpu::CR0_NW;
 
-    ctrl_cpu[0].set |= CPU_HLT | CPU_IO | CPU_IO_BITMAP | CPU_SECONDARY | CPU_RDTSC;
+    ctrl_cpu[0].set |= CPU_HLT | CPU_IO | CPU_IO_BITMAP | CPU_SECONDARY | CPU_RDTSC |
+            Vmcs::CPU_INVLPG | Vmcs::CPU_CR3_LOAD | Vmcs::CPU_CR3_STORE;
 //    ctrl_cpu[0].clr &= ~CPU_MONITOR_TRAP_FLAG;
     ctrl_cpu[1].set |= CPU_VPID | CPU_URG;
 
