@@ -51,7 +51,7 @@ bool Ec::hardening_started = false, Ec::in_rep_instruction = false, Ec::not_nul_
 uint64 Ec::exc_counter = 0, Ec::exc_counter1 = 0, Ec::exc_counter2 = 0, Ec::counter1 = 0, 
         Ec::counter2 = 0, Ec::debug_compteur = 0, Ec::count_je = 0, Ec::nbInstr_to_execute = 0,
         Ec::nb_inst_single_step = 0, Ec::second_run_instr_number = 0, 
-        Ec::first_run_instr_number = 0, Ec::distance_instruction = 0;
+        Ec::first_run_instr_number = 0, Ec::distance_instruction = 0, Ec::prev_counter_val;
        
 uint8 Ec::launch_state = 0, Ec::step_reason = 0, Ec::vmx_step_reason = 0, Ec::debug_nb = 0, 
         Ec::debug_type = 0, Ec::replaced_int3_instruction, Ec::replaced_int3_instruction2;
@@ -62,11 +62,11 @@ int Ec::run1_reason = 0, Ec::previous_ret = 0, Ec::nb_try = 0;
 const char* Ec::reg_names[24] = {"N/A", "RAX", "RBX", "RCX", "RDX", "RBP", "RDI", "RSI", "R8", 
 "R9", "R10", "R11", "R12", "R13", "R14", "R15", "RIP", "RSP", "RFLAG", "GUEST_RIP", "GUEST_RSP", 
 "GUEST_RIP", "FPU_DATA", "FPU_STATE"};
-const char* Ec::pe_stop[27] = {"NUL", "PMI", "PAGE_FAULT", "SYS_ENTER", "VMX_EXIT", 
+const char* Ec::pe_stop[29] = {"NUL", "PMI", "PAGE_FAULT", "SYS_ENTER", "VMX_EXIT", 
 "INVALID_TSS", "GP_FAULT", "DEV_NOT_AVAIL", "SEND_MSG", "MMIO", "SINGLE_STEP", 
 "VMX_SEND_MSG", "VMX_EXT_INT", "GSI", "MSI", "LVT", "ALIGNEMENT_CHECK", 
 "MACHINE_CHECK", "VMX_INVLPG", "VMX_PAGE_FAULT", "VMX_EPT_VIOL", "VMX_CR", "VMX_EXC",
-"VMX_RDTSC", "VMX_RDTSCP", "VMX_IO", "COW_IN_STACK"};
+"VMX_RDTSC", "VMX_RDTSCP", "VMX_IO", "COW_IN_STACK", "PES_SINGLE_STEP_FINISHED", "PES_VMX_MTF"};
 const char* Ec::launches[6] = {"UNLAUNCHED", "SYSEXIT", "IRET", "VMRESUME", "VMRUN", "EXT_INT"};
 
 Ec *Ec::current, *Ec::fpowner;
@@ -429,7 +429,7 @@ void Ec::ret_user_vmresume() {
     if (EXPECT_FALSE(get_cr2() != current->regs.cr2))
         set_cr2(current->regs.cr2);
     guest_start_rip = Vmcs::read(Vmcs::GUEST_RIP);
-    call_log_funct(Logstore::add_entry_in_buffer, 0, "VMResume : Run %d Ec %s "
+    call_log_funct(Logstore::add_entry_in_buffer, nb_try ? 1 : 0, "VMResume : Run %d Ec %s "
         "RIP %lx RSP %lx RFLAGS %lx Counter %llx", Pe::run_number, current->get_name(), 
         guest_start_rip, Vmcs::read(Vmcs::GUEST_RSP), 
         Vmcs::read(Vmcs::GUEST_RFLAGS), Lapic::read_instCounter());
@@ -835,6 +835,10 @@ void Ec::rollback() {
     if (!utcb) {
         vmx_rollback();
     }
+    Lapic::program_pmi();    
+    Pe::c_regs[0] = regs_0;
+    Pe::inState1 = false;
+    Pe::run_number = 0;
 }
 
 /**
@@ -1393,7 +1397,10 @@ size_t Ec::lookup(uint64 v, Paddr &p, mword &a){
 //            Pd::current->ept.lookup(guest_cr3 +, p, a);
 //            Hptp hpt(h_cr3);
 //            hpt.lookup(p+v, p, a);
-            return Pd::current->ept.lookup(v, p, a);
+            Ept* ept;
+            /* We use cow_walk instead of Pte lookup because pte lookup behaves 
+             weirdly due to it s = --- + order() */
+            return Pd::current->ept.cow_walk(v, p, a, ept);
         } else {
             return vtlb_lookup(v, p, a); 
         }

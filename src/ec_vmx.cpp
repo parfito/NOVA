@@ -284,16 +284,22 @@ void Ec::handle_vmx()
 {
     Cpu::hazard = (Cpu::hazard | HZD_DS_ES | HZD_TR) & ~HZD_FPU;
 
-    mword reason = Vmcs::read (Vmcs::EXI_REASON) & 0xff, nst_error = 0, nst_fault = 0;
+    mword reason = Vmcs::read (Vmcs::EXI_REASON) & 0xff, nst_error = 0, nst_fault = 0,
+            intr_info = 0;
     keep_cow = false;    
     Counter::vmi[reason][Pe::run_number]++;
 
+    if(prev_counter_val) {
+        Lapic::write_instCounter(prev_counter_val);
+        prev_counter_val = 0;
+    }
     char counter_buff[STR_MIN_LENGTH];
     uint64 counter_value = Lapic::read_instCounter();
     if(counter_value >= Lapic::perf_max_count - MAX_INSTRUCTION)
         String::print(counter_buff, "%#llx", counter_value);
-    else
+    else {
         String::print(counter_buff, "%llu", counter_value);
+    }
     mword guest_eip = Vmcs::read(Vmcs::GUEST_RIP);
     Paddr hpa;
     mword attr;
@@ -307,10 +313,11 @@ void Ec::handle_vmx()
     }
     char detail[STR_MIN_LENGTH];
     if(reason == Vmcs::VMX_EXTINT) {
-        String::print(detail, "vec %lu", Vmcs::read(Vmcs::EXI_INTR_INFO) & 0xff);
+        intr_info = Vmcs::read (Vmcs::EXI_INTR_INFO) & 0x7ff;
+        String::print(detail, "vec %lu", intr_info);
     } else if(reason == Vmcs::VMX_EXC_NMI) {
-        mword intr_info = Vmcs::read (Vmcs::EXI_INTR_INFO);
-        switch(intr_info & 0x7ff) {
+        intr_info = Vmcs::read (Vmcs::EXI_INTR_INFO) & 0x7ff;
+        switch(intr_info) {
             case 0x202: // NMI
                 String::print(detail, "NMI");
                 break;
@@ -322,7 +329,7 @@ void Ec::handle_vmx()
                     Vmcs::read(Vmcs::EXI_INTR_ERROR));    
                 break;
             default:
-                String::print(detail, "Don't know this VMX_EXC %lx", intr_info & 0x7ff);
+                String::print(detail, "Don't know this VMX_EXC %lx", intr_info);
         } 
     } else if (reason == Vmcs::VMX_CR) {
         mword qual = Vmcs::read (Vmcs::EXI_QUALIFICATION);
@@ -340,13 +347,19 @@ void Ec::handle_vmx()
     } else {
         String::print(detail, " ");
     }
-    call_log_funct(Logstore::add_entry_in_buffer, 0, "VMEXIT PE %llu rip %lx:%lx "
+    call_log_funct(Logstore::add_entry_in_buffer, nb_try ? 1 : 0, "VMEXIT PE %llu rip %lx:%lx "
         "(%s) rsp %lx flags %lx CS %lx run %u counter %s reason %s %s %s", Counter::nb_pe,
         guest_start_rip, guest_eip, rip_instruction, Vmcs::read(Vmcs::GUEST_RSP), 
         Vmcs::read(Vmcs::GUEST_RFLAGS), Vmcs::read(Vmcs::GUEST_SEL_CS), Pe::run_number, 
         counter_buff, Vmcs::reason[reason], detail, vmlaunch ? "VMLAUNCH" :
         "VMRESUME");
-   
+    
+    if((counter_value > 0) && (counter_value < Lapic::perf_max_count - MAX_INSTRUCTION) &&
+            ((reason != Vmcs::VMX_EXTINT) || (intr_info != VEC_LVT_PERFM))) {
+        call_log_funct(Logstore::add_entry_in_buffer, 1, "PMI expected early on next VMResume"
+            " run %d Reason %s %s", Pe::run_number, Vmcs::reason[reason], detail);
+        prev_counter_val = counter_value;
+    }
     if(Pe::run_number == 1 && vmx_step_reason == SR_NIL && run1_reason == PES_PMI && 
         reason != Vmcs::VMX_EXTINT && reason != Vmcs::VMX_EPT_VIOLATION) {
 // What are your doing here? Actually, it means 2nd run exceeds 1st run and trigger exception
@@ -394,9 +407,9 @@ void Ec::handle_vmx()
                 check_memory(PES_VMX_MTF); 
             vmx_disable_single_step();
         case Vmcs::VMX_EPT_VIOLATION:
-            if(Pd::current->ept.is_cow_fault(nst_fault)) {
+            if((nst_error & Ept::EPT_W) && Pd::current->ept.is_cow_fault(nst_fault)) {
                 if(Pe::run_number == 1) {
-                    call_log_funct(Logstore::add_entry_in_buffer, 1, "VMX_EPT_VIOLATION EIP Start %lx "
+                    call_log_funct(Logstore::add_entry_in_buffer, 1, "EPT_VIOLATION on run 2 EIP Start %lx "
                     "Current %lx run1_reason %s counter %s", guest_start_rip, guest_eip, Vmcs::reason[run1_reason], counter_buff);
                     assert(run1_reason == PES_PMI);
                     check_memory(PES_VMX_EPT_VIOL);
@@ -406,7 +419,22 @@ void Ec::handle_vmx()
             current->regs.nst_error = nst_error;
             current->regs.nst_fault = nst_fault;
             break;
-//        case Vmcs::VMX_RDTSCP:      
+        case Vmcs::VMX_RDPMC:
+            trace(0, "VMX_RDPMC");
+            break;
+        case Vmcs::VMX_RDTSC:
+//            trace(0, "VMX_RDTSC");
+            break;       
+        case Vmcs::VMX_RDTSCP:
+            trace(0, "VMX_RDTSCP");
+            break; 
+        case Vmcs::VMX_RAND:
+            trace(0, "VMX_RAND");
+            break;
+        case Vmcs::VMX_RDSEED:
+            trace(0, "VMX_RDSEED");
+            break;
+            
 //            if(Pe::run_number == 0)
 //                tsc1 = rdtscp(tscp_rcx1);
 //            keep_cow = true;
@@ -605,8 +633,8 @@ void Ec::vmx_disable_single_step() {
                         run_switched = true;
                         enable_mtf();
                     } else {
-                        call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 2, 
-                        "SR_EQU Run %d run_switched but %s is different %lx:%lx:%lx:%lx "
+                        call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 0, 
+                        "SR_EQU in VM Run %d run_switched but %s is different %lx:%lx:%lx:%lx "
                         "nb_inst_single_step %llu nbInstr_to_execute %llu "
                         "first_run_instr_number %llu second_run_instr_number %llu "
                         "Pd %s Ec %s", Pe::run_number, reg_names[cmp], 
@@ -614,7 +642,8 @@ void Ec::vmx_disable_single_step() {
                         current->get_reg(cmp, 1), current->get_reg(cmp), 
                         nb_inst_single_step, nbInstr_to_execute, first_run_instr_number, 
                         second_run_instr_number, Pd::current->get_name(),
-                        Ec::current->get_name());                      
+                        Ec::current->get_name());            
+                        relaunch_pe();
                     }
                     ret_user_vmresume();
                 } else { // relaunch the first run without restoring the second execution state

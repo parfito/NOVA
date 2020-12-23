@@ -69,12 +69,12 @@ void Logstore::free_logs(size_t left, bool in_percent) {
  * @param log_depth : the number of log to be printed; default is 5; we will print
  * all logs if this is 0
  */
-void Logstore::dump(char const *funct_name, bool from_tail, size_t log_depth, bool force){
+void Logstore::dump(char const *funct_name, bool from_tail, bool from_start_to_end, size_t log_depth, bool force){
     if(has_been_dumped && !force)
         return;
     Logstore::commit_buffer();
     if(logs_in_table) {
-        Table_logs::dump(funct_name, from_tail, log_depth);
+        Table_logs::dump(funct_name, from_tail, from_start_to_end, log_depth);
     } else {
         Queue_logs::dump(funct_name, from_tail, log_depth);
     }
@@ -279,7 +279,7 @@ void Table_logs::free_logs(size_t left, bool in_percent) {
  * @param log_depth : the number of log to be printed; default is 5; we will print
  * all logs if this is 0
  */
-void Table_logs::dump(char const *funct_name, bool from_tail, size_t log_depth){   
+void Table_logs::dump(char const *funct_name, bool from_tail, bool from_start_to_end, size_t log_depth){   
     if(!total_logs)
         return;
     Logstore::commit_buffer();
@@ -297,16 +297,28 @@ void Table_logs::dump(char const *funct_name, bool from_tail, size_t log_depth){
         return;
     }
     if(from_tail){
-        size_t i_start = cursor ? cursor - 1 : log_max,
-                i_end = (i_start - log_depth > start ? i_start - log_depth : 
-                    i_start + log_max - log_depth) % log_max,
-                s = i_start, e = i_start > i_end ? i_end : 0;
-        trace(0, "i_start %lu i_end %lu s %lu e %lu", i_start, i_end, s, e);
-        for(size_t i = s; i >= e; i--) {
-            logs[i].print(false);
-            if(i_start < i_end && i == 0){
-                i = log_max;
-                e = i_end;
+        size_t to = cursor ? cursor - 1 : log_max,
+                from = (to - log_depth > start ? to - log_depth : 
+                    to + log_max - log_depth) % log_max;
+        if(from_start_to_end) {
+            size_t s = from, e = from < to ? to : log_max;
+            trace(0, "from %lu to %lu s %lu e %lu", to, from, s, e);
+            for(size_t i = s; i <= e; i++) {
+                logs[i].print(false);
+                if(to < from && (i == log_max - 1)){
+                    i = ~static_cast<size_t>(0ul);
+                    e = to;
+                }
+            }
+        } else {
+            size_t s = to, e = to > from ? from : 0;
+            trace(0, "from %lu to %lu s %lu e %lu", to, from, s, e);
+            for(size_t i = s; i >= e; i--) {
+                logs[i].print(false);
+                if(to < from && i == 0){
+                    i = log_max;
+                    e = from;
+                }
             }
         }
     } else {

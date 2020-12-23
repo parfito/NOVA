@@ -289,6 +289,7 @@ class Vmcs
             CPU_TSC_OFFSET          = 1ul << 3,
             CPU_HLT                 = 1ul << 7,
             CPU_INVLPG              = 1ul << 9,
+            CPU_RDPMC               = 1ul << 11, 
             CPU_RDTSC               = 1ul << 12,
             CPU_CR3_LOAD            = 1ul << 15,
             CPU_CR3_STORE           = 1ul << 16,
@@ -304,6 +305,8 @@ class Vmcs
             CPU_EPT                 = 1ul << 1,
             CPU_VPID                = 1ul << 5,
             CPU_URG                 = 1ul << 7,
+            CPU_RDRAND              = 1ul << 11,
+            CPU_RDSEED              = 1ul << 16,
             CPU_TSC_MUL             = 1ul << 25,
         };
 
@@ -360,7 +363,9 @@ class Vmcs
             VMX_PREEMPT             = 52,
             VMX_INVVPID             = 53,
             VMX_WBINVD              = 54,
-            VMX_XSETBV              = 55
+            VMX_XSETBV              = 55,
+            VMX_RAND                = 57,
+            VMX_RDSEED              = 61,
         };
 
         ALWAYS_INLINE

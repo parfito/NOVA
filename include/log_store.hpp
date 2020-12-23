@@ -34,7 +34,7 @@ public:
     
     static void free_logs(size_t=0, bool=false);
         
-    static void dump(char const*, bool = true, size_t = 5, bool = false);
+    static void dump(char const*, bool = true, bool = true, size_t = 5, bool = false);
             
     static void add_entry_in_buffer(const char*);
     
@@ -49,7 +49,7 @@ public:
     static void call(void (*)(const char*), const char*);
     
     static size_t get_number();
-    
+
 };
 
 class Queue_logs {
@@ -87,7 +87,7 @@ private:
     
     static void free_logs(size_t=0, bool=false);
     
-    static void dump(char const*, bool = true, size_t = 5);
+    static void dump(char const*, bool = true, bool = true, size_t = 5);
     
     static void append_log_info(const char*);
     

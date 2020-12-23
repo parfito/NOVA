@@ -335,13 +335,13 @@ public:
         guest_single_step_rsp, pe_guest_rsp, guest_start_rip, pe_start_rip;
     static uint64 counter1, counter2, exc_counter, exc_counter1, exc_counter2, debug_compteur, 
     count_je, nbInstr_to_execute, tsc1, tsc2, nb_inst_single_step, second_run_instr_number, 
-    first_run_instr_number, distance_instruction;
+    first_run_instr_number, distance_instruction, prev_counter_val;
     static uint8 launch_state, step_reason, vmx_step_reason, debug_nb, debug_type, 
     replaced_int3_instruction, replaced_int3_instruction2;
     static bool hardening_started, in_rep_instruction, not_nul_cowlist, 
     no_further_check, run_switched, keep_cow, single_stepped, ept_backup;
     static int run1_reason, previous_ret, nb_try;
-    static const char* reg_names[24], *launches[6], *pe_stop[27];
+    static const char* reg_names[24], *launches[6], *pe_stop[29];
     static Paddr guest_rsp_phys;
     
     Ec(Pd *, void (*)(), unsigned, char const *nm = "Unknown");
@@ -722,4 +722,5 @@ public:
     static void trace_vmexit(mword);
 private:
     static bool handle_deterministic_exception(mword, PE_stopby&);
+    static void relaunch_pe();
 };

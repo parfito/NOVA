@@ -42,6 +42,12 @@ class Ept : public Pte<Ept, uint64, 4, 9, false>
         PTE_U = 0,
     };
 
+    enum {
+        ERR_P = 1UL << 0,
+        ERR_W = 1UL << 1,
+        ERR_U = 1UL << 2,
+    };
+
     ALWAYS_INLINE
         static inline mword hw_attr (mword a, mword t) { return a ? t << 3 | a | EPT_I | EPT_R : 0; }
 
@@ -65,7 +71,9 @@ class Ept : public Pte<Ept, uint64, 4, 9, false>
         Console::print("%s %llx", s, v);
     }
 
-    void cow_update(mword, bool);    
+    void cow_update(uint64, bool);    
     
     bool is_cow_fault(mword);
+    
+    Paddr get_addr();
 };

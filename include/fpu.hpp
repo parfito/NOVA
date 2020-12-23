@@ -177,7 +177,7 @@ class Fpu
                 return;
             fpu_0->load();
             load_state(statedata_0);
-            saved = false;            
+            saved = true;
         }
         
         void save_data(){

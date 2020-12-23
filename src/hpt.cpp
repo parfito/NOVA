@@ -107,10 +107,10 @@ Paddr Hpt::replace(Quota &quota, mword v, mword p) {
 //    return reinterpret_cast<void *>(SPC_LOCAL_REMAP + offset);
 //}
 
-void *Hpt::remap (Quota &quota, Paddr phys, bool is_cow)
+void *Hpt::remap (Quota &quota, Paddr phys)
 {
     Hptp hpt (current());
-    mword page = is_cow ? COW_ADDR : SPC_LOCAL_REMAP;
+
     size_t size = 1UL << (bpl() + PAGE_BITS);
 
     mword offset = phys & (size - 1);
@@ -118,15 +118,15 @@ void *Hpt::remap (Quota &quota, Paddr phys, bool is_cow)
     phys &= ~offset;
 
     Paddr old; mword attr;
-    if (hpt.lookup (page, old, attr)) {
-        hpt.update (quota, page,        bpl(), 0, 0, Hpt::TYPE_DN); flush (page);
-        hpt.update (quota, page + size, bpl(), 0, 0, Hpt::TYPE_DN); flush (page + size);
+    if (hpt.lookup (SPC_LOCAL_REMAP, old, attr)) {
+        hpt.update (quota, SPC_LOCAL_REMAP,        bpl(), 0, 0, Hpt::TYPE_DN); flush (SPC_LOCAL_REMAP);
+        hpt.update (quota, SPC_LOCAL_REMAP + size, bpl(), 0, 0, Hpt::TYPE_DN); flush (SPC_LOCAL_REMAP + size);
     }
 
-    hpt.update (quota, page,        bpl(), phys,        HPT_W | HPT_P);
-    hpt.update (quota, page + size, bpl(), phys + size, HPT_W | HPT_P);
+    hpt.update (quota, SPC_LOCAL_REMAP,        bpl(), phys,        HPT_W | HPT_P);
+    hpt.update (quota, SPC_LOCAL_REMAP + size, bpl(), phys + size, HPT_W | HPT_P);
 
-    return reinterpret_cast<void *>(page + offset);
+    return reinterpret_cast<void *>(SPC_LOCAL_REMAP + offset);
 }
 
 /**
@@ -201,10 +201,4 @@ void Hpt::cow_update(mword new_val, bool rw, mword v){
     Hpt o, *e = this;
     do o = *e; while (o.val != new_val && !e->set (o.val, new_val));
     flush(v);    
-}
-
-void Hpt::resolve_cow(Quota &quota, mword v, Paddr phys, mword a) {
-    Hpt *e = walk(quota, v, 0); // mword l = (bit_scan_reverse(v ^ USSER_ADDR) - PAGE_BITS) / bpl() = 3; but 3 doesnot work
-    assert(e);
-    Cow_elt::resolve_cow_fault_hpt(e, v, phys, a);
 }

@@ -115,7 +115,7 @@ public:
     Paddr replace(Quota &quota, mword, mword);
 
 //    static void *remap(Quota &quota, Paddr);
-    static void *remap (Quota &quota, Paddr, bool = false);
+    static void *remap (Quota &quota, Paddr);
 
     static bool dest_hpt (Paddr p, mword, unsigned) { return (p != reinterpret_cast<Paddr>(&FRAME_0) && p != reinterpret_cast<Paddr>(&FRAME_1)); }
     static bool iter_hpt_lev(unsigned l, mword v){
@@ -138,7 +138,6 @@ public:
     Paddr replace_cow(Quota &quota, mword, mword, mword, mword = 0);
     static void print(char const *s, mword v);
     void cow_update(mword, bool, mword);
-    void resolve_cow(Quota&, mword, Paddr, mword);
     
 };
 

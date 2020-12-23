@@ -302,8 +302,8 @@ mword Space_mem::cowed_attrib(mword virt, Paddr phys, mword attrib) {
 
 bool Space_mem::is_cow_fault(Quota &quota, mword virt, mword err) {
     Paddr phys;
-    mword a;
-    size_t s = loc[Cpu::id].lookup(virt, phys, a);
+    mword a; Hpt *h = nullptr;
+    size_t s = loc[Cpu::id].cow_walk(virt, phys, a, h);
     if(s && (a & Hpt::HPT_U) && Cow_field::is_cowed(&cow_fields, virt)) {
         Ec *ec = Ec::current;
         Pd *pd = ec->getPd();
@@ -328,8 +328,7 @@ bool Space_mem::is_cow_fault(Quota &quota, mword virt, mword err) {
                         Ec::launch_state = Ec::UNLAUNCHED;
                 }
             }
-
-            loc[Cpu::id].resolve_cow(quota, virt, phys, a);
+            Cow_elt::resolve_cow_fault_hpt(h, virt, phys, a);
         }
         return true;
     } 

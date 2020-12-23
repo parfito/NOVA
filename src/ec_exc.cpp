@@ -339,11 +339,12 @@ void Ec::handle_exc_db(Exc_regs *r) {
                             run_switched = true;
                             current->regs.REG(fl) |= Cpu::EFL_TF;
                         } else {
-                            Console::panic("SR_EQU Run %d run_switched but %s is different %lx:%lx:%lx:%lx nb_inst_single_step %llu "
+                            call_log_funct(Logstore::add_entry_in_buffer, 0, "SR_EQU Run %d run_switched but %s is different %lx:%lx:%lx:%lx nb_inst_single_step %llu "
                                 "nbInstr_to_execute %llu first_run_instr_number %llu second_run_instr_number %llu Pd %s Ec %s", 
                                 Pe::run_number, reg_names[cmp], current->get_reg(cmp, 0), current->get_reg(cmp, 1), current->get_reg(cmp, 1),
                                 current->get_reg(cmp), nb_inst_single_step, nbInstr_to_execute, first_run_instr_number, second_run_instr_number, 
-                                Pd::current->get_name(), Ec::current->get_name());                            
+                                Pd::current->get_name(), Ec::current->get_name());
+                            relaunch_pe();
                         }
                         return;
                     } else { // relaunch the first run without restoring the second execution state
@@ -581,8 +582,9 @@ void Ec::check_memory(PE_stopby from) {
                  */
                 if((first_run_instr_number + exc_counter1 > MAX_INSTRUCTION + 300) || 
                     (first_run_instr_number + exc_counter1 < MAX_INSTRUCTION - 300)){
-                    call_log_funct(Logstore::add_entry_in_buffer, 2, "PMI served too early or too late first_run_instr_number %llu "
+                    call_log_funct(Logstore::add_entry_in_buffer, 1, "PMI served too early or too late first_run_instr_number %llu "
                     "counter1 %#llx exc_counter1 %llu\nMust be dug deeper", first_run_instr_number, counter1, exc_counter1);
+                    call_log_funct(Logstore::append_entry_in_buffer, 2, "check_memory 5");
                 }
             } 
             Pe::run_number++;
@@ -611,9 +613,9 @@ void Ec::check_memory(PE_stopby from) {
                     if(Lapic::read_instCounter() == Lapic::perf_max_count - MAX_INSTRUCTION + 1)
                         check_exit();
                     
-                    Logstore::dump("check_memory 1", true);
                     trace(0, "Attention : from >< prevreason %s%s counter1 %llx "
                     "counter2 %llx", pe_stop[run1_reason], pe_stop[from], counter1, Lapic::read_instCounter());
+                    Logstore::dump("check_memory 1", true);
                 }
                 exc_counter2 = exc_counter;
                 counter2 = Lapic::read_instCounter();
@@ -629,9 +631,10 @@ void Ec::check_memory(PE_stopby from) {
                 assert(second_run_instr_number < Lapic::perf_max_count);
                 if ((second_run_instr_number + exc_counter2 > MAX_INSTRUCTION + 300) || 
                         (second_run_instr_number + exc_counter2 < MAX_INSTRUCTION - 300)){
-                    trace(0, "PMI served too early or too late second_run_instr_number"
-                        " %llx counter2 %#llx \n Must be dug deeper", second_run_instr_number,
+                    call_log_funct(Logstore::append_entry_in_buffer, 1, "PMI served too early or too late from %s run_from %s second_run_instr_number"
+                        " %llx counter2 %#llx \n Must be dug deeper", pe_stop[from], pe_stop[run1_reason], second_run_instr_number,
                         counter2);
+                    call_log_funct(Logstore::append_entry_in_buffer, 2, "check_memory 4");
                 } 
                 distance_instruction = distance(first_run_instr_number, second_run_instr_number);
 //                if(!ec->utcb)
@@ -684,10 +687,14 @@ void Ec::check_memory(PE_stopby from) {
                                 ec->enable_step_debug(SR_EQU);
                                 ret_user_iret();
                             }
-                            Console::panic("1stInstnb = 2Instnb but %s is different %lx:%lx:%lx "
+                            call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 1, "1stInstnb = 2Instnb but %s is different %lx:%lx:%lx "
                             "first_run_instr_number %llu second_run_instr_number %llu", 
                             reg_names[cmp], current->get_reg(cmp, 0), current->get_reg(cmp, 1), 
                             current->get_reg(cmp), first_run_instr_number, second_run_instr_number);
+                            if(nb_try < 1) {
+                                relaunch_pe();
+                            }
+                            call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 2, "check_memory 3");
                         }
                     } else {
                         //                        check_instr_number_equals(5);                        
@@ -742,6 +749,9 @@ void Ec::check_memory(PE_stopby from) {
                         "nb_cow_fault %u counter1 %llx counter2 %llx Nb_pe %llu is_saved %d", out_buff, ec->get_name(), pd->get_name(), pe_stop[run1_reason], 
                         pe_stop[from], launches[launch_state], Counter::cow_fault, counter1, counter2 ? counter2 : 
                         Lapic::read_instCounter(),  Counter::nb_pe, Fpu::is_saved());
+                    if(nb_try < 1) {
+                        relaunch_pe();
+                    }
                     call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 2, "check_memory 2");
                     counter2 = nbInstr_to_execute ? counter2 + nbInstr_to_execute : 
                     Lapic::read_instCounter();
@@ -847,7 +857,7 @@ void Ec::check_exit() {
  */ 
 void Ec::reset_counter() {
     exc_counter = counter1 = counter2 = exc_counter1 = exc_counter2 = nb_inst_single_step = 0;
-    distance_instruction = first_run_instr_number = second_run_instr_number = 0;
+    distance_instruction = first_run_instr_number = second_run_instr_number = nb_try = 0;
     single_stepped = false;
     Counter::cow_fault = 0;
     Counter::used_cows_in_old_cow_elts = 0;
@@ -863,6 +873,7 @@ void Ec::reset_all() {
     run1_reason = 0;
     no_further_check = false;
     run_switched = false;
+//    Pd::current->Space_mem::restor_page_table();
     Pending_int::exec_pending_interrupt();
     Logstore::commit_buffer();
 }
@@ -879,7 +890,6 @@ void Ec::start_debugging(Debug_type dt) {
     Pe::inState1 = false;
     nbInstr_to_execute = first_run_instr_number;
     restore_state0_data();
-    launch_state = Ec::IRET;
     enable_step_debug(SR_DBG);
     check_exit();
 }
@@ -948,4 +958,20 @@ void Ec::abort_pe(PE_stopby from) {
     launch_state = UNLAUNCHED;
     reset_all();
     return;
+}
+
+void Ec::relaunch_pe(){
+    call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 1, "Rolling back to re-execute PE %llu Nbr cow fault %u", Counter::nb_pe, Counter::cow_fault);
+    reset_counter();
+    nb_try++;
+    current->rollback();
+    Pe::run_number = 0;
+    Counter::nb_pe--; // reset_counter has increased this counter
+    run1_reason = 0;
+    no_further_check = false;
+    run_switched = false;
+    Logstore::commit_buffer();
+// This comes after commit_buffer to ensure current log has been successfully created
+    Logstore::dump("relaunch_pe", true, true, 5, true); 
+    check_exit();
 }

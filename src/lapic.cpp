@@ -252,3 +252,7 @@ void Lapic::program_pmi(uint64 number) {
     Msr::write(Msr::MSR_PERF_FIXED_CTR0, start_counter);
     Msr::write(Msr::MSR_PERF_FIXED_CTRL, 0xa);
 }
+
+void Lapic::write_instCounter(uint64 number){
+    Msr::write(Msr::MSR_PERF_FIXED_CTR0, number);
+}

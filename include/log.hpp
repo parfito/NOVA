@@ -71,6 +71,7 @@ class Log {
     
     size_t entry_count = 0;
     size_t numero = 0;
+    size_t nb_child = 0;
     String *info = nullptr;
     Queue<Log_entry> log_entries = {};
     Log* prev = nullptr;

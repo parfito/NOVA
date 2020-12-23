@@ -279,9 +279,9 @@ bool Cow_elt::compare() {
             mword val0 = *(reinterpret_cast<mword*>(ptr0) + index);
             Pe::missmatch_addr = c->page_addr + missmatch_addr;
             call_log_funct_with_buffer(Logstore::add_entry_in_buffer, 1, "MISSMATCH "
-                "Pd: %s PE %llu virt %lx: phys0:%lx phys1 %lx phys2 %lx rip %lx:%s "
-                "rcx %lx rsp %lx:%lx MM %lx index %lu %lx val0: 0x%lx  val1: 0x%lx "
-                "val2 0x%lx %s", Pd::current->get_name(), Counter::nb_pe, c->m_fault_addr, 
+                "Pd: %s PE %llu virt %#lx: phys0:%#lx phys1 %#lx phys2 %#lx rip %#lx:%s "
+                "rcx %#lx rsp %#lx:%#lx MM %#lx index %lu %#lx val0: %#lx  val1: %#lx "
+                "val2 %#lx %s", Pd::current->get_name(), Counter::nb_pe, c->m_fault_addr, 
                 c->phys_addr[0], c->phys_addr[1], c->phys_addr[2], c->ec_rip, 
                 c->ec_rip_content, c->ec_rcx, c->ec_rsp, c->ec_rsp_content, Pe::missmatch_addr, 
                 index, reinterpret_cast<mword>(reinterpret_cast<mword*>(c->page_addr) 
@@ -339,7 +339,7 @@ void Cow_elt::commit() {
             assert(ce); // Mandatory
             c->age = ce->age;    
         }
-        c->update_pte(PHYS0, (c->pte_type == HPT) ? true : c->page_addr == 0x48ffc ? true : false);
+        c->update_pte(PHYS0, false);
 
         c->to_log("COMMIT");
         count++;
@@ -381,16 +381,13 @@ void Cow_elt::restore_state2() {
 }
 
 /*
- * upadate hpt or vtlb with phys_addr[0] value and attr
- * called when we have to re-execute the entire double execution
+ * called when we have to re-execute the entire double execution with their 
+ * cow faults
  */
 void Cow_elt::rollback() {
-    Cow_elt *c = cow_elts->head(), *n = nullptr, *h = c;
-    while (c) {
-        copy_frames(c->phys_addr[1], c->phys_addr[2], c->phys_addr[0]);
-        c->update_pte(PHYS1, true);
-        n = c->next;
-        c = (n == h) ? nullptr : n;
+    Cow_elt *c = nullptr;
+    while (cow_elts->dequeue(c = cow_elts->head())) {
+        free(c);
     }
 }
 
@@ -419,9 +416,17 @@ void Cow_elt::free_current_pd_cowelts() {
 void Cow_elt::free(Cow_elt* c){
     Paddr phys;
     mword attr;
-    if(Ec::current->lookup(c->page_addr, phys, attr) && 
-            phys == c->phys_addr[0]) {
-        c->update_pte(PHYS0, false);
+    if(Ec::current->lookup(c->page_addr, phys, attr) && (attr | Hpt::HPT_W)) { 
+        if(phys == c->phys_addr[0]) {
+            c->update_pte(PHYS0, false);            
+        } else if(Ec::nb_try && 
+            ((phys == c->phys_addr[1]) || phys == c->phys_addr[2])){
+            c->update_pte(PHYS0, false);
+        } else { // Someone changed dramatically the mapping
+            trace(0, "cow %#lx %#lx %#lx %#lx has changed to %#lx", c->page_addr, 
+                c->phys_addr[0], c->phys_addr[1], c->phys_addr[2], phys);
+        }
+        
     }
 //    c->to_log("free deleting 1");      
     delete c;    

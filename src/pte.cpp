@@ -24,6 +24,8 @@
 #include "hpt.hpp"
 #include "pte.hpp"
 #include "vtlb.hpp"
+#include "stdio.hpp"
+#include "ec.hpp"
 
 mword Dpt::ord = ~0UL;
 mword Ept::ord = ~0UL;
@@ -151,17 +153,25 @@ void Pte<P, E, L, B, F>::free_up(Quota &quota, unsigned l, P * e, mword v,
 }
 
 template <typename P, typename E, unsigned L, unsigned B, bool F>
-P *Pte<P,E,L,B,F>::cow_walk (E v) {
+size_t Pte<P, E, L, B, F>::cow_walk(E v, Paddr &p, mword &a, P* &te) {
     unsigned long l = L;
 
-    for (P *e = static_cast<P *>(this);; e = static_cast<P *>(Buddy::phys_to_ptr (e->addr())) + (v >> (--l * B + PAGE_BITS) & ((1UL << B) - 1))) {
+    for (P *e = static_cast<P *> (this);; e = static_cast<P *> (Buddy::phys_to_ptr(e->addr())) + (v >> (--l * B + PAGE_BITS) & ((1UL << B) - 1))) {
 
-        if (e && !e->val) {
-            return nullptr;
-        }
+        if (EXPECT_FALSE(!e->val))
+            return 0;
+
+        if (EXPECT_FALSE(l && !e->super()))
+            continue;
+
+        size_t s = 1UL << (l * B + PAGE_BITS);
+
+        p = static_cast<Paddr> (e->addr() | (v & (s - 1)));
+
+        a = e->attr();
         
-        if (l == 0)
-            return e;
+        te = e;
+        return s;
     }
 }
 
